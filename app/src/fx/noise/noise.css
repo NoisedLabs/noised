@@ -1,0 +1,177 @@
+/*
+ * fx/noise: static styles for the "signal from noise" effects (NoiseArt, NoiseGrain, ResolveText, DotSpinner and
+ * the theme wipe). CSP: a bundled stylesheet only; the effects set nothing but CSSOM properties at runtime.
+ */
+
+/* <NoiseArt>: fills its positioned, sized parent. The ink defaults to the theme's text colour. */
+.nz-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+.nz-art > canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* <NoiseGrain>: fills its positioned parent, under the content. */
+.nz-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+.nz-grain > canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* <ResolveText>: the real text holds the layout; the mask lives on the inner span. */
+.nz-text {
+  position: relative;
+}
+.nz-text-in {
+  display: inline;
+}
+
+/* .nz-resolve: the same "resolve from noise" as useNoiseReveal, in CSS only, for elements that animate with a
+   keyframe (the inner pages' headline words): three dot lattices whose radius (--nz-r, a registered length so it
+   interpolates) grows from nothing until the dots merge. Run it with `animation: nz-resolve ...`. */
+@property --nz-r {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 6px;
+}
+.nz-resolve {
+  -webkit-mask-image: radial-gradient(circle, #000 var(--nz-r), transparent calc(var(--nz-r) + 1.4px)), radial-gradient(circle, #000 var(--nz-r), transparent calc(var(--nz-r) + 1.4px)), radial-gradient(circle, #000 var(--nz-r), transparent calc(var(--nz-r) + 1.4px));
+  mask-image: radial-gradient(circle, #000 var(--nz-r), transparent calc(var(--nz-r) + 1.4px)), radial-gradient(circle, #000 var(--nz-r), transparent calc(var(--nz-r) + 1.4px)), radial-gradient(circle, #000 var(--nz-r), transparent calc(var(--nz-r) + 1.4px));
+  -webkit-mask-size: 7px 7px, 11px 11px, 13px 13px;
+  mask-size: 7px 7px, 11px 11px, 13px 13px;
+  -webkit-mask-position: 0 0, 4px 6px, 9px 3px;
+  mask-position: 0 0, 4px 6px, 9px 3px;
+}
+@keyframes nz-resolve {
+  from {
+    --nz-r: 0px;
+    opacity: 0.2;
+  }
+  to {
+    --nz-r: 6px;
+    opacity: 1;
+  }
+}
+
+/* The theme wipe: a fixed sheet of the old colour with holes growing through it (reveal.ts resolveMask, inverted:
+   only what lies outside every lattice's dots stays). */
+.nz-wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  mask-repeat: repeat;
+  -webkit-mask-repeat: repeat;
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}
+
+/* <DotSpinner>: a ring of round dots over a hairline ring; a soft light runs round it. */
+.nz-spin {
+  --nz-spin-dot: max(2px, calc(var(--nz-spin, 32px) * 0.11));
+  --nz-spin-r: calc(var(--nz-spin, 32px) * 0.38);
+  --nz-spin-period: 1.1s;
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--nz-spin, 32px);
+  height: var(--nz-spin, 32px);
+  line-height: 0;
+  color: inherit;
+  vertical-align: middle;
+}
+.nz-spin[data-n="8"] {
+  --nz-spin-dot: max(2px, calc(var(--nz-spin, 32px) * 0.15));
+  --nz-spin-r: calc(var(--nz-spin, 32px) * 0.36);
+}
+.nz-spin-ring {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.nz-spin-ring::before {
+  content: "";
+  position: absolute;
+  inset: calc(50% - var(--nz-spin-r));
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.14;
+}
+.nz-spin-ring > i {
+  position: absolute;
+  top: calc(50% - var(--nz-spin-dot) / 2);
+  left: calc(50% - var(--nz-spin-dot) / 2);
+  width: var(--nz-spin-dot);
+  height: var(--nz-spin-dot);
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.18;
+  transform: rotate(var(--nz-a, 0deg)) translateY(calc(-1 * var(--nz-spin-r)));
+  animation: nz-spin-dot var(--nz-spin-period) linear infinite;
+  animation-delay: calc((var(--nz-k, 0) - 1) * var(--nz-spin-period));
+}
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(1) { --nz-a: 0deg; --nz-k: 0; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(2) { --nz-a: 30deg; --nz-k: 0.0833; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(3) { --nz-a: 60deg; --nz-k: 0.1667; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(4) { --nz-a: 90deg; --nz-k: 0.25; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(5) { --nz-a: 120deg; --nz-k: 0.3333; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(6) { --nz-a: 150deg; --nz-k: 0.4167; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(7) { --nz-a: 180deg; --nz-k: 0.5; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(8) { --nz-a: 210deg; --nz-k: 0.5833; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(9) { --nz-a: 240deg; --nz-k: 0.6667; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(10) { --nz-a: 270deg; --nz-k: 0.75; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(11) { --nz-a: 300deg; --nz-k: 0.8333; }
+.nz-spin[data-n="12"] > .nz-spin-ring > i:nth-child(12) { --nz-a: 330deg; --nz-k: 0.9167; }
+.nz-spin[data-n="8"] > .nz-spin-ring > i:nth-child(1) { --nz-a: 0deg; --nz-k: 0; }
+.nz-spin[data-n="8"] > .nz-spin-ring > i:nth-child(2) { --nz-a: 45deg; --nz-k: 0.125; }
+.nz-spin[data-n="8"] > .nz-spin-ring > i:nth-child(3) { --nz-a: 90deg; --nz-k: 0.25; }
+.nz-spin[data-n="8"] > .nz-spin-ring > i:nth-child(4) { --nz-a: 135deg; --nz-k: 0.375; }
+.nz-spin[data-n="8"] > .nz-spin-ring > i:nth-child(5) { --nz-a: 180deg; --nz-k: 0.5; }
+.nz-spin[data-n="8"] > .nz-spin-ring > i:nth-child(6) { --nz-a: 225deg; --nz-k: 0.625; }
+.nz-spin[data-n="8"] > .nz-spin-ring > i:nth-child(7) { --nz-a: 270deg; --nz-k: 0.75; }
+.nz-spin[data-n="8"] > .nz-spin-ring > i:nth-child(8) { --nz-a: 315deg; --nz-k: 0.875; }
+
+/* The light runs clockwise: each dot flares as it passes, then settles back (opacity only: compositor-cheap). The
+   delays are negative (phase 1 - k), so the dot k twelfths round the ring lights k twelfths of a period after the top. */
+@keyframes nz-spin-dot {
+  0% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 0.32;
+  }
+  100% {
+    opacity: 0.18;
+  }
+}
+
+/* Motion off: a still ring, brightest at the top, fading clockwise. */
+:root[data-motion="still"] .nz-spin-ring > i {
+  animation: none;
+  opacity: calc(1 - var(--nz-k, 0) * 0.85);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nz-spin-ring > i {
+    animation: none;
+    opacity: calc(1 - var(--nz-k, 0) * 0.85);
+  }
+}

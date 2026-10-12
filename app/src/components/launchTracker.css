@@ -1,0 +1,223 @@
+/*
+ * The launch tracker (launchTracker.tsx): six steps on a vertical hairline, square pixel nodes (Graphite glass +
+ * pixel, two tones), one status line, and what the person can do now. Static stylesheet (style-src 'self').
+ */
+.lt {
+  display: grid;
+  gap: 16px;
+  padding: 20px 22px 22px;
+  border-radius: var(--r-glass, 24px);
+  min-width: 0;
+}
+.lt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.lt-title {
+  font-family: var(--font-head, inherit);
+  font-size: var(--ui-px, 18.6667px);
+  font-weight: 600;
+  color: var(--text, #f5f5f5);
+  overflow-wrap: anywhere;
+}
+.lt-sym {
+  margin-left: 6px;
+  font-family: var(--font-pixel, var(--font-mono, monospace));
+  font-size: var(--ui-px, 18.6667px);
+  color: var(--text-dim, #8a8a8a);
+}
+.lt-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--text-muted, #a3a3a3);
+}
+
+.lt-steps {
+  --lt-node: 22px;
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lt-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--lt-node) minmax(0, 1fr);
+  gap: 14px;
+  padding: 0 0 16px;
+}
+.lt-step:last-child {
+  padding-bottom: 0;
+}
+/* The hairline between two nodes. */
+.lt-step::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--lt-node) + 3px);
+  bottom: 3px;
+  left: calc(var(--lt-node) / 2);
+  width: 1px;
+  background: var(--hairline-strong, rgb(255 255 255 / 0.14));
+}
+.lt-step:last-child::before {
+  display: none;
+}
+.lt-step[data-state="done"]::before {
+  background: color-mix(in srgb, var(--text, #f5f5f5) 55%, transparent);
+}
+.lt-node {
+  --px-c: 3px;
+  display: grid;
+  place-items: center;
+  width: var(--lt-node);
+  height: var(--lt-node);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-dim, #8a8a8a);
+  background: var(--hairline, rgb(255 255 255 / 0.08));
+  clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
+}
+.lt-step[data-state="done"] .lt-node {
+  color: var(--bg, #070707);
+  background: var(--text, #f5f5f5);
+}
+.lt-step[data-state="current"] .lt-node {
+  color: var(--bg, #070707);
+  background: var(--text, #f5f5f5);
+  animation: lt-blink 1.6s steps(2, jump-none) infinite;
+}
+.lt-step[data-state="fail"] .lt-node {
+  color: var(--text, #f5f5f5);
+  background: color-mix(in srgb, var(--danger, #f08080) 55%, transparent);
+}
+@keyframes lt-blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+.lt-step-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 1px;
+}
+.lt-step-label {
+  font-size: 14.5px;
+  font-weight: var(--ui-weight, 500);
+  color: var(--text-dim, #8a8a8a);
+  overflow-wrap: anywhere;
+}
+.lt-step:is([data-state="done"], [data-state="current"], [data-state="fail"]) .lt-step-label {
+  color: var(--text, #f5f5f5);
+}
+.lt-step-hint {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-dim, #8a8a8a);
+  overflow-wrap: anywhere;
+}
+.lt-count {
+  margin-top: 4px;
+  font-family: var(--font-pixel, var(--font-mono, monospace));
+  font-size: var(--ui-px, 18.6667px);
+  color: var(--text, #f5f5f5);
+}
+
+.lt-need {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.lt-need-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted, #a3a3a3);
+}
+.lt-need > .btn {
+  justify-self: start;
+}
+
+/* The opening-time picker (also used by the wizard's review). */
+.lt-pick {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.lt-pick-legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: var(--ui-weight, 500);
+  color: var(--text-muted, #a3a3a3);
+}
+.lt-pick-opt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  cursor: pointer;
+}
+.lt-pick-opt input {
+  margin-top: 3px;
+  accent-color: var(--text, #f5f5f5);
+}
+.lt-pick-opt b {
+  display: block;
+  font-size: 14px;
+  font-weight: var(--ui-weight, 500);
+  color: var(--text, #f5f5f5);
+}
+.lt-pick-sub {
+  font-size: 12.5px;
+  color: var(--text-dim, #8a8a8a);
+}
+.lt-pick-time {
+  display: grid;
+  gap: 6px;
+  max-width: 320px;
+  padding-left: 28px;
+}
+.lt-pick-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim, #8a8a8a);
+}
+
+@media (max-width: 520px) {
+  .lt {
+    padding: 16px 14px 18px;
+  }
+  .lt-pick-time {
+    padding-left: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lt-step[data-state="current"] .lt-node {
+    animation: none;
+  }
+}
+
+/* "I understand: sign one more anyway" (three earlier signatures never landed: SDK 0.9.0 SignatureCapError). */
+.lt-ack {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text-muted, #a3a3a3);
+  cursor: pointer;
+}
+.lt-ack input {
+  accent-color: var(--text, #f5f5f5);
+}

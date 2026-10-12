@@ -1,0 +1,8 @@
+@noisedlabs/mcp
+Copyright 2026 The Noised authors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This package vendors no third-party code. Its dependencies, including
+@noisedlabs/sdk (which carries Meteora's MIT-licensed IDLs and their notice), are
+installed from the npm registry under their own licenses.

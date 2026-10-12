@@ -1,0 +1,111 @@
+/*
+ * "Your quantum key was used somewhere else" (KeyUsedElsewhere.tsx): a calm card, the count in large numerals, the
+ * import first, the written confirmation folded away (small counts only). Static stylesheet (style-src 'self').
+ */
+.kue {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--hairline-strong, rgb(255 255 255 / 0.14));
+  border-radius: var(--r-glass-sm, 6px);
+  background: color-mix(in srgb, var(--warn, #e0b062) 6%, transparent);
+}
+.kue-head {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.kue-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text, #f5f5f5);
+}
+.kue-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text, #f5f5f5);
+  overflow-wrap: anywhere;
+}
+.kue-count {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-muted, #a3a3a3);
+}
+.kue-n {
+  font-family: var(--font-pixel, var(--font-mono, monospace));
+  font-size: var(--ui-px, 18.6667px);
+  color: var(--text, #f5f5f5);
+}
+.kue-step {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.kue-step-t {
+  margin: 0;
+  font-size: 14px;
+  font-weight: var(--ui-weight, 500);
+  color: var(--text, #f5f5f5);
+}
+.kue-step-d {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted, #a3a3a3);
+  overflow-wrap: anywhere;
+}
+.kue-file {
+  display: none;
+}
+.kue-paste,
+.kue-confirm {
+  min-width: 0;
+  border-top: 1px solid var(--hairline, rgb(255 255 255 / 0.08));
+}
+/* A fold's content: one column with room between the lines and the buttons (a <details> lays its children out as blocks). */
+.kue-fold {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 8px;
+}
+.kue-paste > summary,
+.kue-confirm > summary {
+  padding: 10px 0 2px;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: var(--ui-weight, 500);
+  color: var(--text-muted, #a3a3a3);
+}
+.kue-paste > summary:hover,
+.kue-confirm > summary:hover {
+  color: var(--text, #f5f5f5);
+}
+.kue-paste[open],
+.kue-confirm[open] {
+  padding-bottom: 4px;
+}
+.kue-fold > .btn,
+.kue-typed > .btn {
+  justify-self: start;
+}
+.kue-typed {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.kue-typed .input {
+  max-width: 420px;
+}
+.kue-no {
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline, rgb(255 255 255 / 0.08));
+}
+@media (max-width: 520px) {
+  .kue {
+    padding: 14px 12px;
+  }
+}

@@ -1,0 +1,18 @@
+Noised
+Copyright 2026 The Noised authors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository includes third-party material under its own license:
+
+- idls/dynamic_bonding_curve.json and idls/cp_amm.json, and their copies in
+  sdk/src/idl/ (built into the SDK's dist/idl/): the IDLs of Meteora's
+  Dynamic Bonding Curve and DAMM v2 programs, taken from Meteora's
+  MIT-licensed SDKs. Copyright (c) 2026 Meteora; MIT License, full text in
+  idls/LICENSE-meteora and sdk/src/idl/LICENSE-meteora (the web app serves it
+  as app/public/licenses/LICENSE-meteora.txt).
+
+- app/src/assets/fonts/: the Geist, Geist Mono, Geist Pixel and Jersey 10
+  fonts, under the SIL Open Font License 1.1. Each font directory holds its
+  LICENSE file; copyrights and provenance are in app/THIRD_PARTY_NOTICES.md
+  and app/src/assets/fonts/FONTS.md.

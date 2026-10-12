@@ -1,0 +1,24 @@
+[toolchain]
+anchor_version = "1.2.1"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+noised_vault = "7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb"
+noised_hook = "cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia"
+noised_launchpad = "CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc"
+noised_shield = "BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9"
+noised_autopilot = "D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx"
+
+[programs.devnet]
+noised_vault = "7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb"
+noised_hook = "cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia"
+noised_launchpad = "CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc"
+noised_shield = "BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9"
+noised_autopilot = "D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"

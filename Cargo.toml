@@ -1,0 +1,69 @@
+[workspace]
+members = ["crates/*", "programs/*"]
+# LiteSVM test suites are separate workspaces with their own Cargo.lock:
+# LiteSVM pins older solana-* crates (e.g. solana-address ~2.7) and would
+# otherwise downgrade the programs' audited on-chain dependency graph.
+# Build each workspace into its own CARGO_TARGET_DIR: the program crates are
+# cdylib+lib, so their rlibs are not hashed and a shared target dir mixes them.
+exclude = [
+    "tests/integration",
+    "programs/noised-launchpad/tests/litesvm",
+    "programs/noised-shield/tests/litesvm",
+    "programs/noised-autopilot/tests/litesvm",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/NoisedLabs/noised"
+homepage = "https://noised.fun"
+
+[workspace.metadata.solana]
+# cargo-build-sbf toolchain pin. Build with --arch v3 (SBPF v3) so programs
+# stay finalizable once SIMD-0500 restricts finalize to v3.
+tools-version = "v1.57"
+
+[workspace.metadata.cli]
+solana = "4.3.0"
+
+[workspace.dependencies]
+# Exact pins: every on-chain dependency is part of the audited surface.
+# anchor >= 1.0.2 is required (1.0.0/1.0.1 Program<System> address bug).
+anchor-lang = "=1.2.1"
+anchor-spl = "=1.2.1"
+spl-transfer-hook-interface = "=2.1.0"
+# >= 0.11.1 always clears is_signer on extra metas (0.11.0 could forward it).
+spl-tlv-account-resolution = "=0.11.1"
+spl-discriminator = "=0.5.2"
+# Same version anchor-lang 1.2.1 uses (one AccountInfo type).
+solana-instructions-sysvar = "=3.0.1"
+# sol_sha256 syscall on-chain; the sha2 feature only affects host builds.
+solana-sha256-hasher = { version = "=3.1.0", features = ["sha2"] }
+noised-lmots = { path = "crates/noised-lmots" }
+noised-rules = { path = "crates/noised-rules" }
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+
+[profile.release.build-override]
+opt-level = 3
+incremental = false
+codegen-units = 1
+
+# Host tests generate LMS keys (about 1.14 million SHA-256 compressions each):
+# compile the hashing optimized in dev/test builds too. Overflow checks and
+# debug assertions stay on (they are separate profile settings).
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.noised-lmots]
+opt-level = 3
+
+[profile.dev.package.noised-rules]
+opt-level = 3

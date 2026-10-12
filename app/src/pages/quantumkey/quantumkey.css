@@ -1,0 +1,31 @@
+/*
+ * "Your quantum key" panel (QuantumKeyPanel.tsx). Built on the inner-page kit
+ * (../inner/kit.css): glass cards, two-tone, the UI font for labels.
+ */
+.qk-body { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.qk-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.qk-ways { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.qk-way { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 18px; border: 1px solid var(--pg-line); border-radius: var(--r-glass-sm, 3px); background: color-mix(in srgb, var(--pg-panel-2) 70%, transparent); }
+.qk-way[data-disabled] { opacity: 0.6; }
+.qk-way > .btn { align-self: flex-start; }
+.qk-way-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; }
+.qk-way-title { font-family: var(--font-ui, var(--pg-sans)); font-size: var(--ui-px, 18.6667px); line-height: 1.1; letter-spacing: var(--label-tracking, 1px); text-transform: uppercase; color: var(--pg-text); }
+.qk-tag { padding: 2px 8px; border: 1px solid color-mix(in srgb, var(--pg-signal) 45%, var(--pg-line)); border-radius: 2px; font-size: 12px; color: var(--pg-signal); }
+.qk-way-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--pg-muted); }
+.qk-way-note { margin: 0; font-size: 13px; color: var(--pg-dim); }
+.qk-have { grid-column: 1 / -1; margin: 0; font-size: 14px; color: var(--pg-muted); }
+.qk-link { padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
+.qk-back { align-self: flex-start; }
+.qk-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.qk-id { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.qk-id-k { font-size: 13px; font-weight: 500; color: var(--pg-muted); }
+.qk-id-v { font-size: 22px; letter-spacing: 0.04em; color: var(--pg-text); }
+.qk-id-h { font-size: 13px; color: var(--pg-dim); }
+.qk-meta { margin: 0; font-size: 14px; color: var(--pg-muted); }
+/* "Use one device per quantum key unless you import its records." (SDK 0.9.0, audit 4: a key used elsewhere is refused). */
+.qk-device { margin: 0; font-size: 14px; font-weight: var(--ui-weight, 500); color: var(--pg-text); }
+.qk-words { display: flex; flex-direction: column; gap: 14px; }
+
+@media (max-width: 720px) {
+  .qk-ways { grid-template-columns: minmax(0, 1fr); }
+}

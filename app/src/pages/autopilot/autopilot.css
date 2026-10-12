@@ -1,0 +1,119 @@
+/*
+ * Autopilot (PROGRAMMABLE_V1 §6): the pixel graph canvas, its palette and
+ * inspector, the simulation, the review and the run history. Static CSS
+ * (CSP-safe); the canvas's pan, zoom and card positions come in as React
+ * style props and CSS custom properties. Shared pieces are in ../inner/kit.css.
+ */
+
+/* ---------------------------------------------------------------- canvas --- */
+.ap-canvas-wrap { position: relative; min-width: 0; }
+.ap-canvas {
+  --ap-line: color-mix(in srgb, var(--pg-text) 7%, transparent);
+  /* One 2 x 2 square per grid cell (scales with the zoom), and a faint line every 4 cells. */
+  --ap-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='2' height='2' fill='%230a0a0a' fill-opacity='.22'/%3E%3C/svg%3E");
+  position: relative;
+  height: 540px;
+  overflow: hidden;
+  border-radius: 0;
+  background-color: var(--pg-glass-well);
+  background-image:
+    var(--ap-dots),
+    linear-gradient(to right, var(--ap-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--ap-line) 1px, transparent 1px);
+  background-size:
+    var(--gs, 16px) var(--gs, 16px),
+    calc(var(--gs, 16px) * 4) calc(var(--gs, 16px) * 4),
+    calc(var(--gs, 16px) * 4) calc(var(--gs, 16px) * 4);
+  background-position: var(--gx, 0) var(--gy, 0);
+  box-shadow: inset 0 0 0 1px var(--pg-hair);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+:root[data-theme="dark"] .ap-canvas {
+  --ap-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='2' height='2' fill='%23ffffff' fill-opacity='.2'/%3E%3C/svg%3E");
+}
+.ap-canvas:focus-visible { outline: 2px solid var(--pg-ink); outline-offset: 2px; }
+.ap-canvas[data-gesture="pan"] { cursor: grabbing; }
+.ap-canvas[data-gesture="connect"] { cursor: crosshair; }
+.ap-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.ap-edges { position: absolute; left: 0; top: 0; overflow: visible; }
+.ap-edge-line { fill: none; stroke: var(--pg-ink-2); stroke-width: 2; shape-rendering: crispEdges; }
+.ap-edge-head { fill: var(--pg-ink-2); shape-rendering: crispEdges; }
+.ap-edge-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
+.ap-canvas[data-readonly] .ap-edge-hit { cursor: default; }
+.ap-edge:hover .ap-edge-line { stroke: var(--pg-ink); }
+.ap-edge[data-selected] .ap-edge-line { stroke: var(--pg-ink); stroke-width: 3; stroke-dasharray: 6 4; }
+.ap-edge[data-selected] .ap-edge-head { fill: var(--pg-ink); }
+.ap-edge-temp { fill: none; stroke: var(--pg-ink); stroke-width: 2; stroke-dasharray: 4 4; shape-rendering: crispEdges; }
+
+/* A step card: the focusable wrapper (never clipped, so its focus ring shows) holds the stepped card and the ports. */
+.ap-node { position: absolute; outline: none; cursor: grab; transition: filter 0.2s; }
+.ap-node[data-dragging] { cursor: grabbing; z-index: 3; filter: drop-shadow(0 14px 22px rgb(0 0 0 / 0.28)); }
+.ap-node:focus-visible { outline: 2px solid var(--pg-ink); outline-offset: 4px; z-index: 2; }
+.ap-card {
+  --px-c: 4px;
+  --px-frame-color: var(--pg-hair-strong);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px 12px;
+  background: var(--panel, #fbfbfa);
+  color: var(--pg-text);
+}
+.ap-node:hover .ap-card { --px-frame-color: var(--pg-ink-line); }
+.ap-node[data-selected] .ap-card { --px-frame-color: var(--pg-ink); background: color-mix(in srgb, var(--pg-ink) 4%, var(--panel, #fbfbfa)); }
+.ap-node[data-selected] .ap-card::after { content: ""; position: absolute; inset: 2px; pointer-events: none; box-shadow: inset 0 0 0 1px var(--pg-ink); clip-path: inherit; }
+.ap-node[data-tone="warn"] .ap-card { --px-frame-color: color-mix(in srgb, var(--pg-warn) 70%, transparent); }
+.ap-node[data-tone="danger"] .ap-card { --px-frame-color: color-mix(in srgb, var(--pg-danger) 75%, transparent); }
+.ap-node[data-connecting] .ap-card { --px-frame-color: var(--pg-ink); background: color-mix(in srgb, var(--pg-ink) 8%, var(--panel, #fbfbfa)); }
+.ap-node[data-pulse] .ap-card { animation: ap-pulse 1.2s steps(4, end) 2; }
+@keyframes ap-pulse { 50% { background: color-mix(in srgb, var(--pg-ok) 16%, var(--panel, #fbfbfa)); } }
+.ap-node-head { display: flex; align-items: center; gap: 8px; min-height: 26px; padding-bottom: 6px; border-bottom: 1px solid var(--pg-hair); }
+.ap-glyph { flex: none; fill: currentColor; }
+.ap-node-n {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  background: var(--pg-ink);
+  color: var(--pg-on-ink);
+  font: 400 var(--ui-px, 18.6667px)/1 var(--font-ui, var(--pg-sans));
+}
+.ap-node-title { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 var(--ui-px, 18.6667px)/1 var(--font-ui, var(--pg-sans)); letter-spacing: var(--label-tracking, 1px); }
+.ap-node-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pg-dim); font: 11.5px/1 var(--pg-mono); }
+.ap-node-lines { display: flex; flex-direction: column; gap: 0; margin: 0; }
+.ap-node-lines > div { display: flex; align-items: baseline; gap: 8px; min-height: 24px; font-size: 12.5px; line-height: 1.3; }
+.ap-node-lines dt { flex: none; width: 42px; white-space: nowrap; color: var(--pg-dim); font: 400 var(--ui-px, 18.6667px)/1 var(--font-ui, var(--pg-sans)); letter-spacing: var(--label-tracking, 1px); }
+.ap-node-lines dd { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pg-text); }
+.ap-node-badges { position: absolute; top: 9px; right: 10px; display: flex; gap: 4px; }
+.ap-node-badge { padding: 3px 5px 2px; background: var(--pg-ink-soft); box-shadow: inset 0 0 0 1px var(--pg-hair-strong); font: 400 calc(var(--ui-px, 18.6667px) * 0.75)/1 var(--font-ui, var(--pg-sans)); color: var(--pg-text); }
+.ap-port { position: absolute; left: calc(50% - 6px); width: 12px; height: 12px; background: var(--panel, #fbfbfa); box-shadow: inset 0 0 0 2px var(--pg-ink-2); z-index: 1; }
+.ap-port-in { top: -6px; pointer-events: none; }
+.ap-port-out { bottom: -6px; cursor: crosshair; }
+.ap-port-out:hover,
+.ap-canvas[data-gesture="connect"] .ap-port-out { background: var(--pg-ink); box-shadow: none; }
+.ap-port-out::before { content: ""; position: absolute; inset: -8px; }
+.ap-canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; color: var(--pg-dim); text-align: center; pointer-events: none; }
+
+/* Zoom tools (top right) and the minimap (bottom right). */
+.ap-canvas-tools { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 2px; padding: 3px; background: var(--glass-strong, var(--panel)); box-shadow: inset 0 0 0 1px var(--pg-hair-strong), 0 10px 24px -16px rgb(0 0 0 / 0.35); }
+.ap-tool { display: inline-grid; place-items: center; min-width: 32px; height: 32px; padding: 0 8px; border: 0; background: none; color: var(--pg-text); font: 400 var(--ui-px, 18.6667px)/1 var(--font-ui, var(--pg-sans)); cursor: pointer; }
+.ap-tool:hover { background: var(--pg-glass-well-2); }
+.ap-tool:focus-visible { outline: 2px solid var(--pg-ink); outline-offset: -2px; }
+.ap-tool-zoom { min-width: 44px; text-align: center; color: var(--pg-muted); font: 400 var(--ui-px, 18.6667px)/1 var(--font-ui, var(--pg-sans)); font-variant-numeric: tabular-nums; }
+.ap-minimap { position: absolute; right: 10px; bottom: 10px; background: var(--glass-strong, var(--panel)); box-shadow: inset 0 0 0 1px var(--pg-hair-strong); cursor: pointer; }
+.ap-mini-node { fill: var(--pg-ink-2); }
+.ap-mini-view { fill: color-mix(in srgb, var(--pg-ink) 6%, transparent); stroke: var(--pg-ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ap-connect-hint { position: absolute; left: 10px; top: 10px; max-width: calc(100% - 200px); margin: 0; padding: 8px 10px; background: var(--pg-ink); color: var(--pg-on-ink); font-size: 13px; line-height: 1.4; }
+
+@media (max-width: 640px) {
+  .ap-canvas { height: 440px; }
+  .ap-minimap { display: none; }
+  .ap-connect-hint { top: auto; bottom: 10px; max-width: calc(100% - 20px); }
+}

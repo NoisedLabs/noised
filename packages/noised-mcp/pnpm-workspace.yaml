@@ -1,0 +1,51 @@
+# pnpm 11 reads its settings from this file (it ignores pnpm-only keys in .npmrc).
+# The store, cache and state locations are machine settings, not project ones:
+# set them with the pnpm_config_store_dir / pnpm_config_cache_dir /
+# pnpm_config_state_dir environment variables or in pnpm's global config.
+
+# Supply-chain guards (same policy as sdk/ and app/).
+# Never resolve a version younger than 7 days (10080 minutes): most hijacked
+# releases are detected and unpublished within that window.
+minimumReleaseAge: 10080
+# Refuse a version whose publish trust (provenance / trusted publisher) is
+# weaker than an earlier version of the same package.
+trustPolicy: no-downgrade
+# Reviewed exceptions, each pinned to one exact version:
+# - undici-types@6.21.0: type declarations only (never bundled or executed),
+#   published 2024-11-13 without provenance; required by @types/node 22.x
+#   (Node 22 runtime). Same exception as sdk/ and app/.
+trustPolicyExclude:
+  - "undici-types@6.21.0"
+# Transitive dependencies may only come from the registry (no git or tarball URLs).
+blockExoticSubdeps: true
+# Run no dependency install scripts.
+ignoreScripts: true
+# Peers are declared explicitly; nothing is installed implicitly.
+autoInstallPeers: false
+
+# Reviewed peer warnings (inherited from @noisedlabs/sdk, see sdk/pnpm-workspace.yaml):
+# - fastestsmallesttextencoderdecoder: optional TextEncoder polyfill peer of
+#   @solana/codecs-strings (via @noisedlabs/sdk -> @solana/spl-token); its dist
+#   uses the global TextEncoder (Node 22) and never imports it.
+# - typescript: @meteora-ag/dynamic-bonding-curve-sdk (via @noisedlabs/sdk) lists
+#   "^5" as a peer for its .d.ts files only; this package type-checks with 6.
+# - @cfworker/json-schema: optional peer of @modelcontextprotocol/sdk (an
+#   alternative JSON-schema validator for edge runtimes); this server uses the
+#   default (ajv) validator and never imports it.
+peerDependencyRules:
+  ignoreMissing:
+    - fastestsmallesttextencoderdecoder
+    - "@cfworker/json-schema"
+  allowedVersions:
+    "@meteora-ag/dynamic-bonding-curve-sdk>typescript": "6"
+
+# One copy of each Solana client library, shared with @noisedlabs/sdk: two copies
+# of @solana/web3.js make `instanceof PublicKey` / `Transaction` checks fail
+# between packages. These pins are the SDK's own (sdk/pnpm-workspace.yaml).
+# The MCP SDK and zod are pinned to the exact versions this package declares.
+overrides:
+  "@solana/web3.js": "1.98.4"
+  "@coral-xyz/anchor": "0.31.1"
+  "@solana/spl-token": "0.4.14"
+  "@modelcontextprotocol/sdk": "1.32.0"
+  "zod": "4.6.5"

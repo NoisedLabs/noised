@@ -1,0 +1,48 @@
+/* The shield wall canvas (ShieldWall.tsx). Static CSS only (style-src 'self'). */
+.sw,
+.sw-canvas,
+.sw-poster {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.sw {
+  pointer-events: none;
+}
+/* The live canvas sits over the 2D poster frame (painted at once, so the hero is never half empty) and
+   cross-fades over it on its first real frame (not while its shaders still compile). */
+.sw-canvas {
+  z-index: 1;
+}
+.sw-poster {
+  z-index: 0;
+  /* "backwards", not "both": a held final keyframe would override the fade-out below. */
+  animation: sw-fade 0.28s ease-out backwards;
+  transition: opacity 0.38s ease 0.05s;
+}
+.sw-canvas[data-started] ~ .sw-poster {
+  opacity: 0;
+}
+.sw-canvas:not([data-started]) {
+  opacity: 0;
+}
+.sw-canvas[data-started] {
+  animation: sw-fade 0.38s ease-out both;
+}
+@keyframes sw-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sw-canvas[data-started],
+  .sw-poster {
+    animation: none;
+    transition: none;
+  }
+}

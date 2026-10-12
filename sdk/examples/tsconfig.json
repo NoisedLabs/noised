@@ -1,0 +1,15 @@
+{
+  // Type-checks the examples against the SDK's sources (`pnpm typecheck` runs it).
+  // `@noisedlabs/sdk` maps to src/ here; at run time Node resolves it to dist/
+  // through the package's own "exports" (build first: `pnpm build`).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Examples import each other as `./shared.ts`, which Node's type stripping requires.
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@noisedlabs/sdk": ["../src/index.ts"]
+    }
+  },
+  "include": ["*.ts"]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "@noisedlabs/mcp-example-langgraph-operator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Examples for the Noised MCP server: a LangGraph AI operator (observe -> decide -> build -> human approval -> unsigned transaction) and a no-LLM keeper. Nothing here signs.",
+  "homepage": "https://noised.fun",
+  "bugs": {
+    "url": "https://github.com/NoisedLabs/noised/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NoisedLabs/noised.git",
+    "directory": "packages/noised-mcp/examples/langgraph-operator"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.json",
+    "operator": "pnpm run build && node dist/operator.js",
+    "keeper": "pnpm run build && node dist/keeper.js"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "1.5.12",
+    "@langchain/core": "1.2.14",
+    "@langchain/langgraph": "1.4.19",
+    "@langchain/mcp-adapters": "1.1.4",
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "typescript": "6.0.3"
+  }
+}

@@ -1,0 +1,42 @@
+[package]
+name = "noised-autopilot"
+version = "0.1.0"
+description = "Noised Autopilot: PXG1 automation graphs that run a launched token's treasury (buy back and burn, burn, pay declared recipients) inside fixed on-chain bounds, changed only by the creator's post-quantum identity after a 72-hour timelock"
+edition.workspace = true
+license.workspace = true
+# Deployed on-chain, never published to a registry (cargo-deny also requires
+# this for crates with path dependencies).
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "noised_autopilot"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+custom-heap = []
+custom-panic = []
+anchor-debug = []
+
+[dependencies]
+anchor-lang = { workspace = true, features = ["init-if-needed"] }
+anchor-spl = { workspace = true }
+solana-sha256-hasher = { workspace = true }
+# PXG1 verification, due-ness, epochs, caps and shares (no features on-chain:
+# allocation-free).
+noised-rules = { workspace = true }
+
+[dev-dependencies]
+# Host tests encode graphs and hash with the sha2 backend.
+noised-rules = { workspace = true, features = ["alloc", "sha2-backend"] }
+# Pins the launchpad account layouts the autopilot reads by offset
+# (`launchpad.rs`) against the launchpad's own types.
+noised-launchpad = { path = "../noised-launchpad", features = ["no-entrypoint"] }
+
+[lints]
+workspace = true

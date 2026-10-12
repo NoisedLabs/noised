@@ -1,0 +1,80 @@
+{
+  "name": "@noisedlabs/mcp",
+  "version": "0.2.0",
+  "private": false,
+  "description": "Noised MCP server: lets AI agents (Claude, LangGraph, any MCP client) read Noised launches, rules and autopilots, simulate them, and build unsigned autopilot transactions inside the on-chain bounds. It never signs and never holds keys.",
+  "keywords": [
+    "solana",
+    "mcp",
+    "model-context-protocol",
+    "noised",
+    "autopilot",
+    "keeper",
+    "ai-operator",
+    "claude",
+    "langgraph",
+    "ai-agent",
+    "post-quantum",
+    "quantum-security-layer",
+    "qsl-1",
+    "token-launch"
+  ],
+  "homepage": "https://noised.fun",
+  "bugs": {
+    "url": "https://github.com/NoisedLabs/noised/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NoisedLabs/noised.git",
+    "directory": "packages/noised-mcp"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "bin": {
+    "noised-mcp": "./dist/index.js"
+  },
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js",
+      "default": "./dist/server.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "@noisedlabs/sdk": "file:../../sdk",
+    "@solana/web3.js": "1.98.4",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "typescript": "6.0.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.3"
+  }
+}

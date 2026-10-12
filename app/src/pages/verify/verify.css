@@ -1,0 +1,378 @@
+/*
+ * Verify (pages/verify/VerifyPage.tsx) and the QSL-1 report (QslReport.tsx, also on token pages). Inner-page kit
+ * tokens (--pg-*), two tones. Static stylesheet.
+ */
+
+/* ------------------------------------------------------------------ form --- */
+.vf-form {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 8px 8px 8px 20px;
+  border-radius: var(--r-glass, 4px);
+  transition: box-shadow 0.25s var(--pg-ease);
+}
+.vf-form:focus-within {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--pg-ink) 70%, transparent),
+    0 0 0 7px color-mix(in srgb, var(--pg-ink) 8%, transparent),
+    var(--glass-shadow);
+}
+.vf-form[data-invalid] {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pg-danger) 80%, transparent), var(--glass-shadow);
+}
+.vf-form-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--pg-muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.vf-input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  border: 0;
+  background: transparent;
+  color: var(--pg-text);
+  font: 450 16px/1 var(--pg-mono);
+  letter-spacing: -0.01em;
+}
+.vf-input::placeholder {
+  color: var(--pg-dim);
+  font-family: var(--pg-sans);
+  opacity: 1;
+}
+.vf-input:focus-visible {
+  outline: none;
+}
+.vf-go {
+  min-width: 112px;
+}
+.vf-error {
+  flex-basis: 100%;
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  color: var(--pg-danger);
+}
+
+/* ---------------------------------------------------------------- result --- */
+.vf-result {
+  margin-top: 24px;
+}
+.vf-token {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+.vf-token-t {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  font: 400 var(--px-1h, 39.4737px) / 1 var(--font-pixel);
+  color: var(--pg-text);
+}
+.vf-token-sym {
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui);
+  color: var(--pg-muted);
+}
+.vf-token-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.vf-token-go svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ----------------------------------------------------------- QSL report --- */
+.qsl-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 22px;
+  padding: 18px 20px;
+  border-radius: 3px;
+  background: var(--pg-glass-well);
+  box-shadow: inset 0 0 0 1px var(--pg-hair);
+}
+.qsl-hero[data-tone="candidate"] {
+  box-shadow: inset 0 0 0 1px var(--pg-hair-strong);
+  background:
+    repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--pg-ink) 2.5%, transparent) 6px 7px),
+    var(--pg-glass-well);
+}
+.qsl-hero-t {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.qsl-hero-label {
+  margin: 0;
+  font: 400 var(--px-1h, 39.4737px) / 1 var(--font-pixel);
+  color: var(--pg-text);
+  animation: qsl-hero-in 0.6s var(--pg-ease) both;
+}
+@keyframes qsl-hero-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(4px);
+  }
+}
+.qsl-hero-line {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--pg-text);
+}
+.qsl-hero-mint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--pg-dim);
+}
+.qsl-reasons {
+  display: grid;
+  gap: 4px;
+}
+.qsl-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px 28px;
+}
+.qsl-group-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--pg-hair);
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui);
+  color: var(--pg-text);
+}
+.qsl-group-n {
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui);
+  color: var(--pg-muted);
+}
+.qsl-how {
+  margin-top: 4px;
+}
+.qsl-how > summary {
+  cursor: pointer;
+  width: fit-content;
+  font-size: 12px;
+  color: var(--pg-dim);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.qsl-how > summary::-webkit-details-marker {
+  display: none;
+}
+.qsl-how > span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--pg-muted);
+  overflow-wrap: anywhere;
+}
+.qsl-means-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--pg-text);
+}
+.qsl-required {
+  font-size: 12.5px;
+}
+
+/* ----------------------------------------------------------------- intro --- */
+.vf-levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.vf-level {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 22px 22px 24px;
+  border-radius: var(--r-glass, 4px);
+  animation: qsl-hero-in 0.6s var(--pg-ease) both;
+}
+.vf-level:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.vf-level:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.vf-level .qsl-mark {
+  margin-bottom: 6px;
+}
+.vf-level-n {
+  margin: 0;
+  font: 500 11px/1.3 var(--pg-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pg-dim);
+}
+.vf-level-name {
+  margin: 0;
+  font: 400 var(--px-1, 26.3158px) / 1 var(--font-pixel);
+  color: var(--pg-text);
+}
+.vf-level-line {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pg-muted);
+}
+/* Not a level: the programmable tag, explained next to the two levels (dashed, never a level's look). */
+.vf-level-tag {
+  border: 1px dashed var(--pg-hair-strong);
+  background: transparent;
+}
+.vf-level-tag .qsl-tag {
+  justify-self: start;
+  margin-bottom: 6px;
+}
+.vf-try {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vf-try-a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--pg-hair-strong);
+  border-radius: 3px;
+  background: var(--pg-glass-well);
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui);
+  color: var(--pg-text);
+  transition:
+    border-color 0.2s var(--pg-ease),
+    transform 0.2s var(--pg-ease);
+}
+.vf-try-a:hover {
+  border-color: var(--pg-ink-line);
+  transform: translateY(-1px);
+}
+.vf-try-a svg {
+  width: 15px;
+  height: 15px;
+}
+.vf-foot {
+  margin: 0;
+  font-size: 14px;
+  color: var(--pg-muted);
+}
+
+@media (max-width: 860px) {
+  .vf-levels {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 560px) {
+  .vf-form {
+    padding-left: 14px;
+  }
+  .vf-go {
+    flex-basis: 100%;
+  }
+  .qsl-hero {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .vf-token-t,
+  .qsl-hero-label {
+    font-size: var(--px-1, 26.3158px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qsl-hero-label,
+  .vf-level {
+    animation: none;
+  }
+}
+:root[data-motion="still"] :is(.qsl-hero-label, .vf-level) {
+  animation: none;
+}
+
+/* ---------------------------------------------- rules and automation --- */
+.qsl-hero-tag {
+  margin: 8px 0 0;
+}
+.qsl-prog {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px dashed var(--pg-hair-strong);
+  border-radius: var(--r-glass-sm, 3px);
+  scroll-margin-top: calc(var(--nav-offset, 96px) + 12px);
+  outline: none;
+}
+.qsl-prog[data-tone="caution"] {
+  border: 1px solid color-mix(in srgb, var(--pg-warn) 45%, transparent);
+}
+.qsl-prog-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+.qsl-prog-k {
+  font: 400 var(--px-1, 26.3158px) / 1.05 var(--pg-head);
+  color: var(--pg-text);
+}
+.qsl-prog-not {
+  padding: 2px 8px;
+  border: 1px dashed var(--pg-hair-strong);
+  border-radius: 999px;
+  font: 500 10.5px/1.4 var(--pg-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pg-dim);
+}
+.qsl-prog-s {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--pg-muted);
+  text-wrap: pretty;
+}
+.qsl-prog-part {
+  display: grid;
+  gap: 6px;
+}
+.qsl-notice-body {
+  display: grid;
+  gap: 8px;
+}
+.qsl-notice-tag {
+  display: block;
+}

@@ -1,0 +1,59 @@
+# pnpm 11 reads its settings from this file (it ignores pnpm-only keys in .npmrc).
+# The store, cache and state locations are machine settings, not project ones:
+# set them with the pnpm_config_store_dir / pnpm_config_cache_dir /
+# pnpm_config_state_dir environment variables or in pnpm's global config.
+
+# Supply-chain guards (same policy as sdk/).
+# Never resolve a version younger than 7 days (10080 minutes): most hijacked
+# releases are detected and unpublished within that window.
+minimumReleaseAge: 10080
+# Refuse a version whose publish trust (provenance / trusted publisher) is
+# weaker than an earlier version of the same package.
+trustPolicy: no-downgrade
+# Reviewed exceptions, each pinned to one exact version:
+# - undici-types@6.21.0: type declarations only (never bundled), published
+#   2024-11-13 without provenance; required by @types/node 22.x (Node 22 runtime).
+trustPolicyExclude:
+  - "undici-types@6.21.0"
+# Transitive dependencies may only come from the registry (no git or tarball URLs).
+blockExoticSubdeps: true
+# Run no dependency install scripts.
+ignoreScripts: true
+# Do not install optional peers (the wallet adapter's mobile package lists
+# react-native as an optional peer; this is a browser-only app).
+autoInstallPeers: false
+
+# Reviewed peer warnings:
+# - react-native: optional peer of the Solana Mobile Wallet Adapter's React
+#   Native entry point; the browser build never imports it (vite build would
+#   fail if it did).
+# - fastestsmallesttextencoderdecoder: optional TextEncoder polyfill peer of
+#   @solana/codecs-strings (via @noisedlabs/sdk -> @solana/spl-token); its dist
+#   uses the global TextEncoder (browsers, Node 22) and never imports it.
+# - typescript: @meteora-ag/dynamic-bonding-curve-sdk (via @noisedlabs/sdk) lists
+#   "^5" as a peer for its .d.ts files only; this app type-checks with 6.
+peerDependencyRules:
+  ignoreMissing:
+    - react-native
+    - fastestsmallesttextencoderdecoder
+  allowedVersions:
+    "@meteora-ag/dynamic-bonding-curve-sdk>typescript": "6"
+
+# One copy of each Solana client library, shared by the app and @noisedlabs/sdk:
+# two copies of @solana/web3.js make `instanceof PublicKey` / `Transaction`
+# checks fail between packages. These pins are the SDK's own (sdk/pnpm-workspace.yaml).
+# The wallet adapter's newest releases (2026-09-10) require @solana/web3.js
+# ^1.99; the app stays on 1.98.x like the SDK, so pin the last compatible line.
+overrides:
+  "@solana/wallet-adapter-base": "0.9.27"
+  "@solana/wallet-adapter-react": "0.15.39"
+  "@solana/web3.js": "1.98.4"
+  "@coral-xyz/anchor": "0.31.1"
+  "@solana/spl-token": "0.4.14"
+  # motion@13.5.0 (UI animation): pin its three internal packages to the same
+  # release. framer-motion 13.x declares caret ranges on them, and a mixed set
+  # fails to link (motion-dom 13.5.0 removed an export 13.4 imports). Reviewed
+  # in the maintainers' library review (section 1).
+  "framer-motion": "13.5.0"
+  "motion-dom": "13.5.0"
+  "motion-utils": "13.5.0"

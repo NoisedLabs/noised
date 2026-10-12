@@ -1,0 +1,1128 @@
+{
+  "address": "7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb",
+  "metadata": {
+    "name": "noised_vault",
+    "version": "0.2.0",
+    "spec": "0.1.0",
+    "description": "Post-quantum token vaults: funds move only with an LM-OTS (RFC 8554) hash-based signature"
+  },
+  "instructions": [
+    {
+      "name": "open_vault",
+      "docs": [
+        "Create a vault for `mint` controlled by the LM-OTS public key `key`.",
+        "",
+        "The address commits to this first key, so nobody can open a vault at",
+        "someone else's address with a different key. The first key has LM-OTS",
+        "index `q = 0`: every key of a vault is bound to its position."
+      ],
+      "discriminator": [
+        181,
+        248,
+        228,
+        67,
+        6,
+        175,
+        37,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "arg",
+                "path": "key_id_arg"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "key_id_arg",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "key",
+          "type": {
+            "defined": {
+              "name": "VaultKey"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "docs": [
+        "Deliver a payout to the recipient's canonical associated token",
+        "account, creating it if needed. Permissionless."
+      ],
+      "discriminator": [
+        253,
+        249,
+        15,
+        206,
+        28,
+        127,
+        193,
+        241
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone; pays for the recipient's associated token account if missing."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "vault.genesis_key_id",
+                "account": "Vault"
+              }
+            ]
+          },
+          "relations": [
+            "payout"
+          ]
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "payout",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  121,
+                  111,
+                  117,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "payout.sequence",
+                "account": "Payout"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_payer",
+          "writable": true,
+          "relations": [
+            "payout"
+          ]
+        },
+        {
+          "name": "destination_owner",
+          "relations": [
+            "payout"
+          ]
+        },
+        {
+          "name": "destination",
+          "docs": [
+            "checked (and created if missing) in the handler. Ignored when the",
+            "payout is zero."
+          ],
+          "writable": true
+        },
+        {
+          "name": "memo_program",
+          "docs": [
+            "requires memos."
+          ],
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "release_to",
+      "docs": [
+        "Deliver a payout to any token account of the mint, chosen and signed",
+        "for by the recipient wallet. For recipients whose canonical account",
+        "cannot receive (for example confidential-only accounts)."
+      ],
+      "discriminator": [
+        89,
+        11,
+        150,
+        168,
+        140,
+        201,
+        56,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "destination_owner",
+          "docs": [
+            "The recipient wallet named in the signed message."
+          ],
+          "signer": true,
+          "relations": [
+            "payout"
+          ]
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "vault.genesis_key_id",
+                "account": "Vault"
+              }
+            ]
+          },
+          "relations": [
+            "payout"
+          ]
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "payout",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  121,
+                  111,
+                  117,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "payout.sequence",
+                "account": "Payout"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_payer",
+          "writable": true,
+          "relations": [
+            "payout"
+          ]
+        },
+        {
+          "name": "destination",
+          "docs": [
+            "Any token account of the mint; the recipient chose it by signing."
+          ],
+          "writable": true
+        },
+        {
+          "name": "memo_program",
+          "docs": [
+            "requires memos."
+          ],
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw",
+      "docs": [
+        "Spend the current key: reserve up to `max_amount` for",
+        "`destination_owner` and hand the vault to the next key, whose LM-OTS",
+        "index must be the vault's `sequence + 1`.",
+        "",
+        "Reads no account the recipient or any other third party controls, so",
+        "a valid signature that names the key of the next position always",
+        "executes."
+      ],
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Pays the payout account's rent (refunded on release). Has no",
+            "authority over the vault."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "vault.genesis_key_id",
+                "account": "Vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token_account",
+          "docs": [
+            "Read only: the balance a withdrawal can reserve from."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "payout",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  121,
+                  111,
+                  117,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.sequence",
+                "account": "Vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "WithdrawArgs"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Payout",
+      "discriminator": [
+        69,
+        45,
+        245,
+        131,
+        218,
+        101,
+        158,
+        228
+      ]
+    },
+    {
+      "name": "Vault",
+      "discriminator": [
+        211,
+        8,
+        232,
+        43,
+        2,
+        152,
+        117,
+        119
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "PayoutReleased",
+      "discriminator": [
+        245,
+        195,
+        37,
+        2,
+        200,
+        70,
+        126,
+        210
+      ]
+    },
+    {
+      "name": "VaultOpened",
+      "discriminator": [
+        198,
+        250,
+        195,
+        25,
+        26,
+        107,
+        197,
+        16
+      ]
+    },
+    {
+      "name": "VaultWithdrawn",
+      "discriminator": [
+        238,
+        9,
+        219,
+        172,
+        188,
+        77,
+        72,
+        104
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "KeyIdMismatch",
+      "msg": "Key id does not match the LM-OTS public key"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidSignature",
+      "msg": "Invalid post-quantum signature"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidNextKey",
+      "msg": "The next key must differ from the current key"
+    },
+    {
+      "code": 6003,
+      "name": "UnsupportedMint",
+      "msg": "Mint cannot be held in a vault"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidDestination",
+      "msg": "Destination is not the recipient's associated token account for this mint"
+    },
+    {
+      "code": 6005,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidKeyIndex",
+      "msg": "Key index q must be 0 for a new vault and the vault's sequence + 1 for the next key"
+    }
+  ],
+  "types": [
+    {
+      "name": "Payout",
+      "docs": [
+        "Tokens a withdrawal set aside for its recipient. They stay in the vault's",
+        "token account, counted in `Vault::reserved`, until `release` or",
+        "`release_to` delivers them; then this account closes."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "docs": [
+              "The withdrawal's sequence number (PDA seed)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "destination_owner",
+            "docs": [
+              "The wallet the signed message names."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "rent_payer",
+            "docs": [
+              "Paid the rent; receives it back when the payout closes."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PayoutReleased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "payout",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "destination_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Vault",
+      "docs": [
+        "A vault: one mint, one current LM-OTS key. The address, the token account",
+        "and the balance stay put for the vault's lifetime; every withdrawal",
+        "replaces the key and increments `sequence`. Never closed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "genesis_key_id",
+            "docs": [
+              "key_id of the first key: the PDA seed, so a vault address commits to",
+              "the key that opened it."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sequence",
+            "docs": [
+              "Withdrawals executed so far; signed into every withdrawal message."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "key_id",
+            "docs": [
+              "SHA-256 commitment to the current public key."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "key_ident",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "key_q",
+            "docs": [
+              "The current key's LM-OTS leaf index: always equal to `sequence`",
+              "(`open_vault` requires 0, every withdrawal installs `sequence + 1`)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "key_k",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Tokens held for payouts that have not been released yet."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultKey",
+      "docs": [
+        "LM-OTS public key as passed in instructions."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "docs": [
+              "LM-OTS key identifier `I`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "docs": [
+              "LM-OTS leaf index `q`."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "k",
+            "docs": [
+              "LM-OTS public key hash `K`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "key_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          },
+          {
+            "name": "destination_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "payout",
+            "type": "pubkey"
+          },
+          {
+            "name": "next_key_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WithdrawArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "signature",
+            "docs": [
+              "LM-OTS signature `C || y[0..67]` (2176 bytes)."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "destination_owner",
+            "docs": [
+              "The recipient wallet (never a token account)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "max_amount",
+            "docs": [
+              "Upper bound on the payout; `min(max_amount, unreserved balance)` is reserved."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "next_key_id",
+            "docs": [
+              "key_id of the key that controls the vault after this withdrawal."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "next_key",
+            "docs": [
+              "The next key; its index `q` must be the vault's `sequence + 1`."
+            ],
+            "type": {
+              "defined": {
+                "name": "VaultKey"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

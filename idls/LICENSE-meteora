@@ -1,0 +1,32 @@
+dynamic_bonding_curve.json and cp_amm.json in this directory (and their
+copies in sdk/src/idl/ and the SDK's dist/idl/) are the IDLs of Meteora's
+Dynamic Bonding Curve and DAMM v2 programs, taken from Meteora's MIT-licensed
+SDKs (the Dynamic Bonding Curve SDK, @meteora-ag/dynamic-bonding-curve-sdk,
+ships both). Meteora's license for them:
+
+MIT License
+
+Copyright (c) 2026 Meteora
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+The other files in this directory (noised_launchpad.json, noised_hook.json,
+noised_vault.json, noised_shield.json) are generated from this repository's
+programs with `anchor idl build` and are under the repository's Apache-2.0
+license (see LICENSE and NOTICE at the repository root).

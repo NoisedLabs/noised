@@ -1,0 +1,52 @@
+/*
+ * A token's own details from its on-chain record (tokenMeta.tsx): the icon drawn pixel-crisp at a whole multiple of
+ * its 32 x 32 pixels, and the description and links as plain text. Static stylesheet (style-src 'self').
+ */
+.tk-img {
+  display: block;
+  image-rendering: pixelated;
+  user-select: none;
+}
+.tm-about {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.tm-desc {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text, #f5f5f5);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.tm-links {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tm-links > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+  font-size: 13.5px;
+}
+.tm-link-kind {
+  min-width: 64px;
+  color: var(--text-dim, #8a8a8a);
+}
+.tm-link-host {
+  font-weight: var(--ui-weight, 500);
+  color: var(--text, #f5f5f5);
+}
+.tm-link-url {
+  min-width: 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--text-dim, #8a8a8a);
+  overflow-wrap: anywhere;
+}

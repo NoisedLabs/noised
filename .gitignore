@@ -1,0 +1,94 @@
+# ---------------------------------------------------------------------------
+# Secrets: never commit key material. Program keypairs live in .keys/, the
+# deployer key and devnet test wallets live outside the repository.
+# ---------------------------------------------------------------------------
+.keys/
+*-keypair.json
+*.keypair.json
+keypair*.json
+id.json
+deployer*.json
+*-deployer.json
+**/secrets/
+*phrase*.txt
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+.env
+.env.*
+!.env.example
+.npmrc.local
+.netrc
+
+# ---------------------------------------------------------------------------
+# Rust / Solana / Anchor build output
+# ---------------------------------------------------------------------------
+target/
+target*/
+**/*.rs.bk
+.anchor/
+test-ledger/
+.surfpool/
+*.sqlite
+*.sqlite-journal
+# Program binaries: built in CI (verifiable builds attached to GitHub
+# releases with SHA-256 sums), never committed.
+*.so
+*.so.debug
+# Mainnet program/account dumps (scripts/fetch-fixtures.*, NOISED_FIXTURES_DIR)
+/fixtures/
+
+# ---------------------------------------------------------------------------
+# Node / TypeScript
+# ---------------------------------------------------------------------------
+node_modules
+**/node_modules
+.pnpm-store/
+.npm/
+dist/
+out/
+.next/
+.vite/
+*.tsbuildinfo
+*.tgz
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+
+# ---------------------------------------------------------------------------
+# Logs, scratch, browser profiles
+# ---------------------------------------------------------------------------
+*.log
+logs/
+*.out
+tmp/
+.tmp/
+.cache/
+chrome-*/
+.chrome-profile/
+user-data-dir/
+
+# ---------------------------------------------------------------------------
+# Editors and OS junk
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# Local working files (branding drafts, renders) — not part of the release
+/output/

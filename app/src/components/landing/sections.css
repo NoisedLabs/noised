@@ -1,0 +1,1219 @@
+/*
+ * Home sections (PIXEL_V6 "Pixel Glass" on GLASS_V51 / GLASS_V5 section 4 / SIMPLE_V4 section 3): Live launches
+ * (right under the hero's numbers), Why Noised, How it works, Keep it safe and the closing band. Each sits on a
+ * very faint field of dots and carries an illustration of dots coalescing out of noise (noise/*.ts, noise/home.css).
+ * Two tones only: graphite glass and white light
+ * (paper and ink in the light theme). Colour appears only where it means something: the small status dots on
+ * the launch cards. One idea per section, big calm whitespace.
+ *
+ * Material: the shell's glass (styles.css .glass + --glass-* tokens). Type: the pairing tokens (--font-head,
+ * --font-body, --title-*, --num-*). Every colour below is a local token (--hm-*), defined for both themes.
+ *
+ * CSP: static CSS only (style-src 'self'); the scroll progress and stagger indexes arrive as custom properties
+ * set through CSSOM. Loops run only while motion is on ([data-motion="on"]), only once their section has been
+ * seen ([data-in]) and pause off screen (styles.css: [data-inview="false"]).
+ */
+
+.ld-home {
+  /* Pixel-exact type steps (V6_READY --px-n), kept local so they also step down on phones. */
+  --hm-title-size: var(--px-2, 52.6316px);
+  --hm-cta-size: var(--px-3, 78.9474px);
+  --hm-max: 1200px;
+  --hm-gutter: 24px;
+  /* Line art and light: white on graphite. */
+  --hm-ink: #f5f5f5;
+  --hm-ink-2: rgb(245 245 245 / 0.72);
+  --hm-ink-soft: rgb(245 245 245 / 0.44);
+  --hm-ink-faint: rgb(245 245 245 / 0.13);
+  --hm-light: #ffffff;
+  --hm-glow: rgb(255 255 255 / 0.55);
+  --hm-pool: rgb(255 255 255 / 0.06);
+  /* The accent word of a title: the shell's silver (vertical, top-lit), never a colour. */
+  --hm-silver: var(--silver, linear-gradient(180deg, #f5f5f5 0%, #9a9a9a 100%));
+  /* Small glass (icon tiles, nodes, chips inside a card). */
+  --hm-chip-glass: linear-gradient(165deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.025));
+  --hm-chip-edge: inset 0 0 0 1px rgb(255 255 255 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.2);
+  --hm-chip-shadow: 0 14px 30px -18px rgb(0 0 0 / 0.85);
+  --hm-track: rgb(255 255 255 / 0.08);
+  --hm-focus: #ffffff;
+  /* A recessed screen inside a glass card (the scenes draw on it). */
+  --hm-screen: linear-gradient(180deg, rgb(0 0 0 / 0.38), rgb(0 0 0 / 0.22));
+  --hm-screen-edge: inset 0 0 0 1px rgb(255 255 255 / 0.07), inset 0 1px 0 rgb(0 0 0 / 0.5), 0 1px 0 rgb(255 255 255 / 0.05);
+  /* Status (small dots only): the shell's desaturated status tokens. */
+  --hm-ok: var(--phosphor, #55d383);
+  --hm-warn: var(--amber, #e9c226);
+  --hm-danger: var(--danger, #ee7b7b);
+}
+
+:root[data-theme="light"] .ld-home {
+  --hm-ink: #0a0a0a;
+  --hm-ink-2: rgb(10 10 10 / 0.72);
+  --hm-ink-soft: rgb(10 10 10 / 0.42);
+  --hm-ink-faint: rgb(10 10 10 / 0.11);
+  --hm-light: #0a0a0a;
+  --hm-glow: rgb(10 10 10 / 0.16);
+  --hm-pool: rgb(10 10 10 / 0.045);
+  --hm-chip-glass: linear-gradient(165deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.55));
+  --hm-chip-edge: inset 0 0 0 1px rgb(10 10 10 / 0.08), inset 0 1px 0 rgb(255 255 255 / 1);
+  --hm-chip-shadow: 0 10px 24px -16px rgb(0 0 0 / 0.3);
+  --hm-track: rgb(10 10 10 / 0.08);
+  --hm-focus: #0a0a0a;
+  --hm-screen: linear-gradient(180deg, rgb(10 10 10 / 0.05), rgb(10 10 10 / 0.025));
+  --hm-screen-edge: inset 0 0 0 1px rgb(10 10 10 / 0.08), inset 0 1px 0 rgb(10 10 10 / 0.06), 0 1px 0 rgb(255 255 255 / 0.9);
+}
+
+.ld-home {
+  position: relative;
+  color: var(--text, #f5f5f5);
+}
+.ld-home ::selection {
+  background: color-mix(in srgb, var(--hm-ink) 22%, transparent);
+  color: var(--text, #f5f5f5);
+}
+
+/* ---------------------------------------------------------------- frame --- */
+
+.hm-section {
+  position: relative;
+  width: min(100% - 2 * var(--hm-gutter), var(--hm-max));
+  margin-inline: auto;
+  padding-top: clamp(72px, 7.5vw, 112px);
+  scroll-margin-top: calc(var(--nav-offset, 104px) + 8px);
+}
+
+.hm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px 40px;
+  margin-bottom: clamp(36px, 4vw, 56px);
+}
+.hm-head[data-align="center"] {
+  justify-content: center;
+  text-align: center;
+}
+.hm-head-text {
+  min-width: 0;
+}
+.hm-head[data-align="center"] .hm-head-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hm-title {
+  font-family: var(--font-head);
+  font-weight: 400;
+  font-size: var(--hm-title-size);
+  line-height: 1.04;
+  letter-spacing: 0;
+  color: var(--text, #f5f5f5);
+  text-wrap: balance;
+}
+/* The accent word: silver, top-lit. */
+.ld-home .hm-accent .nz-text-in {
+  background-image: var(--hm-silver);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.hm-lead {
+  max-width: 46ch;
+  margin-top: 16px;
+  font-family: var(--font-body);
+  font-weight: var(--body-weight, 400);
+  font-size: clamp(17px, 1.3vw, 19px);
+  line-height: 1.55;
+  letter-spacing: var(--body-tracking, 0);
+  color: var(--text-muted, #a3a3a3);
+  text-wrap: pretty;
+}
+.hm-head-aside {
+  flex: none;
+}
+
+/* "View all" / "How we verify it": the shared pixel button (.btn .btn-secondary) with an arrow that steps right. */
+.hm-more > svg {
+  width: 16px;
+  height: 16px;
+  transition: translate 0.3s steps(3, end);
+}
+.hm-more:hover > svg {
+  translate: 6px 0;
+}
+
+.hm-card-title {
+  font-family: var(--font-head);
+  font-weight: 400;
+  font-size: var(--px-1, 26.3158px);
+  line-height: 1.12;
+  letter-spacing: 0;
+  color: var(--text, #f5f5f5);
+  text-wrap: balance;
+}
+.hm-card-text {
+  margin-top: 10px;
+  font-family: var(--font-body);
+  font-weight: var(--body-weight, 400);
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: var(--body-tracking, 0);
+  color: var(--text-muted, #a3a3a3);
+  text-wrap: pretty;
+}
+
+/* Live launches follow the hero's numbers directly: a shorter gap above them. */
+.hm-live {
+  padding-top: clamp(48px, 5vw, 80px);
+}
+
+/* ----------------------------------------------------------- why noised --- */
+
+.hm-why-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto auto auto;
+  column-gap: 20px;
+  list-style: none;
+}
+/* Icon, title and text share rows across the three cards (subgrid), so the texts line up. */
+.hm-why-card {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  align-content: start;
+  min-width: 0;
+  padding: clamp(26px, 2.5vw, 34px);
+}
+.hm-why-card {
+  position: relative;
+  overflow: hidden;
+}
+/* The dot scene sits right on the glass (no inner panel), the card's full width (noise/home.css sizes it). */
+.hm-why-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 168px;
+  margin: calc(-1 * clamp(10px, 1vw, 14px));
+  margin-bottom: 0;
+}
+.hm-why-card .hm-card-title {
+  margin-top: 22px;
+}
+.hm-why-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
+}
+
+/* --------------------------------------------------------- live launches --- */
+
+.hm-lc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  list-style: none;
+}
+.hm-lc {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  min-height: 196px;
+  padding: 22px 22px 24px;
+  border-radius: var(--r-glass, 24px);
+}
+.hm-lc-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+/* The token's own 32 x 32 icon at exactly 2x on a dark pixel tile (dark in both themes, like an app icon); a token
+   without one shows its 15 x 15 pixel coin at 4x on its own. */
+.hm-lc-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+}
+.hm-lc-avatar[data-own] {
+  overflow: hidden;
+}
+.hm-lc-id {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+/* The name on Geist Pixel's grid (--px-1: one font pixel = one CSS px), so it reads pixel, not soft. */
+.hm-lc-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-head);
+  font-weight: 400;
+  font-size: var(--px-1, 26.3158px);
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--text, #f5f5f5);
+}
+.hm-lc-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+/* The name link covers the whole card: one tab stop per launch. */
+.hm-lc-link {
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-lc-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+}
+.hm-lc-link:focus-visible {
+  outline: none;
+}
+.hm-lc-link:focus-visible::after {
+  outline: 2px solid var(--hm-focus);
+  outline-offset: 2px;
+}
+.hm-lc-arrow {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  color: var(--hm-ink);
+  opacity: 0;
+  translate: -4px 4px;
+  transition:
+    opacity 0.35s var(--ld-ease),
+    translate 0.45s var(--ld-ease);
+}
+.hm-lc:hover .hm-lc-arrow,
+.hm-lc:focus-within .hm-lc-arrow {
+  opacity: 1;
+  translate: 0 0;
+}
+@media (hover: none) {
+  .hm-lc-arrow {
+    opacity: 0.7;
+    translate: 0 0;
+  }
+}
+/* Small pixel labels: Jersey 10 at its native size (V6_READY --ui-px), uppercase, whole-pixel tracking. */
+.hm-lc-sym {
+  overflow: hidden;
+  font-family: var(--font-ui, var(--font-body));
+  font-weight: 400;
+  font-size: var(--ui-px, 18.6667px);
+  line-height: 1;
+  letter-spacing: var(--label-tracking, 1px);
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim, #8a8a8a);
+}
+/* A live countdown in the pixel face: each digit in a fixed cell, so the numbers do not jiggle as they tick. */
+.hm-lc-clock {
+  display: inline-flex;
+}
+.hm-lc-clock > i {
+  display: inline-block;
+  width: 0.62em;
+  font-style: normal;
+  text-align: center;
+}
+.hm-lc-clock > i[data-sep] {
+  width: 0.38em;
+  color: var(--text-muted, #a3a3a3);
+}
+:root[data-motion="on"] .hm-lc-clock > i[data-sep] {
+  animation: hm-colon 2s steps(1, end) infinite;
+}
+@keyframes hm-colon {
+  50% {
+    opacity: 0.35;
+  }
+}
+.hm-lc-note {
+  margin-top: -8px;
+  font-family: var(--font-ui, var(--font-body));
+  font-weight: 400;
+  font-size: var(--ui-px, 18.6667px);
+  line-height: 1;
+  color: var(--text-dim, #8a8a8a);
+}
+.hm-lc-figs {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+}
+.hm-lc-fig[data-end] {
+  text-align: right;
+}
+.hm-lc-k {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--font-ui, var(--font-body));
+  font-weight: 400;
+  font-size: var(--ui-px, 18.6667px);
+  line-height: 1;
+  letter-spacing: var(--label-tracking, 1px);
+  text-transform: uppercase;
+  color: var(--text-muted, #a3a3a3);
+}
+.hm-lc-v {
+  font-family: var(--font-num, var(--font-head));
+  font-weight: 400;
+  font-size: var(--px-1, 26.3158px);
+  line-height: 1;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text, #f5f5f5);
+}
+.hm-lc-v small {
+  margin-left: 6px;
+  font-family: var(--font-ui, var(--font-body));
+  font-weight: 400;
+  font-size: var(--ui-px, 18.6667px);
+  letter-spacing: var(--label-tracking, 1px);
+  color: var(--text-muted, #a3a3a3);
+}
+.hm-lc-fig[data-end] .hm-lc-v small {
+  margin-left: 1px;
+}
+/* Progress as a pixel bar: 20 segments; the lit ones are ink, a partly reached one glows dimmer. On reveal the
+   segments light up one by one; an open batch's front segment blinks slowly (1 Hz). */
+.hm-lc-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  gap: 3px;
+  height: 8px;
+}
+.hm-lc-track > i {
+  display: block;
+  background: var(--hm-track);
+}
+.hm-lc-track > i[data-on] {
+  background: var(--hm-ink);
+  box-shadow: 0 0 8px -1px var(--hm-glow);
+}
+.hm-lc-track > i[data-on="part"] {
+  background: var(--hm-ink-soft);
+  box-shadow: none;
+}
+:root[data-theme="light"] .hm-lc-track > i[data-on] {
+  box-shadow: none;
+}
+.hm-lc[data-phase="graduated"] .hm-lc-track > i[data-on] {
+  background: var(--hm-ink-2);
+  box-shadow: none;
+}
+:root[data-motion="on"] .hm-live[data-in] .hm-lc-track > i[data-on] {
+  animation: hm-seg 0.5s steps(2, end) backwards;
+  animation-delay: calc(0.35s + var(--i, 0) * 0.09s + var(--s, 0) * 0.035s);
+}
+@keyframes hm-seg {
+  from {
+    background: var(--hm-track);
+    box-shadow: none;
+  }
+}
+:root[data-motion="on"] .hm-live[data-in] .hm-lc[data-phase="commit"] .hm-lc-track > i[data-on="part"],
+:root[data-motion="on"] .hm-live[data-in] .hm-lc[data-phase="commit"] .hm-lc-track > i[data-on]:has(+ i:not([data-on])) {
+  animation: hm-blink 2s steps(1, end) 1.6s infinite;
+}
+@keyframes hm-blink {
+  50% {
+    background: var(--hm-ink-soft);
+    box-shadow: none;
+  }
+}
+
+/* Hover sheen: a soft diagonal band of fine round dots (static, settling) glides across the card. */
+.hm-lc-shimmer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background-image: radial-gradient(circle, rgb(255 255 255 / 0.9) 0.7px, transparent 1.3px), radial-gradient(circle, rgb(255 255 255 / 0.6) 0.6px, transparent 1.2px);
+  background-size: 7px 7px, 11px 11px;
+  background-position: 0 0, 4px 6px;
+  -webkit-mask-image: linear-gradient(105deg, transparent 30%, #000 47%, #000 53%, transparent 70%);
+  mask-image: linear-gradient(105deg, transparent 30%, #000 47%, #000 53%, transparent 70%);
+  -webkit-mask-size: 300% 100%;
+  mask-size: 300% 100%;
+  -webkit-mask-position: 100% 0;
+  mask-position: 100% 0;
+}
+:root[data-theme="light"] .hm-lc-shimmer {
+  background-image: radial-gradient(circle, rgb(10 10 10 / 0.8) 0.7px, transparent 1.3px), radial-gradient(circle, rgb(10 10 10 / 0.5) 0.6px, transparent 1.2px);
+}
+:root[data-motion="on"] .hm-lc:hover .hm-lc-shimmer {
+  animation: hm-shimmer 1.2s cubic-bezier(0.22, 1, 0.36, 1) 1 forwards;
+}
+@keyframes hm-shimmer {
+  0% {
+    opacity: 0;
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+  25% {
+    opacity: 0.26;
+  }
+  100% {
+    opacity: 0.14;
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
+  }
+}
+.hm-lc > :not(.hm-lc-shimmer) {
+  position: relative;
+  z-index: 1;
+}
+/* QA v6: the head row is neither positioned nor stacked (a flex item with a z-index is a stacking context even when
+   static), so the card is the containing block and the stacking context of the name link's ::after: the whole card
+   is clickable and its focus ring goes round the whole card. The hover shimmer then sweeps over the head row too. */
+.hm-lc > .hm-lc-head {
+  position: static;
+  z-index: auto;
+}
+
+/* The token's pixel icon: a voxel coin (components/Identicon.tsx TokenIcon). On hover it spins in 16 steps, so the
+   turn reads as pixel animation; its edge layers give it thickness. */
+.hm-lc-avatar {
+  perspective: 240px;
+}
+.tk {
+  display: inline-grid;
+  place-items: center;
+  line-height: 0;
+}
+.tk-face {
+  display: block;
+}
+.tk-rim-hi {
+  fill: var(--hm-ink);
+}
+.tk-rim {
+  fill: var(--hm-ink-2);
+}
+.tk-bevel {
+  fill: var(--hm-ink-faint);
+}
+.tk-mark {
+  fill: var(--hm-ink);
+}
+.tk-mark-dim {
+  fill: var(--hm-ink-soft);
+}
+.tk-body {
+  fill: color-mix(in srgb, var(--hm-ink) 7%, transparent);
+}
+.tk-voxel {
+  width: var(--tk-size, 30px);
+  height: var(--tk-size, 30px);
+}
+.tk-spin {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+.tk-side,
+.tk-edge {
+  position: absolute;
+  inset: 0;
+  display: block;
+  backface-visibility: hidden;
+}
+.tk-front {
+  transform: translateZ(2px);
+}
+.tk-back {
+  transform: rotateY(180deg) translateZ(2px);
+}
+/* The coin's thickness: three rims between the faces (they line up with the rim face-on and stack into an edge
+   while it turns). */
+.tk-edge {
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 calc(var(--tk-size, 30px) / 15) var(--hm-ink-soft);
+  backface-visibility: visible;
+  scale: 0.96;
+}
+.tk-voxel[data-shape="square"] .tk-edge {
+  display: none;
+}
+.tk-edge:nth-child(1) {
+  transform: translateZ(-1px);
+}
+.tk-edge:nth-child(2) {
+  transform: translateZ(0);
+}
+.tk-edge:nth-child(3) {
+  transform: translateZ(1px);
+}
+:root[data-motion="on"] .hm-lc:hover .tk-spin,
+:root[data-motion="on"] .hm-lc:focus-within .tk-spin {
+  animation: tk-spin 1.6s steps(16, end) infinite;
+}
+@keyframes tk-spin {
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+/* Status chips in plain words (StatusChip, launch.tsx): a neutral glass chip; only its small dot carries colour,
+   and only where it means something (open now = live, guarded = caution, failed = danger). */
+.hm-chip {
+  --dot: var(--hm-ink-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 9px;
+  border-radius: 4px;
+  font-family: var(--font-ui, var(--font-body));
+  font-weight: 400;
+  font-size: var(--ui-px, 18.6667px);
+  line-height: 1;
+  letter-spacing: var(--label-tracking, 1px);
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text-muted, #a3a3a3);
+  background: var(--hm-chip-glass);
+  box-shadow: var(--hm-chip-edge);
+}
+/* Pixel dots: square, not round. */
+.hm-chip > .ld-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 0;
+  color: var(--dot);
+}
+.hm-chip > .ld-dot[data-pulse]::after {
+  border-radius: 0;
+}
+.hm-chip[data-tone="signal"] {
+  --dot: var(--hm-ok);
+  color: var(--text, #f5f5f5);
+}
+.hm-chip[data-tone="amber"] {
+  --dot: var(--hm-warn);
+}
+.hm-chip[data-tone="ice"] {
+  --dot: var(--hm-ink);
+}
+.hm-chip[data-tone="violet"] {
+  --dot: var(--hm-ink-soft);
+}
+/* Coming soon: a hollow dot. */
+.hm-chip[data-tone="dim"] > .ld-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--hm-ink-soft);
+}
+.hm-chip[data-tone="danger"] {
+  --dot: var(--hm-danger);
+  color: var(--text, #f5f5f5);
+}
+
+.hm-live-error {
+  margin-bottom: 18px;
+}
+.hm-live-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+.hm-live-empty .btn {
+  margin-top: 22px;
+}
+
+/* Loading cards: soft breathing placeholders. */
+.hm-skel {
+  display: block;
+  height: 12px;
+  border-radius: 99px;
+  background: var(--hm-track);
+}
+.hm-skel[data-w="lg"] {
+  width: 70%;
+  height: 14px;
+}
+.hm-skel[data-w="md"] {
+  width: 46%;
+  height: 22px;
+}
+.hm-skel[data-w="sm"] {
+  width: 36%;
+}
+.hm-skel-dot {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--hm-track);
+}
+.hm-lc[data-skeleton] .hm-lc-track > i {
+  background: var(--hm-track);
+}
+:root[data-motion="on"] .hm-lc[data-skeleton] > * {
+  animation: hm-breathe 1.6s ease-in-out infinite;
+}
+@keyframes hm-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---------------------------------------------------------- how it works --- */
+
+/* A recessed screen (glass) next to the four steps: the dots form each step on it. */
+.hm-how-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: clamp(20px, 2.4vw, 32px);
+  align-items: stretch;
+}
+.hm-how-screen {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: clamp(14px, 1.6vw, 22px);
+  border-radius: calc(var(--r-glass, 20px) + 4px);
+}
+.hm-how-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  padding: 10px 0;
+  border-radius: calc(var(--r-glass, 20px) - 6px);
+  background: var(--hm-screen);
+  box-shadow: var(--hm-screen-edge);
+  overflow: hidden;
+}
+.hm-how-pin {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.hm-how-pin > .hm-how-screen {
+  flex: 1;
+}
+.hm-how-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* Wide screens with motion on: the screen (about 60%) stays pinned while the steps scroll past; the step in the
+   middle of the window plays. Steps away from the middle step back. */
+@media (min-width: 981px) {
+  .hm-how[data-scroll] .hm-how-grid {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .hm-how[data-scroll] .hm-how-pin {
+    position: sticky;
+    top: calc(var(--nav-offset, 104px) + 28px);
+  }
+  .hm-how[data-scroll] .hm-how-art {
+    min-height: 0;
+  }
+  .hm-how[data-scroll] .hm-how-steps {
+    gap: 0;
+  }
+  .hm-how[data-scroll] .hm-how-steps > li {
+    flex: none;
+    align-items: center;
+    min-height: 40vh;
+  }
+  .hm-how[data-scroll] .hm-how-steps > li:first-child {
+    align-items: flex-start;
+    min-height: 34vh;
+  }
+  .hm-how[data-scroll] .hm-how-step {
+    flex: 1;
+  }
+  /* Steps away from the middle step back: no glass, a fainter rim (their words keep full contrast). */
+  .hm-how[data-scroll] .hm-how-step:not([data-active]) {
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hm-ink) 6%, transparent);
+  }
+}
+.hm-how-steps {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+}
+.hm-how-steps > li {
+  flex: 1;
+  display: flex;
+}
+.hm-how-step {
+  position: relative;
+  display: grid;
+  flex: 1;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 16px;
+  align-items: start;
+  width: 100%;
+  padding: 14px 18px 20px;
+  border: 0;
+  border-radius: var(--r-glass-sm, 14px);
+  /* A quiet glass panel: the dithered field behind never shows through the words. */
+  background: color-mix(in srgb, var(--bg, #070707) 70%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px var(--hm-ink-faint);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.3s var(--ld-ease),
+    box-shadow 0.3s var(--ld-ease);
+}
+.hm-how-step:hover {
+  background: color-mix(in srgb, var(--bg, #070707) 60%, color-mix(in srgb, var(--hm-ink) 8%, transparent));
+}
+.hm-how-step[data-active] {
+  background: var(--hm-chip-glass), color-mix(in srgb, var(--bg, #070707) 70%, transparent);
+  box-shadow: var(--hm-chip-edge), var(--hm-chip-shadow);
+}
+.hm-how-step:focus-visible {
+  outline: 2px solid var(--hm-focus);
+  outline-offset: 2px;
+}
+.hm-how-num {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--hm-ink-faint);
+  font-family: var(--font-ui, var(--font-head));
+  font-weight: 400;
+  font-size: var(--ui-px, 18.6667px);
+  line-height: 1;
+  color: var(--text-dim, #8a8a8a);
+  transition:
+    background-color 0.3s,
+    color 0.3s;
+}
+.hm-how-step[data-active] .hm-how-num {
+  background: var(--hm-ink);
+  box-shadow: none;
+  color: var(--bg, #070707);
+}
+.hm-how-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.hm-how-title {
+  font-family: var(--font-head);
+  font-weight: 400;
+  font-size: var(--px-1, 26.3158px);
+  line-height: 1.1;
+  color: var(--text-muted, #a3a3a3);
+  transition: color 0.3s;
+}
+.hm-how-step[data-active] .hm-how-title {
+  color: var(--text, #f5f5f5);
+}
+.hm-how-text {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-muted, #a3a3a3);
+}
+/* Under the playing step a pixel bar fills in 10 steps over the frame's length. */
+.hm-how-bar {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 9px;
+  height: 3px;
+  background: repeating-linear-gradient(90deg, var(--hm-track) 0 6px, transparent 6px 8px);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.hm-how-bar > i {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, var(--hm-ink) 0 6px, transparent 6px 8px);
+  clip-path: inset(0 100% 0 0);
+}
+.hm-how-step[data-active] .hm-how-bar {
+  opacity: 1;
+}
+.hm-how-step[data-active] .hm-how-bar > i {
+  clip-path: inset(0 0 0 0);
+}
+:root[data-motion="on"] .hm-how-step[data-playing] .hm-how-bar > i {
+  animation: hm-how-fill var(--dur, 3.8s) linear both;
+}
+@keyframes hm-how-fill {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.hm-how-play {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  min-height: 40px;
+  margin-top: 12px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted, #a3a3a3);
+  font-family: var(--font-ui, var(--font-body));
+  font-weight: 400;
+  font-size: var(--ui-px, 18.6667px);
+  line-height: 1;
+  cursor: pointer;
+}
+.hm-how-play:hover {
+  color: var(--text, #f5f5f5);
+  background: color-mix(in srgb, var(--hm-ink) 5%, transparent);
+}
+.hm-how-play:focus-visible {
+  outline: 2px solid var(--hm-focus);
+  outline-offset: 2px;
+}
+.hm-how-play > svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ----------------------------------------------------------- keep it safe --- */
+
+.hm-safe-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  grid-template-areas:
+    "head vault"
+    "private vault";
+  gap: 28px 20px;
+  align-items: end;
+}
+.hm-safe-layout > .hm-head {
+  grid-area: head;
+  align-self: start;
+  margin-bottom: 0;
+}
+.hm-safe-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: calc(var(--r-glass, 24px) + 4px);
+}
+.hm-safe-card[data-kind="private"] {
+  grid-area: private;
+}
+/* The vault: the bigger card, its door drawn larger than the card and bleeding past its top edge. */
+.hm-safe-card[data-kind="vault"] {
+  grid-area: vault;
+  margin-top: clamp(56px, 6vw, 96px);
+}
+/* The pixel scenes sit right on the glass (no inner panel). */
+.hm-safe-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: clamp(200px, 19vw, 260px);
+  margin: clamp(10px, 1vw, 14px);
+  margin-bottom: 0;
+}
+.hm-safe-card[data-kind="vault"] .hm-safe-art {
+  height: clamp(320px, 31vw, 430px);
+  margin: calc(-1 * clamp(56px, 6vw, 96px)) calc(-1 * clamp(8px, 2vw, 28px)) 0;
+}
+.hm-safe-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: clamp(24px, 2.4vw, 34px);
+}
+.hm-safe-title {
+  font-family: var(--font-head);
+  font-weight: 400;
+  font-size: var(--px-1, 26.3158px);
+  line-height: 1.12;
+  letter-spacing: 0;
+  color: var(--text, #f5f5f5);
+}
+.hm-safe-btn {
+  position: relative;
+  z-index: 3;
+  margin-top: 26px;
+}
+.hm-safe-btn > svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.35s var(--ld-ease);
+}
+.hm-safe-btn:hover > svg {
+  transform: translateX(3px);
+}
+
+/* -------------------------------------------------------------- the end --- */
+
+.hm-end {
+  padding-bottom: clamp(72px, 7.5vw, 112px);
+}
+.hm-cta-stage {
+  position: relative;
+  isolation: isolate;
+}
+.hm-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(40px, 5vw, 64px) clamp(16px, 4vw, 64px) clamp(48px, 6vw, 80px);
+  border-radius: calc(var(--r-glass, 24px) + 12px);
+  overflow: hidden;
+  text-align: center;
+}
+/* A faint hex lattice (the hero wall's cells) fading out from the centre, and a top light on the slab. */
+.hm-cta-hex {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34.64' height='60' viewBox='0 0 34.64 60'%3E%3Cpath d='M17.32 0 34.64 10v20L17.32 40 0 30V10ZM17.32 40v20' fill='none' stroke='%23ffffff' stroke-opacity='.09' stroke-width='1'/%3E%3C/svg%3E");
+  background-position: center;
+  background-size: 34.64px 60px;
+  -webkit-mask-image: radial-gradient(ellipse 60% 70% at 50% 50%, #000 0%, transparent 100%);
+  mask-image: radial-gradient(ellipse 60% 70% at 50% 50%, #000 0%, transparent 100%);
+  pointer-events: none;
+}
+.hm-cta-hex::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 50% 60% at 50% 0%, rgb(255 255 255 / 0.06), transparent 70%);
+}
+:root[data-theme="light"] .hm-cta-hex {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34.64' height='60' viewBox='0 0 34.64 60'%3E%3Cpath d='M17.32 0 34.64 10v20L17.32 40 0 30V10ZM17.32 40v20' fill='none' stroke='%230a0a0a' stroke-opacity='.07' stroke-width='1'/%3E%3C/svg%3E");
+}
+:root[data-theme="light"] .hm-cta-hex::after {
+  display: none;
+}
+/* The shield wall: a row of pixel shields above the title. */
+/* The shield wall: twelve pixel shields, the band's hero, above the title. */
+.hm-cta-art {
+  display: grid;
+  place-items: center;
+  width: min(100%, 920px);
+  margin-bottom: clamp(24px, 3vw, 40px);
+}
+.hm-cta-title {
+  font-family: var(--font-head);
+  font-weight: 400;
+  font-size: var(--hm-cta-size);
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--text, #f5f5f5);
+}
+.hm-cta-line {
+  display: block;
+  white-space: nowrap;
+}
+.hm-cta-line-pair {
+  white-space: normal;
+}
+.hm-cta-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+.hm-cta-lead {
+  max-width: 44ch;
+  margin-top: 22px;
+  text-wrap: balance;
+}
+.hm-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 34px;
+}
+
+/* ------------------------------------------------------------- responsive --- */
+
+@media (max-width: 1080px) {
+  .hm-lc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .hm-why-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    row-gap: 16px;
+    max-width: 560px;
+    margin-inline: auto;
+  }
+  .hm-why-card {
+    grid-row: auto;
+    grid-template-rows: none;
+  }
+  .hm-how-grid {
+    grid-template-columns: 1fr;
+    max-width: 640px;
+    margin-inline: auto;
+  }
+  .hm-how-art {
+    min-height: 0;
+  }
+  .hm-how-steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .hm-safe-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "vault" "private";
+    max-width: 640px;
+    margin-inline: auto;
+  }
+  .hm-safe-card[data-kind="vault"] {
+    margin-top: clamp(40px, 10vw, 72px);
+  }
+  .hm-safe-card[data-kind="vault"] .hm-safe-art {
+    height: clamp(240px, 62vw, 340px);
+    margin-top: calc(-1 * clamp(40px, 10vw, 72px));
+  }
+}
+
+@media (max-width: 1099px) {
+  .ld-home {
+    --hm-cta-size: var(--px-2h, 65.7895px);
+  }
+}
+@media (max-width: 639px) {
+  .ld-home {
+    --hm-title-size: var(--px-1h, 39.4737px);
+    --hm-cta-size: var(--px-2, 52.6316px);
+  }
+}
+
+@media (max-width: 720px) {
+  .ld-home {
+    --hm-gutter: 16px;
+  }
+  /* Phones: the launches are one swipeable row (the next card peeks in) instead of a tall stack. The row scrolls on
+     its own; the page never scrolls sideways. */
+  .hm-lc-grid {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: min(84%, 340px);
+    gap: 12px;
+    margin-inline: calc(-1 * var(--hm-gutter));
+    padding: 2px var(--hm-gutter) 10px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--hm-gutter);
+    scrollbar-width: none;
+  }
+  .hm-lc-grid::-webkit-scrollbar {
+    display: none;
+  }
+  .hm-lc-grid > .hm-lc {
+    scroll-snap-align: start;
+  }
+  .hm-head[data-align="start"] .hm-head-aside {
+    width: 100%;
+  }
+  .hm-cta {
+    border-radius: calc(var(--r-glass, 24px) + 4px);
+  }
+  .hm-cta-actions,
+  .hm-cta-actions .btn {
+    width: 100%;
+  }
+  .hm-cta-actions .btn {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 560px) {
+  .hm-how-steps {
+    grid-template-columns: 1fr;
+  }
+  .hm-how-step {
+    padding: 14px 14px 18px;
+  }
+  .hm-how-bar {
+    left: 14px;
+    right: 14px;
+  }
+}
+
+@media (max-width: 420px) {
+  .hm-why-card .hm-card-title {
+    margin-top: 22px;
+  }
+  .hm-lc {
+    padding: 18px 18px 20px;
+  }
+  .hm-safe-art {
+    height: 180px;
+  }
+}
+
+/* --------------------------------------------------------- reduced motion --- */
+
+@media (prefers-reduced-motion: reduce) {
+  .hm-more > svg,
+  .hm-how-step,
+  .hm-lc-arrow {
+    transition: none;
+  }
+  .hm-more:hover > svg {
+    translate: none;
+  }
+}

@@ -1,0 +1,526 @@
+/*
+ * The QSL-1 badge, its explainer and the level ladder (components/qsl/QslBadge.tsx). Two tones like the rest of the
+ * app: the ink (near-black on Paper, white on Graphite) carries the meaning; the shield's bars are the levels. A
+ * candidate's bars are drawn but dimmed and scanning: reached apart from finality. Static stylesheet; reduced motion
+ * and the "still" setting show the final state.
+ */
+
+/* ---------------------------------------------------------------- mark --- */
+.qsl-mark {
+  flex: none;
+  display: block;
+  color: var(--text);
+  image-rendering: pixelated;
+}
+.qsl-mark-rim {
+  fill: currentColor;
+  opacity: 0.9;
+}
+.qsl-mark-bar {
+  fill: currentColor;
+  opacity: 0.14;
+}
+.qsl-mark-bar[data-on] {
+  opacity: 1;
+  animation: qsl-bar-in 0.42s steps(3, end) both;
+  animation-delay: calc(var(--i, 0) * 0.16s + 0.1s);
+}
+.qsl-mark[data-tone="candidate"] .qsl-mark-bar[data-on] {
+  opacity: 0.55;
+  animation: qsl-bar-in 0.42s steps(3, end) both, qsl-bar-scan 2.4s steps(2, end) infinite;
+  animation-delay: calc(var(--i, 0) * 0.16s + 0.1s), calc(var(--i, 0) * 0.3s + 0.9s);
+}
+.qsl-mark[data-tone="none"] .qsl-mark-rim {
+  opacity: 0.45;
+}
+.qsl-mark[data-tone="loading"] .qsl-mark-bar {
+  animation: qsl-bar-load 1.2s steps(2, end) infinite;
+  animation-delay: calc(var(--i, 0) * 0.2s);
+}
+@keyframes qsl-bar-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes qsl-bar-scan {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes qsl-bar-load {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* ---------------------------------------------------------------- chip --- */
+.qsl-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-glass-sm, 3px);
+  background: linear-gradient(180deg, var(--glass-hi), var(--glass-lo));
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: var(--text);
+  font: 500 12.5px/1.2 var(--font-body);
+  white-space: nowrap;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* A one-time light sweep when the badge appears (a pixel-stepped glint). */
+.qsl-chip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--text) 9%, transparent) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: qsl-glint 1.1s steps(10, end) 0.5s both;
+  pointer-events: none;
+}
+@keyframes qsl-glint {
+  to {
+    transform: translateX(120%);
+  }
+}
+.qsl-chip-k {
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui);
+  letter-spacing: var(--label-tracking, 1px);
+}
+.qsl-chip-v {
+  color: var(--text-muted);
+}
+.qsl-chip[data-tone="attested"] .qsl-chip-v,
+.qsl-chip[data-tone="norug"] .qsl-chip-v {
+  color: var(--text);
+}
+.qsl-chip[data-tone="candidate"] {
+  border-style: dashed;
+}
+.qsl-chip[data-tone="none"] {
+  color: var(--text-muted);
+}
+.qsl-chip-btn {
+  cursor: pointer;
+  transition:
+    border-color 0.2s var(--ease-out),
+    background 0.2s var(--ease-out),
+    transform 0.2s var(--ease-out);
+}
+.qsl-chip-btn:hover {
+  border-color: color-mix(in srgb, var(--text) 40%, transparent);
+  background: var(--glass-fill-hover);
+}
+.qsl-chip-btn:active {
+  transform: translateY(1px);
+}
+.qsl-chip-btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.qsl-chip-btn[aria-expanded="true"] {
+  border-color: var(--text);
+}
+.qsl-chip-i {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 1px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 2px;
+  font: 600 10.5px/1 var(--font-body);
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------- popover --- */
+.qsl-pop {
+  position: fixed;
+  left: var(--qsl-x, 12px);
+  top: var(--qsl-y, 12px);
+  z-index: 1200;
+  width: min(392px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 18px 18px 16px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-glass, 4px);
+  background: var(--glass-strong-tint, rgb(250 250 249 / 0.9));
+  -webkit-backdrop-filter: blur(28px) saturate(120%);
+  backdrop-filter: blur(28px) saturate(120%);
+  box-shadow: var(--glass-inset), var(--glass-shadow);
+  color: var(--text);
+  font: 400 14px/1.5 var(--font-body);
+  outline: none;
+  visibility: hidden;
+}
+.qsl-pop[data-placed] {
+  visibility: visible;
+  animation: qsl-pop-in 0.26s var(--ease-out) both;
+}
+.qsl-pop[data-placed="up"] {
+  animation-name: qsl-pop-in-up;
+}
+@keyframes qsl-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+    filter: blur(6px);
+  }
+}
+@keyframes qsl-pop-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+    filter: blur(6px);
+  }
+}
+.qsl-pop-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+}
+.qsl-pop-eyebrow {
+  margin: 0 0 4px;
+  font: 500 11px/1.3 var(--font-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.qsl-pop-title {
+  margin: 0;
+  font: 400 var(--px-1, 26.3158px) / 1 var(--font-pixel);
+  letter-spacing: 0;
+}
+.qsl-pop-x {
+  align-self: start;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui);
+  cursor: pointer;
+}
+.qsl-pop-x:hover {
+  color: var(--text);
+}
+.qsl-pop-x:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.qsl-pop-line {
+  margin: 14px 0 0;
+  color: var(--text);
+}
+.qsl-pop-sub {
+  margin: 12px 0 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.qsl-pop-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.qsl-pop-mint {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.qsl-pop-mint code {
+  font: 400 12px/1 var(--font-mono);
+  color: var(--text-muted);
+}
+.qsl-pop-link {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 12px;
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui);
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+.qsl-pop-link:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+/* -------------------------------------------------------------- ladder --- */
+.qsl-ladder {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.qsl-rung {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
+  animation: qsl-rung-in 0.42s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 0.08s + 0.08s);
+}
+@keyframes qsl-rung-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(4px);
+  }
+}
+.qsl-rung-n {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 2px;
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui);
+  color: var(--text-muted);
+}
+.qsl-rung[data-state="reached"] .qsl-rung-n {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+.qsl-rung[data-state="candidate"] .qsl-rung-n {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--text) 60%, transparent);
+  color: var(--text);
+}
+.qsl-rung[data-state="soon"] .qsl-rung-n {
+  border-style: dashed;
+}
+.qsl-rung-t {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.qsl-rung-name {
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui);
+  color: var(--text);
+}
+.qsl-rung[data-state="todo"] .qsl-rung-name,
+.qsl-rung[data-state="soon"] .qsl-rung-name {
+  color: var(--text-muted);
+}
+.qsl-rung-line {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.qsl-rung-state {
+  font: 500 11px/1.2 var(--font-body);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: right;
+  max-width: 9em;
+}
+.qsl-rung[data-state="reached"] .qsl-rung-state {
+  color: var(--text);
+}
+.qsl-ladder[data-size="lg"] {
+  gap: 8px;
+}
+.qsl-ladder[data-size="lg"] .qsl-rung {
+  padding: 14px 16px;
+  gap: 16px;
+}
+.qsl-ladder[data-size="lg"] .qsl-rung-n {
+  width: 36px;
+  height: 36px;
+}
+.qsl-ladder[data-size="lg"] .qsl-rung-line {
+  font-size: 14px;
+}
+@media (max-width: 560px) {
+  .qsl-rung {
+    grid-template-columns: auto 1fr;
+  }
+  .qsl-rung-state {
+    grid-column: 2;
+    text-align: left;
+    max-width: none;
+  }
+}
+
+/* ---------------------------------------------------------- still / reduced --- */
+@media (prefers-reduced-motion: reduce) {
+  .qsl-mark-bar,
+  .qsl-mark-bar[data-on],
+  .qsl-chip::after,
+  .qsl-pop[data-placed],
+  .qsl-rung {
+    animation: none !important;
+  }
+  .qsl-chip::after {
+    display: none;
+  }
+}
+:root[data-motion="still"] :is(.qsl-mark-bar, .qsl-mark-bar[data-on], .qsl-pop[data-placed], .qsl-rung) {
+  animation: none !important;
+}
+:root[data-motion="still"] .qsl-chip::after {
+  display: none;
+}
+button.qsl-pop-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------- the "programmable" tag --- */
+/*
+ * QSL-1 revision 0.4: a description next to the level, never a level. It never takes the badge's colours: neutral
+ * (hairline) or caution (amber edge, when there are warnings), never a "positive" look.
+ */
+.qsl-badge-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  max-width: 100%;
+}
+.qsl-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--r-glass-sm, 3px);
+  background: transparent;
+  color: var(--text-muted);
+  font: 500 12.5px/1.2 var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.qsl-tag[data-tone="caution"] {
+  border: 1px solid color-mix(in srgb, var(--warn) 60%, transparent);
+  background: var(--amber-soft);
+  color: var(--text);
+}
+.qsl-tag-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qsl-tag-sep {
+  color: var(--text-dim);
+}
+.qsl-tag-link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.qsl-tag-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--warn);
+  color: #1a1400;
+  font: 600 11px/1 var(--font-body);
+}
+.qsl-tag-btn {
+  cursor: pointer;
+  transition:
+    border-color 0.2s var(--ease-out),
+    background 0.2s var(--ease-out);
+}
+.qsl-tag-btn:hover {
+  border-color: color-mix(in srgb, var(--text) 40%, transparent);
+}
+.qsl-tag-btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* In the explainer: the tag's words and warnings, before the levels. */
+.qsl-pop-prog {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 2px;
+  padding: 10px 12px;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--r-glass-sm, 3px);
+}
+.qsl-pop-prog[data-tone="caution"] {
+  border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
+  background: var(--amber-soft);
+}
+.qsl-pop-prog-t {
+  margin: 0;
+  font: 400 var(--ui-px, 18.6667px) / 1.1 var(--font-ui);
+  letter-spacing: var(--label-tracking, 1px);
+  color: var(--text);
+}
+.qsl-pop-prog-s,
+.qsl-pop-prog-n {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* Warnings: one sentence each, an amber square before it. */
+.qsl-warn-list {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.qsl-warn-list > li {
+  position: relative;
+  padding-left: 16px;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.qsl-warn-list > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 7px;
+  height: 7px;
+  background: var(--warn);
+}
+.qsl-warn-list-lg {
+  gap: 8px;
+  font-size: 14px;
+}

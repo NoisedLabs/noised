@@ -1,0 +1,39 @@
+[package]
+name = "noised-shield-litesvm"
+version = "0.1.0"
+description = "LiteSVM tests for noised-shield against mainnet Token-2022 / SPL Token / ATA builds"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+# Its own workspace, like tests/integration (see the root Cargo.toml): LiteSVM
+# pins older solana-* crates that must not leak into the programs' graph.
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[dev-dependencies]
+litesvm = "=0.17.0"
+anchor-lang = { version = "=1.2.1", features = ["init-if-needed"] }
+anchor-spl = "=1.2.1"
+noised-shield = { path = "../..", features = ["no-entrypoint"] }
+noised-hook = { path = "../../../noised-hook", features = ["no-entrypoint"] }
+solana-account = "4.3.0"
+solana-keypair = "3.1.2"
+solana-signer = "3.0.1"
+solana-transaction = "4.1.5"
+solana-transaction-error = "~3.4.0"
+solana-instruction-error = "~2.5.0"
+solana-clock = "~3.2.0"
+# Confidential-balance test. Proofs must come from zk-sdk 7 (the transcript
+# the re-enabled ZK ElGamal program verifies); spl-token-2022-interface 2.1
+# still bundles zk-sdk 4, whose proofs the current runtime rejects.
+spl-token-confidential-transfer-proof-extraction = "0.5.0"
+solana-zk-sdk-v7 = { package = "solana-zk-sdk", version = "=7.0.1" }
+bytemuck = "1"
+
+[profile.dev.package."*"]
+opt-level = 2

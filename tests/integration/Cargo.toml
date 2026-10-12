@@ -1,0 +1,76 @@
+[package]
+name = "noised-integration-tests"
+version = "0.1.0"
+description = "LiteSVM integration tests: our SBF builds against mainnet Token-2022/SPL fixtures"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+# Deliberately its own workspace (the root workspace lists it in `exclude`):
+# LiteSVM 0.17 pins older solana-* crates (solana-address ~2.7, solana-hash
+# ~4.6, ...). Sharing the root Cargo.lock would downgrade the on-chain
+# programs' audited dependency graph just to run tests, and any future
+# program dependency needing a newer solana-address would make the whole
+# workspace unresolvable. The programs under test are the .so files built
+# from the root workspace; the host copies linked here only provide types
+# and instruction builders.
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[dev-dependencies]
+litesvm = "=0.17.0"
+# Same exact pins as the root workspace.
+anchor-lang = "=1.2.1"
+anchor-spl = "=1.2.1"
+spl-transfer-hook-interface = "=2.1.0"
+spl-tlv-account-resolution = "=0.11.1"
+noised-lmots = { path = "../../crates/noised-lmots", features = ["signer", "sha2-backend"] }
+noised-vault = { path = "../../programs/noised-vault", features = ["no-entrypoint"] }
+noised-hook = { path = "../../programs/noised-hook", features = ["no-entrypoint"] }
+solana-account = "4.3.0"
+solana-address-lookup-table-interface = { version = "3.1.0", features = ["bincode"] }
+solana-clock = "3.2.0"
+solana-compute-budget-interface = "3.1.0"
+solana-instruction = "3.5.0"
+solana-keypair = "3.1.2"
+solana-message = { version = "4.2.4", features = ["wincode"] }
+solana-sdk-ids = "3.1.0"
+solana-signature = "3.5.2"
+solana-signer = "3.0.1"
+solana-system-interface = "3.2.0"
+solana-transaction = { version = "4.1.5", features = ["wincode"] }
+solana-transaction-error = "3.4.0"
+base64 = "0.22"
+# Wire-format sizes of legacy, v0 and v1 transactions (same serializer as solana-transaction).
+wincode = "0.6.2"
+serde_json = "1"
+# The runtime LiteSVM already runs: `common::relay` registers a native
+# stand-in program (one CPI from a chosen top-level program id) with it.
+solana-program-runtime = { version = "=4.3.0", features = ["agave-unstable-api"] }
+# Confidential-transfer account setup (vault V1c test). Proofs come from
+# zk-sdk 7, whose transcript the ZK ElGamal proof program verifies;
+# spl-token-2022-interface 2.1 bundles zk-sdk 4 types with the same layout.
+solana-zk-sdk-v7 = { package = "solana-zk-sdk", version = "=7.0.1" }
+spl-token-confidential-transfer-proof-extraction = "0.5.0"
+bytemuck = "1"
+
+# Dependencies (LiteSVM's SBPF interpreter, syscalls, SHA-256 for LM-OTS key
+# generation and signing) run optimized; the tests stay debuggable.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+# LMS identities (PQ v2): a key generation is about 1.14 million SHA-256
+# compressions, so the hashing runs at full speed in test builds too.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.noised-lmots]
+opt-level = 3

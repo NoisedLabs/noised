@@ -1,0 +1,58 @@
+[package]
+name = "noised-lmots"
+version = "0.1.0"
+description = "LM-OTS (LMOTS_SHA256_N32_W4) one-time and LMS (LMS_SHA256_M32_H10) hash-based signatures, RFC 8554 parameter sets also listed in NIST SP 800-208, for Solana programs and clients"
+edition.workspace = true
+license.workspace = true
+# Oldest toolchain tested: Rust 1.95 (Solana platform-tools v1.57) builds and
+# passes every target, feature and doctest of this crate.
+rust-version = "1.95"
+readme = "README.md"
+# Set from scripts/release/repo-config.json (apply-repo-config.mjs writes the
+# root [workspace.package]).
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/noised-lmots"
+keywords = ["lms", "lm-ots", "post-quantum", "hash-based", "signatures"]
+categories = ["cryptography", "no-std"]
+# Only crates.io, and only from the release workflow (.github/workflows/release.yml)
+# after the owner pushes a version tag: crates.io versions cannot be deleted.
+publish = ["crates-io"]
+# Ship the library only: the tests, their RFC 8554 vectors and the benchmark
+# example stay in the repository.
+include = ["/src/**/*.rs", "/README.md", "/LICENSE", "/NOTICE"]
+
+[package.metadata.docs.rs]
+features = ["signer", "sha2-backend"]
+
+[lib]
+name = "noised_lmots"
+
+[features]
+default = []
+# Off-chain key generation and signing (RFC 8554 Appendix A key derivation).
+signer = []
+# SHA-256 backend on the `sha2` crate, for clients and tests.
+sha2-backend = ["dep:sha2"]
+
+[dependencies]
+sha2 = { version = "0.10", default-features = false, optional = true }
+
+[dev-dependencies]
+sha2 = { version = "0.10", default-features = false }
+serde_json = "1"
+
+[[test]]
+name = "lmots"
+required-features = ["signer", "sha2-backend"]
+
+[[test]]
+name = "lms"
+required-features = ["signer", "sha2-backend"]
+
+# Host cost of LMS key generation, signing and verification, and the
+# sol_sha256 syscall CU of verification:
+#   cargo run --release -p noised-lmots --features signer,sha2-backend --example lms_bench
+[[example]]
+name = "lms_bench"
+required-features = ["signer", "sha2-backend"]

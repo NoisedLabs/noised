@@ -1,0 +1,48 @@
+[package]
+name = "noised-launchpad"
+version = "0.1.0"
+description = "Noised launchpad: Meteora DBC launches attested on-chain by the creator's post-quantum (LMS) identity, with no admin key, a fair-open batch and immutable fee routing"
+edition.workspace = true
+license.workspace = true
+# Deployed on-chain, never published to a registry (cargo-deny also requires
+# this for crates with path dependencies).
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "noised_launchpad"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+custom-heap = []
+custom-panic = []
+anchor-debug = []
+
+[dependencies]
+anchor-lang = { workspace = true, features = ["init-if-needed"] }
+anchor-spl = { workspace = true }
+spl-transfer-hook-interface = { workspace = true }
+solana-sha256-hasher = { workspace = true }
+# Required by the zero-copy types `declare_program!` generates for DBC and DAMM v2.
+bytemuck = { version = "=1.25.2", features = ["derive", "min_const_generics"] }
+noised-hook = { path = "../noised-hook", features = ["cpi"] }
+# LMS verification of launch attestations (no features on-chain).
+noised-lmots = { workspace = true }
+# PXR1 verification of creator rules (no features on-chain: allocation-free).
+noised-rules = { workspace = true }
+
+[dev-dependencies]
+# Host tests sign attestations with the LMS signer.
+noised-lmots = { workspace = true, features = ["signer", "sha2-backend"] }
+# Host tests encode rule sets and hash them with the sha2 backend.
+noised-rules = { workspace = true, features = ["alloc", "sha2-backend"] }
+# Pins the vault bytes `pq::is_vault_of` recognizes against the vault crate.
+noised-vault = { path = "../noised-vault", features = ["no-entrypoint"] }
+
+[lints]
+workspace = true

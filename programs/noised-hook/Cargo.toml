@@ -1,0 +1,43 @@
+[package]
+name = "noised-hook"
+version = "0.1.0"
+description = "Launch Guard: a bounded, stateless Token-2022 transfer hook for Meteora DBC launches"
+edition.workspace = true
+license.workspace = true
+# Deployed on-chain, never published to a registry (cargo-deny also requires
+# this for crates with path dependencies).
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "noised_hook"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+custom-heap = []
+custom-panic = []
+anchor-debug = []
+
+[dependencies]
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+spl-transfer-hook-interface = { workspace = true }
+spl-tlv-account-resolution = { workspace = true }
+spl-discriminator = { workspace = true }
+solana-instructions-sysvar = { workspace = true }
+# PXR1 creator rules: verified at `create_policy`, evaluated by `execute`
+# (no features: allocation-free).
+noised-rules = { workspace = true }
+
+[dev-dependencies]
+# Host tests encode rule sets and reuse the rules crate's random generators
+# (`rules::rules_gen`).
+noised-rules = { workspace = true, features = ["alloc"] }
+
+[lints]
+workspace = true

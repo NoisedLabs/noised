@@ -1,0 +1,290 @@
+name: ci
+
+# Runs every check the repository has, for all five programs
+# (noised_launchpad, noised_hook, noised_vault, noised_shield,
+# noised_autopilot): formatting and lints in the five Cargo workspaces, the
+# host tests (the rules crate also with all its features), the LM-OTS/LMS
+# known-answer tests, SBPF v3 builds, the four LiteSVM suites against mainnet
+# dumps (integration, launchpad, shield, autopilot), the independent Python
+# references, cargo-deny, the SDK and app (typecheck, tests, the live and the
+# mock build with their output checks), the MCP server and its LangGraph
+# example, and (manually) deterministic builds of the five programs. No
+# secrets are used. Every action is pinned to a commit SHA; every tool to an
+# exact version or a checksum-pinned archive.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # The release workflow (release.yml) runs this whole file before publishing.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_TOOLCHAIN: "1.98.0"
+  AGAVE_VERSION: v4.3.0
+  # sha256 of solana-release-x86_64-unknown-linux-gnu.tar.bz2 (GitHub release asset digest).
+  AGAVE_SHA256: c97289a8abb1d0efb497d8b5cb285baabd9b7f8ea6647f5d145c5dc8ff3611e8
+  PLATFORM_TOOLS_VERSION: v1.57
+  # cargo-build-sbf downloads platform-tools without verifying them, so CI
+  # installs a checksum-verified copy first.
+  PLATFORM_TOOLS_SHA256: b0f7af104adf726fff2a6a09ea2eb2f2d2965c92295f4d7388c08d140e0c2b00
+  CARGO_TERM_COLOR: always
+  # The LiteSVM workspaces, each built into its own target directory: their
+  # program crates are cdylib + lib, so a shared target dir mixes builds.
+  LP_SVM: programs/noised-launchpad/tests/litesvm/Cargo.toml
+  SH_SVM: programs/noised-shield/tests/litesvm/Cargo.toml
+  AP_SVM: programs/noised-autopilot/tests/litesvm/Cargo.toml
+  IT: tests/integration/Cargo.toml
+
+jobs:
+  programs:
+    name: programs, unit and LiteSVM tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy,rustfmt
+          rustup default "$RUST_TOOLCHAIN"
+
+      - name: Install Agave CLI (checksum-pinned)
+        run: |
+          curl -sSfL -o agave.tar.bz2 "https://github.com/anza-xyz/agave/releases/download/${AGAVE_VERSION}/solana-release-x86_64-unknown-linux-gnu.tar.bz2"
+          echo "${AGAVE_SHA256}  agave.tar.bz2" | sha256sum -c -
+          tar -xjf agave.tar.bz2
+          echo "$PWD/solana-release/bin" >> "$GITHUB_PATH"
+
+      - name: Install platform-tools (checksum-pinned)
+        run: |
+          curl -sSfL -o pt.tar.bz2 "https://github.com/anza-xyz/platform-tools/releases/download/${PLATFORM_TOOLS_VERSION}/platform-tools-linux-x86_64.tar.bz2"
+          echo "${PLATFORM_TOOLS_SHA256}  pt.tar.bz2" | sha256sum -c -
+          mkdir -p "$HOME/.cache/solana/${PLATFORM_TOOLS_VERSION}/platform-tools"
+          tar -xjf pt.tar.bz2 -C "$HOME/.cache/solana/${PLATFORM_TOOLS_VERSION}/platform-tools"
+
+      - name: Format (five workspaces)
+        run: |
+          cargo fmt --all -- --check
+          cargo fmt --manifest-path "$IT" -- --check
+          cargo fmt --manifest-path "$LP_SVM" -- --check
+          cargo fmt --manifest-path "$SH_SVM" -- --check
+          cargo fmt --manifest-path "$AP_SVM" -- --check
+
+      - name: Lints, root workspace
+        env:
+          CARGO_TARGET_DIR: target-host
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Host unit tests
+        env:
+          CARGO_TARGET_DIR: target-host
+        run: cargo test --workspace --locked
+
+      - name: Rules crate with all features (alloc, std, sha2-backend)
+        env:
+          CARGO_TARGET_DIR: target-host
+        run: cargo test -p noised-rules --all-features --locked
+
+      - name: LM-OTS and LMS known-answer tests (RFC 8554 Appendix F, RFC 4231, randomizer)
+        env:
+          CARGO_TARGET_DIR: target-host
+        run: cargo test -p noised-lmots --features signer,sha2-backend --locked
+
+      - name: Build programs (SBPF v3)
+        env:
+          CARGO_TARGET_DIR: target-sbf
+        run: |
+          for p in noised-hook noised-vault noised-launchpad noised-shield noised-autopilot; do
+            cargo-build-sbf --manifest-path "programs/$p/Cargo.toml" --arch v3 --tools-version "$PLATFORM_TOOLS_VERSION"
+          done
+          for so in target-sbf/deploy/*.so; do
+            flags=$(python3 -c "import struct,sys; print(struct.unpack_from('<I', open(sys.argv[1],'rb').read(64), 48)[0])" "$so")
+            echo "$so e_flags=$flags"
+            test "$flags" = "3"
+          done
+          sha256sum target-sbf/deploy/*.so | tee program-hashes.txt
+
+      - name: Fetch mainnet fixtures
+        run: bash scripts/fetch-fixtures.sh fixtures
+
+      - name: Lints, LiteSVM workspaces
+        run: |
+          CARGO_TARGET_DIR=target-it cargo clippy --manifest-path "$IT" --all-targets --locked -- -D warnings
+          CARGO_TARGET_DIR=target-lp-svm cargo clippy --manifest-path "$LP_SVM" --all-targets --locked -- -D warnings
+          CARGO_TARGET_DIR=target-sh-svm cargo clippy --manifest-path "$SH_SVM" --all-targets --locked -- -D warnings
+          CARGO_TARGET_DIR=target-ap-svm cargo clippy --manifest-path "$AP_SVM" --all-targets --locked -- -D warnings
+
+      - name: Integration tests (vault, hook, PQ vectors, metadata; LiteSVM)
+        env:
+          CARGO_TARGET_DIR: target-it
+          NOISED_SBF_DIR: ${{ github.workspace }}/target-sbf/deploy
+          NOISED_FIXTURES_DIR: ${{ github.workspace }}/fixtures
+        run: cargo test --manifest-path "$IT" --locked
+
+      - name: Launchpad end to end (LiteSVM, mainnet DBC and DAMM v2; serial)
+        env:
+          CARGO_TARGET_DIR: target-lp-svm
+          NOISED_SBF_DIR: ${{ github.workspace }}/target-sbf/deploy
+          NOISED_FIXTURES_DIR: ${{ github.workspace }}/fixtures
+        run: cargo test --manifest-path "$LP_SVM" --locked -- --test-threads=1
+
+      - name: Shield (LiteSVM)
+        env:
+          CARGO_TARGET_DIR: target-sh-svm
+          NOISED_SBF_DIR: ${{ github.workspace }}/target-sbf/deploy
+          NOISED_FIXTURES_DIR: ${{ github.workspace }}/fixtures
+          NOISED_FIXTURES: ${{ github.workspace }}/fixtures
+        run: cargo test --manifest-path "$SH_SVM" --locked
+
+      - name: Autopilot (LiteSVM, on launches graduated to mainnet DAMM v2)
+        env:
+          CARGO_TARGET_DIR: target-ap-svm
+          NOISED_SBF_DIR: ${{ github.workspace }}/target-sbf/deploy
+          NOISED_FIXTURES_DIR: ${{ github.workspace }}/fixtures
+        run: cargo test --manifest-path "$AP_SVM" --locked
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: programs
+          path: |
+            target-sbf/deploy/*.so
+            program-hashes.txt
+
+  pq-reference:
+    name: independent Python references (LMS, attestation and metadata vectors)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Standard-library Python only; -I isolates the interpreter from the
+      # checkout and the environment.
+      - name: RFC 8554 Appendix F
+        run: python3 -I scripts/pq/lms_reference.py appendix-f crates/noised-lmots/tests/rfc8554_appendix_f.json
+      - name: Attestation vectors (tests/integration/vectors/lms.json)
+        run: python3 -I scripts/pq/lms_reference.py attest-vectors tests/integration/vectors/lms.json
+      - name: Metadata vectors (tests/integration/vectors/metadata.json)
+        run: python3 -I scripts/pq/lms_reference.py metadata-vectors tests/integration/vectors/metadata.json
+      - name: Programmable-launch vectors (tests/integration/vectors/programmable.json)
+        run: python3 -I scripts/pq/lms_reference.py programmable-vectors tests/integration/vectors/programmable.json
+
+  supply-chain:
+    name: cargo-deny
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+      - name: cargo-deny
+        run: |
+          cargo install cargo-deny --version 0.20.2 --locked
+          cargo deny check advisories licenses sources bans
+
+  js:
+    name: sdk, app and MCP server
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # Keep the pnpm store, cache and state outside the checkout.
+      pnpm_config_store_dir: ${{ github.workspace }}/../pnpm-store
+      pnpm_config_cache_dir: ${{ github.workspace }}/../pnpm-cache
+      pnpm_config_state_dir: ${{ github.workspace }}/../pnpm-state
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: SDK (typecheck, tests, build)
+        working-directory: sdk
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm test
+          pnpm build
+      # The app installs @noisedlabs/sdk as a copy of ../sdk, so it needs the SDK
+      # build above. Both builds run the output checks of build/output-checks.ts
+      # (CSP meta tag first, no inline scripts or styles, no third-party loads,
+      # no mock code in the live build); a failed check fails the build.
+      - name: App (typecheck, tests)
+        working-directory: app
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm test
+      - name: App, live build with output checks
+        working-directory: app
+        env:
+          NOISED_OUT_DIR: dist
+        run: pnpm build
+      - name: App, mock build with output checks
+        working-directory: app
+        env:
+          NOISED_OUT_DIR: dist-mock
+          VITE_NOISED_MOCK: "1"
+        run: pnpm build
+      # The MCP server also installs @noisedlabs/sdk as a copy of ../../sdk (the
+      # SDK build above). It is built before its tests so that the stdio and
+      # end-to-end tests run the built server; the example only typechecks
+      # (running it needs the network and an API key).
+      - name: MCP server (typecheck, build, tests)
+        working-directory: packages/noised-mcp
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm build
+          pnpm test
+      - name: MCP LangGraph example (typecheck)
+        working-directory: packages/noised-mcp/examples/langgraph-operator
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+
+  verifiable-build:
+    name: verifiable build (manual)
+    # Not when release.yml calls this file: it makes its own verifiable builds.
+    if: github.event_name == 'workflow_dispatch' && github.workflow == 'ci'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Deterministic builds with solana-verify (Docker)
+        run: |
+          cargo install solana-verify --version 0.5.2 --locked
+          for lib in noised_hook noised_vault noised_launchpad noised_shield noised_autopilot; do
+            solana-verify build --library-name "$lib" -- --arch v3
+          done
+          sha256sum target/deploy/*.so | tee verified-hashes.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-programs
+          path: |
+            target/deploy/*.so
+            verified-hashes.txt

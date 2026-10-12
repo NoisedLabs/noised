@@ -1,0 +1,69 @@
+/*
+ * Vault page (v4): the unlocked phrase, the vaults
+ * of one token and the signed withdrawals. Shared pieces are in ../inner/kit.css.
+ */
+
+/* ----------------------------------------------------- unlocked phrase --- */
+.pg-unlocked-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.pg-fp { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pg-fp-k { font-size: 13px; font-weight: 500; color: var(--pg-muted); }
+.pg-fp-v { font-size: 22px; color: var(--pg-text); }
+.pg-fp-h { font-size: 13px; color: var(--pg-dim); }
+
+/* token picker (also the Privacy page) */
+.pg-pick { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 12px 14px; align-items: end; }
+.pg-span-all { grid-column: 1 / -1; }
+
+/* "How the vault works": the technical facts. */
+.pg-facts { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.pg-facts li { max-width: 78ch; padding-left: 18px; border-left: 2px solid var(--pg-line-strong); font-size: 14px; line-height: 1.65; color: var(--pg-muted); }
+.pg-facts strong { color: var(--pg-text); font-weight: 600; }
+
+/* ------------------------------------------------------ vaults of a token --- */
+.pg-vault-tree { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.pg-deposit { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid color-mix(in srgb, var(--pg-signal) 30%, var(--pg-line)); border-radius: var(--pg-r-sm); background: color-mix(in srgb, var(--pg-signal) 5%, var(--pg-panel-2)); }
+.pg-deposit-k { font-size: 13px; font-weight: 500; color: var(--pg-muted); }
+.pg-deposit-v { min-width: 0; font-size: 15px; }
+.pg-stats-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.pg-stats-3 > .pg-stat { padding: 16px; border: 1px solid var(--pg-line); border-radius: var(--pg-r-sm); background: color-mix(in srgb, var(--pg-panel-2) 60%, transparent); }
+.pg-radios { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.pg-radios legend { margin-bottom: 8px; }
+.pg-radio { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 14.5px; color: var(--pg-text); cursor: pointer; }
+.pg-radio input[type="radio"] { width: 18px; height: 18px; accent-color: var(--pg-signal); }
+.pg-radio .input { width: 11rem; max-width: 100%; }
+.pg-msg-kv { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 6px 16px; font-size: 13px; }
+.pg-msg-kv dt { color: var(--pg-muted); }
+.pg-msg-kv dd { margin: 0; min-width: 0; font-family: var(--pg-mono); font-size: 12px; overflow-wrap: anywhere; color: var(--pg-text); }
+.pg-msg-hex { font: 400 11.5px/1.6 var(--pg-mono); color: var(--pg-dim); overflow-wrap: anywhere; }
+.pg-inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.pg-inline-form > .pg-grow { flex: 1 1 260px; min-width: 0; }
+.pg-inline-form .input { width: 100%; }
+.pg-gap-top { margin-top: 8px; }
+
+/* ---------------------------------------------------- recovery phrase --- */
+.pg-gate { display: flex; flex-direction: column; gap: 18px; }
+.pg-gate-step { display: flex; flex-direction: column; gap: 16px; }
+.pg-gate-step > .btn,
+.pg .pg-unlock { align-self: flex-start; }
+.pg-phrase-bar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.pg-phrase-bar .label { margin-bottom: 0; }
+.pg-phrase-bar-k { font-family: var(--font-ui, var(--pg-sans)); font-size: var(--ui-px, 18.6667px); line-height: 1; letter-spacing: var(--label-tracking, 1px); text-transform: uppercase; color: var(--pg-muted); }
+.pg .pg-phrase { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; border: 0; background: none; }
+.pg .pg-phrase > li { display: flex; align-items: baseline; gap: 10px; min-width: 0; padding: 11px 14px; border: 1px solid var(--pg-line); border-radius: var(--r-glass-sm, 3px); background: var(--pg-panel-2); font: 500 15px/1.3 var(--pg-mono); color: var(--pg-text); }
+.pg .pg-phrase > li > span:first-child { min-width: 2ch; font: 500 12px/1 var(--pg-sans); color: var(--pg-dim); text-align: right; }
+.pg .pg-phrase[data-hidden] > li > span:last-child { color: var(--pg-dim); letter-spacing: 0.1em; }
+.pg-confirm-words { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) {
+  .pg-confirm-words { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .pg .pg-phrase { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .pg-pick { grid-template-columns: minmax(0, 1fr); }
+  .pg-stats-3 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .pg-msg-kv { grid-template-columns: minmax(0, 1fr); }
+}

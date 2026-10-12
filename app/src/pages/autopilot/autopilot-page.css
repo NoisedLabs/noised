@@ -1,0 +1,243 @@
+/*
+ * Autopilot page layout (PROGRAMMABLE_V1 §6): the builder's workbench (palette,
+ * canvas, inspector), the simulation, the review, "Run now" and the history,
+ * and the #/autopilot overview. Static CSS (CSP-safe). The canvas itself is
+ * ./autopilot.css.
+ */
+
+/* ------------------------------------------------------------------ page --- */
+.ap { min-width: 0; }
+.ap-grid { display: grid; gap: 22px; }
+.ap-muted { margin: 0; color: var(--pg-dim); font-size: 13.5px; line-height: 1.55; }
+.ap-treasury { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 14px 0 0; font-size: 13px; }
+.ap-card-link { align-self: flex-start; margin-top: 12px; }
+
+/* ---------------------------------------------------------------- editor --- */
+/*
+ * The workbench follows the editor's own width (a container query), not the window's: beside the Custom launch's
+ * step rail the editor is narrower than on the token's Autopilot page, and the canvas must still get the full width.
+ *   - under 700 px (phones): one column, the canvas first, then the palette, then the inspector;
+ *   - 700 to 1099 px: the palette as a strip above a full-width canvas, the inspector and the people below, side by side;
+ *   - 1100 px and up (and full screen on a desktop): palette | canvas | inspector.
+ */
+.ap-editor { container: ap-editor / inline-size; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ap-editor-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.ap-editor-tools { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.ap-workbench { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 12px; }
+.ap-center { display: flex; flex-direction: column; gap: 10px; min-width: 0; order: -1; }
+.ap-side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+.ap-announce { margin: 0; padding: 8px 12px; background: var(--pg-ink-soft); color: var(--pg-text); font-size: 13px; }
+.ap-ok { margin: 0; color: var(--pg-ok); font-size: 13px; }
+.ap-issues { margin-top: 2px; }
+.ap-issues .rl-problem:disabled { cursor: default; }
+
+/* The palette: three groups of pixel chips (click to use; drag onto the canvas on desktop). */
+.ap-palette { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px 22px; min-width: 0; }
+.ap-pal-group { display: flex; flex: 1 1 100%; flex-direction: column; gap: 6px; min-width: 0; }
+.ap-pal-title { margin: 0; font: 400 var(--ui-px, 18.6667px)/1 var(--font-ui, var(--pg-sans)); letter-spacing: var(--label-tracking, 1px); color: var(--pg-text); }
+.ap-pal-hint { display: none; margin: 0; color: var(--pg-dim); font-size: 12px; line-height: 1.4; }
+.ap-pal-list { display: flex; flex-direction: row; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.ap-pal-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  background: var(--pg-glass-well);
+  box-shadow: inset 0 0 0 1px var(--pg-hair);
+  color: var(--pg-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: grab;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.ap-pal-item:hover:not(:disabled) { background: var(--pg-glass-well-2); box-shadow: inset 0 0 0 1px var(--pg-ink-line); }
+.ap-pal-item:active:not(:disabled) { cursor: grabbing; }
+.ap-pal-item:focus-visible { outline: 2px solid var(--pg-ink); outline-offset: 1px; }
+.ap-pal-item:disabled { opacity: 0.45; cursor: not-allowed; }
+.ap-pal-item[aria-disabled="true"] { color: var(--pg-muted); }
+/* Two tones only: an action is a filled square, a trigger a hollow one, a condition a small diamond. */
+.ap-pal-dot { flex: none; width: 9px; height: 9px; background: var(--pg-ink); }
+.ap-pal-item[data-group="trigger"] .ap-pal-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--pg-ink); }
+.ap-pal-item[data-group="condition"] .ap-pal-dot { width: 7px; height: 7px; margin: 0 1px; transform: rotate(45deg); background: var(--pg-ink-2); }
+
+@container ap-editor (min-width: 700px) {
+  .ap-center { order: 0; }
+  .ap-pal-group { flex: 1 1 180px; }
+  /* "Only if" has the most items: give it more of the strip so the palette stays short. */
+  .ap-pal-group:last-child { flex: 2 1 300px; }
+  .ap-pal-hint { display: block; }
+  .ap-side { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@container ap-editor (min-width: 1100px) {
+  .ap-workbench { grid-template-columns: 196px minmax(0, 1fr) 316px; }
+  .ap-palette { flex-direction: column; flex-wrap: nowrap; gap: 14px; }
+  .ap-pal-group,
+  .ap-pal-group:last-child { flex: none; }
+  .ap-pal-list { flex-direction: column; }
+  .ap-pal-item { width: 100%; }
+  .ap-side { display: flex; flex-direction: column; }
+}
+
+/* Full screen: the same editor over the whole window (its host moves to <body>); the page behind stops scrolling. */
+.ap-editor-anchor,
+.ap-editor-host { min-width: 0; }
+:root.ap-fullscreen-open { overflow: hidden; }
+.ap-editor[data-expanded] {
+  color: var(--pg-text);
+  font-family: var(--pg-sans);
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 14px clamp(16px, 2.2vw, 32px) 24px;
+  background: radial-gradient(1100px 520px at 50% -220px, var(--bg-tint, transparent), transparent 72%), var(--bg);
+  outline: none;
+}
+.ap-editor[data-expanded] .rl-templates { display: none; }
+.ap-editor[data-expanded] .ap-editor-bar { position: sticky; top: -14px; z-index: 5; margin: -14px 0 0; padding: 14px 0 10px; background: var(--bg); }
+.ap-editor[data-expanded] .ap-workbench { margin-top: 0; }
+.ap-editor[data-expanded] .ap-canvas { height: max(360px, calc(100dvh - 200px)); }
+@container ap-editor (min-width: 1100px) {
+  .ap-editor[data-expanded] .ap-workbench { grid-template-columns: 196px minmax(0, 1fr) 340px; }
+  .ap-editor[data-expanded] .ap-palette,
+  .ap-editor[data-expanded] .ap-side { max-height: calc(100dvh - 120px); overflow: auto; overscroll-behavior: contain; }
+}
+
+/* Inspector, recipients and operator. */
+.ap-inspector { display: flex; flex-direction: column; gap: 12px; padding: 14px; background: var(--pg-glass-well); box-shadow: inset 0 0 0 1px var(--pg-hair); }
+.ap-inspector-empty { gap: 10px; }
+.ap-insp-head { display: flex; align-items: center; gap: 8px; }
+.ap-insp-title { margin: 0; font: 400 var(--ui-px, 18.6667px)/1.1 var(--font-ui, var(--pg-sans)); letter-spacing: var(--label-tracking, 1px); color: var(--pg-text); }
+.ap-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.ap-field .input,
+.ap-field .select { width: 100%; min-height: 38px; font-size: 14px; }
+.ap-group { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0; padding: 12px 0 0; border: 0; border-top: 1px solid var(--pg-hair); }
+.ap-legend { padding: 0; margin-bottom: 4px; font: 400 var(--ui-px, 18.6667px)/1 var(--font-ui, var(--pg-sans)); letter-spacing: var(--label-tracking, 1px); color: var(--pg-muted); }
+.ap-unit { position: relative; display: flex; align-items: center; }
+.ap-unit .input { padding-right: 64px; }
+.ap-unit-t { position: absolute; right: 12px; color: var(--pg-dim); font-size: 13px; pointer-events: none; }
+.ap-conds { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ap-cond { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; padding: 8px; background: var(--pg-glass-well-2); box-shadow: inset 0 0 0 1px var(--pg-hair); }
+.ap-cond-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 6px; }
+.ap-cond-t { align-self: center; font-size: 13.5px; }
+.ap-codeonly { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 8px 10px; background: var(--pg-ink-soft); font-size: 13px; }
+.ap-codeonly-n { color: var(--pg-muted); font-size: 12px; }
+.ap-add-sel { color: var(--pg-muted); border-style: dashed; background-color: transparent; }
+.ap-legend-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 18px; color: var(--pg-muted); font-size: 12.5px; line-height: 1.5; }
+.ap-people { display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--pg-glass-well); box-shadow: inset 0 0 0 1px var(--pg-hair); }
+.ap-recips { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ap-recip { display: grid; grid-template-columns: minmax(0, 1fr) 92px auto; gap: 6px; align-items: center; }
+.ap-recip .input { font-size: 12.5px; }
+.ap-people-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.ap-total { font-size: 13px; color: var(--pg-ok); }
+.ap-total[data-tone="warn"] { color: var(--pg-warn); }
+
+/* Code and TypeScript tabs. */
+.ap-ts { display: flex; flex-direction: column; gap: 10px; }
+.ap-pre { margin: 0; padding: 14px 16px; max-height: 420px; overflow: auto; background: var(--field-bg, var(--pg-glass-well)); box-shadow: inset 0 0 0 1px var(--pg-hair); font: 12.5px/1.6 var(--pg-mono); white-space: pre; }
+.ap-pre:focus-visible { outline: 2px solid var(--pg-ink); outline-offset: 2px; }
+
+/* ------------------------------------------------------------ simulation --- */
+.ap-sim-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 18px; }
+.ap-sim-controls .ap-field { min-width: 170px; }
+.ap-sim { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+.ap-charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.ap-chart { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 0; }
+.ap-events summary { cursor: pointer; }
+.ap-event-list { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
+.ap-event-list li { display: grid; grid-template-columns: 58px 110px minmax(0, 1fr); gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--pg-hair); }
+.ap-event-list li[data-kind="wait"] { color: var(--pg-muted); }
+.ap-event-day { color: var(--pg-dim); font-variant-numeric: tabular-nums; }
+.ap-event-node { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--pg-mono); font-size: 12px; }
+
+/* ---------------------------------------------------------------- review --- */
+.ap-signed { display: flex; flex-direction: column; gap: 8px; }
+.ap-bytes { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; width: 100%; }
+.ap-bytes code { font-size: 12px; }
+.ap-bytes-n { flex: none; color: var(--pg-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ap-pending,
+.ap-danger { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--pg-hair); }
+.ap-danger .btn,
+.ap-pending .btn { align-self: flex-start; }
+.ap-foot { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 0; }
+
+/* ------------------------------------------------------- run now, history --- */
+.ap-runs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 22px; align-items: start; }
+.ap-due { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.ap-due-item { --px-c: 3px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--pg-ok) 7%, var(--pg-glass-well)); }
+.ap-due-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ap-due-t { font-size: 14px; }
+.ap-due-s { color: var(--pg-muted); font-size: 12.5px; }
+.ap-due-c { color: var(--pg-text); font-size: 12.5px; }
+.ap-history { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.ap-hist { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--pg-hair); }
+.ap-hist:last-child { border-bottom: 0; }
+.ap-hist-ico { display: inline-grid; place-items: center; width: 30px; height: 30px; background: var(--pg-ink-soft); color: var(--pg-text); }
+.ap-hist-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ap-hist-t { font-size: 14px; }
+.ap-hist-s { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; color: var(--pg-muted); font-size: 12.5px; }
+.ap-hist-sig { color: var(--pg-dim); font-size: 12px; }
+
+/* ------------------------------------------------------------------ index --- */
+.ap-idx-h { margin: 28px 0 12px; font: 400 var(--px-1, 26.3158px)/1.1 var(--pg-head); }
+.ap-idx { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.ap-idx-card { display: flex; flex-direction: column; gap: 8px; height: 100%; padding: 16px 18px; color: var(--pg-text); text-decoration: none; }
+.ap-idx-card:focus-visible { outline: 2px solid var(--pg-ink); outline-offset: 2px; }
+.ap-idx-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ap-idx-sym { font: 400 var(--px-1, 26.3158px)/1 var(--pg-head); }
+.ap-idx-name { color: var(--pg-muted); font-size: 13.5px; }
+.ap-idx-facts { display: flex; flex-direction: column; gap: 4px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--pg-hair); color: var(--pg-muted); font-size: 13px; }
+.ap-idx-facts > span { display: inline-flex; align-items: center; gap: 6px; }
+.ap-idx-due { color: var(--pg-ok); }
+
+/* ----------------------------------------------------------- responsive --- */
+@media (max-width: 960px) {
+  .ap-charts { grid-template-columns: minmax(0, 1fr); }
+  .ap-runs { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  /* Four review steps: two per row on phones (the kit wraps them three per row). */
+  .ap .pg-step { flex-basis: 50%; }
+  .ap-due-item { grid-template-columns: auto minmax(0, 1fr); }
+  .ap-due-item .btn { grid-column: 1 / -1; }
+  .ap-hist { grid-template-columns: auto minmax(0, 1fr); }
+  .ap-hist-sig { display: none; }
+  .ap-event-list li { grid-template-columns: 52px minmax(0, 1fr); }
+  .ap-event-node { display: none; }
+  .ap-recip { grid-template-columns: minmax(0, 1fr) 84px auto; }
+}
+
+/* ------------------------------------------------------------ simple jobs --- */
+/* The Simple jobs reuse the rules gallery's cards (../create/rules/rules.css: .rg-*). */
+.ap-jobs { margin-top: 14px; }
+.ap-summary { display: grid; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--pg-hair); }
+.ap-sim-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); align-items: start; gap: 14px 18px; }
+.ap-sim-controls > .sl { grid-column: 1 / -1; }
+.ap-sim-cost { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--pg-muted); text-wrap: pretty; }
+
+/* Who gets paid and who operates: every address in full. */
+.ap-people-list { display: grid; gap: 6px; min-width: 0; }
+.ap-people-list > ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; }
+.ap-people-list > ul > li { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ap-people-list > code { font-size: 12.5px; }
+.ap-share { flex: none; min-width: 3.4em; font-weight: var(--ui-weight, 500); color: var(--pg-text); }
+
+/* What a change does, compared with the running steps. */
+.ap-changes { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; line-height: 1.5; }
+.ap-changes > li { position: relative; padding-left: 16px; overflow-wrap: anywhere; }
+.ap-changes > li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 7px; height: 7px; background: var(--pg-ink); }
+.ap-changes > li[data-kind="removed"]::before { background: var(--pg-warn); }
+.ap-pending.pg-note-box { margin-top: 14px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--pg-tone, var(--pg-warn)) 26%, var(--pg-hair)); }
+.ap-pending-when { margin: 0 0 8px; }
+.ap-sign { display: grid; gap: 12px; margin-top: 14px; padding: 14px 16px; border: 1px solid var(--pg-hair); background: var(--pg-glass-well); }
+.ap-change-list { display: grid; gap: 6px; }
+.ap-review .pg-btns { margin-top: 4px; }
+
+/* Payees checked on the chain (SDK 0.9.0 checkGraphRecipients): refusals, payees without a wSOL account, cautions. */
+.ap-payees { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; min-width: 0; }
+.ap-payee-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; padding-left: 18px; font-size: 13px; overflow-wrap: anywhere; }

@@ -1,0 +1,71 @@
+/*
+ * Home "signal from noise" layer: the dot illustrations (fx/noise NoiseArt) and the very faint dot field behind each
+ * section (glass.tsx SectionField wraps NoiseGrain). Monochrome: the canvases paint the page ink (--nz-ink) at
+ * varying opacities. CSP: static CSS only.
+ */
+
+.ld-home {
+  /* The ink the noise canvases paint with (fx/noise readInk). */
+  --nz-ink: var(--text, #f5f5f5);
+}
+
+/* A faint dot field behind a section: the full window width, behind the section's content (the shell clips the few
+   px of scrollbar overflow, .phx-shell overflow-x: clip). */
+.hm-section {
+  isolation: isolate;
+}
+.hm-field {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  translate: -50% 0;
+  pointer-events: none;
+}
+
+/* The art boxes the scenes fill (a NoiseArt fills its positioned parent; the hero tiles' icon box is positioned in
+   hero.css, absolutely on phones). */
+.hm-why-art,
+.hm-how-art,
+.hm-safe-art,
+.hm-cta-art {
+  position: relative;
+}
+.hm-why-art {
+  aspect-ratio: 2 / 1;
+  min-height: 0;
+}
+.hm-how-art {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 16 / 10;
+}
+.hm-cta-art {
+  aspect-ratio: 300 / 64;
+}
+
+/* How it works: the playing step's name, quietly, in the screen's corner (the list beside it is the real text). */
+.hm-how-cap {
+  position: absolute;
+  left: clamp(26px, 2.6vw, 36px);
+  bottom: clamp(24px, 2.4vw, 32px);
+  display: inline-flex;
+  gap: 10px;
+  align-items: baseline;
+  font: 400 var(--ui-px) / 1 var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--text-muted, #a3a3a3);
+  pointer-events: none;
+}
+.hm-how-cap > b {
+  font-weight: 400;
+  color: var(--text-dim, #8a8a8a);
+}
+@media (max-width: 560px) {
+  .hm-how-cap {
+    left: 22px;
+    bottom: 20px;
+  }
+}

@@ -1,0 +1,1706 @@
+/*
+ * NOISED // v4 "Same look, simple words" — the shell (SIMPLE_V4 spec sections 1-2): calm background, floating
+ * pill navbar + mode pill, network banner, mobile sheet, command palette, footer, soft page fade; plus the legacy
+ * page classes (.terminal-*, .lx-*). Tokens and shared components live in styles.css. Static CSS only
+ * (style-src 'self'); components set custom properties / delays through React style props.
+ *
+ * Unlayered on purpose: shell rules must beat page utilities (they style chrome the pages do not own).
+ * Shared component classes live in @layer components (styles.css).
+ */
+
+/* ============================================================ GLOBAL FX === */
+/* The living aurora + grain sit in fx/aurora (Aurora.tsx, aurora.css). .phx-fx-back is the legacy layer name. */
+.phx-fx-back,
+.phx-fx-grain,
+.phx-fx-front {
+  display: none;
+}
+
+/* ============================================================== SHELL === */
+.phx-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  /* Safety net for 390px: anything wider than the viewport is clipped instead of widening the page (clip is not a
+     scroll container, so position: sticky inside keeps working; the fixed navbar is not clipped). */
+  overflow-x: clip;
+}
+.phx-main {
+  flex: 1;
+  min-width: 0;
+  counter-reset: phx-panel;
+  outline: none;
+}
+.phx-main[data-home="false"] {
+  padding-top: calc(var(--nav-offset) + 28px);
+  padding-bottom: 112px;
+}
+.phx-shell:has(.phx-netbanner) .phx-main[data-home="false"] {
+  /* --phx-banner-h: the banner's measured height (Layout.tsx NetworkBanner); 8px gap above it. */
+  padding-top: calc(var(--nav-offset) + 8px + var(--phx-banner-h, 40px) + 24px);
+}
+.phx-page {
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+/* Route change: Layout.tsx resolves the new page in from noise (fx/noise/reveal.ts: a mask of growing dots and an
+   opacity ramp, ~0.45 s, removed when done). No filter / transform is ever left on the page (either would become the containing
+   block of every position: fixed element inside it). The old blur keyframes stay for legacy callers. */
+.phx-route {
+  animation: none;
+}
+/* Lazy pages: the dot ring while the chunk loads. */
+.phx-route-loading {
+  display: grid;
+  place-items: center;
+  min-height: 52vh;
+}
+@keyframes phx-page-in {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(8px);
+  }
+}
+/* Leaving: Layout.tsx holds the old page for 200 ms while it blurs out. */
+.phx-route[data-leaving="true"] {
+  animation: phx-page-out 0.2s var(--ease-in-out) both;
+  pointer-events: none;
+}
+@keyframes phx-page-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(-4px);
+  }
+}
+
+/* ======================================================= GLASS (shell) === */
+/* The navbar, the mode pill and the menu sheet share the liquid-glass material (tokens: styles.css). */
+.phx-nav,
+.phx-mode,
+.phx-sheet-head,
+.phx-sheet-tools > button {
+  isolation: isolate;
+  background: var(--glass-fill), var(--glass-tint);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+/* The rim: a 1px gradient ring lit from the top (mask-composite keeps only the border box). */
+.phx-nav::before,
+.phx-mode::before,
+.phx-sheet-head::before,
+.phx-sheet-tools > button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--glass-edge);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  pointer-events: none;
+  transition: opacity 0.35s var(--ease-out);
+}
+/* The specular highlight follows the pointer (--mx / --my from fx/aurora/glassPointer.ts). */
+.phx-nav::after,
+.phx-sheet-tools > button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(var(--glass-spec-size) circle at var(--mx, 50%) var(--my, -120%), var(--glass-spec), transparent 62%);
+  opacity: 0;
+  transition: opacity 0.45s var(--ease-out);
+  pointer-events: none;
+}
+.phx-nav:hover::after,
+.phx-sheet-tools > button:hover::after {
+  opacity: 1;
+}
+
+/* ============================================================= NAVBAR === */
+/* A floating liquid-glass pill: logo · five links · sound · theme · Connect. A small mode pill floats under it. */
+.phx-nav-wrap {
+  position: fixed;
+  top: var(--nav-top);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-inline: var(--gutter);
+  pointer-events: none;
+}
+/* Progressive blur at the top edge once the page moves: content softens as it slides under the bar. */
+.phx-nav-wrap::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: -1;
+  height: calc(var(--nav-top) + var(--nav-h) + 34px);
+  pointer-events: none;
+  background: linear-gradient(color-mix(in srgb, var(--aurora-bg) 70%, transparent), transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  -webkit-mask-image: linear-gradient(#000 45%, transparent);
+  mask-image: linear-gradient(#000 45%, transparent);
+  opacity: 0;
+  transition: opacity 0.5s var(--ease-out);
+}
+.phx-nav-wrap[data-scrolled="true"]::before {
+  opacity: 1;
+}
+.phx-nav {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: var(--nav-max);
+  height: var(--nav-h);
+  padding: 0 7px 0 20px;
+  border-radius: 999px;
+  box-shadow: var(--glass-inset), var(--glass-shadow);
+  transition:
+    box-shadow 0.4s var(--ease-out),
+    background-color 0.4s var(--ease-out);
+}
+.phx-nav-wrap[data-scrolled="true"] .phx-nav {
+  background: var(--glass-fill), var(--glass-strong-tint);
+}
+
+/* Brand: the 3 x 3 dot mark in the palette gradient + NOISED. */
+.phx-brand {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  color: var(--text);
+  border-radius: 0;
+}
+.phx-mark {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  overflow: visible;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--signal) 18%, transparent));
+}
+.phx-mark rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.3s steps(3, end);
+}
+.phx-mark-d0 {
+  fill: var(--signal-hi);
+}
+.phx-mark-d1 {
+  fill: color-mix(in srgb, var(--signal) 80%, var(--primary-2));
+}
+.phx-mark-d2 {
+  fill: color-mix(in srgb, var(--signal) 52%, var(--primary-2));
+}
+.phx-mark-d3 {
+  fill: color-mix(in srgb, var(--signal) 24%, var(--primary-2));
+}
+.phx-mark-d4 {
+  fill: var(--primary-2);
+}
+.phx-brand:hover .phx-mark rect,
+.phx-brand:focus-visible .phx-mark rect {
+  transform: scale(0.72);
+}
+.phx-brand:hover .phx-mark-d2 {
+  transition-delay: 0.04s;
+}
+.phx-brand:hover .phx-mark-d4 {
+  transition-delay: 0.08s;
+}
+.phx-word {
+  font-family: var(--font-ui);
+  font-size: var(--ui-px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 3px;
+}
+
+/* Center links: plain words; the active one sits on a small glass lens that glides between links. */
+.phx-links {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline: auto;
+}
+.phx-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 0;
+  font-family: var(--font-ui);
+  font-size: var(--ui-px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color 0.25s var(--ease-out);
+}
+.phx-link:hover,
+.phx-link:focus-visible {
+  color: var(--text);
+}
+.phx-link[aria-current="page"] {
+  color: var(--text);
+}
+.phx-link-text {
+  position: relative;
+  z-index: 1;
+}
+.phx-link-active {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0.05));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    inset 0 -1px 0 rgb(255 255 255 / 0.04),
+    0 6px 16px -8px rgb(0 0 0 / 0.6);
+}
+:root[data-theme="light"] .phx-link-active {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.6));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 1),
+    0 0 0 1px rgb(10 10 10 / 0.06),
+    0 6px 16px -8px rgb(0 0 0 / 0.22);
+}
+
+/* Right: sound · theme · Connect (the menu button replaces the links on narrow screens). */
+.phx-tools {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.phx-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 0.2s var(--ease-out),
+    background-color 0.2s var(--ease-out),
+    transform 0.2s var(--ease-out);
+}
+.phx-icon-btn:hover {
+  color: var(--text);
+  background: rgb(255 255 255 / 0.07);
+}
+:root[data-theme="light"] .phx-icon-btn:hover {
+  background: rgb(10 10 10 / 0.05);
+}
+.phx-icon-btn:active {
+  transform: scale(0.94);
+}
+.phx-icon-btn > svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.75;
+}
+.phx-icon-btn[aria-pressed="false"] {
+  color: var(--text-dim);
+}
+.phx-menu-btn {
+  display: none;
+}
+.phx-wallet {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: 6px;
+}
+/* A primary action somewhere on the page is waiting for a wallet: the Connect button ripples softly. */
+:root:has(.ip-need-wallet) .phx-wallet:has(> .btn-primary)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--signal);
+  border-radius: 0;
+  pointer-events: none;
+  animation: phx-ring 2.2s var(--ease-out) infinite;
+}
+:root[data-motion="still"]:has(.ip-need-wallet) .phx-wallet:has(> .btn-primary)::after {
+  animation: none;
+  inset: -3px;
+  opacity: 0.7;
+}
+.phx-wallet .btn {
+  min-height: 42px;
+  height: 42px;
+  padding: 0 20px;
+}
+.phx-wallet .btn-primary > svg {
+  display: none;
+}
+.phx-wallet .btn-secondary > svg,
+.phx-wallet .btn-secondary > img {
+  width: 15px;
+  height: 15px;
+}
+.phx-wallet .btn-secondary .badge {
+  min-height: 18px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+/* The account menu (wallet.tsx) drops from the button as a dense glass sheet. */
+.phx-wallet [role="menu"] {
+  top: 100%;
+  width: 18rem;
+  margin-top: 10px;
+  background: var(--glass-fill), var(--glass-strong-tint);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border-color: rgb(255 255 255 / 0.1);
+  border-radius: var(--r-glass-sm);
+  box-shadow: var(--glass-inset), var(--glass-shadow);
+  animation: phx-drop-in 0.22s var(--ease-out);
+}
+
+/* "Demo mode — no real funds": a small glass pill under the navbar. It steps aside once the page scrolls. */
+.phx-mode {
+  pointer-events: auto;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 4px 13px 4px 11px;
+  border-radius: 999px;
+  box-shadow: var(--glass-inset), 0 8px 20px -12px rgb(0 0 0 / 0.6);
+  font-family: var(--font-label);
+  font-size: var(--ui-px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition:
+    opacity 0.3s var(--ease-out),
+    transform 0.3s var(--ease-out),
+    filter 0.3s var(--ease-out);
+}
+.phx-mode-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--signal) 16%, transparent),
+    0 0 10px var(--signal);
+}
+.phx-nav-wrap[data-scrolled="true"] .phx-mode {
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(-6px) scale(0.96);
+  pointer-events: none;
+}
+
+/* Live-mode network problems (wrong network, endpoint down, programs missing). */
+.phx-netbanner {
+  pointer-events: auto;
+  width: 100%;
+  max-width: var(--nav-max);
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 88%, var(--amber));
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  font: 500 13px/1.5 var(--font-display);
+  color: var(--amber);
+}
+.phx-netbanner summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  list-style: none;
+  cursor: pointer;
+}
+.phx-netbanner summary::-webkit-details-marker {
+  display: none;
+}
+.phx-netbanner summary > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.phx-netbanner summary > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.phx-netbanner p {
+  padding: 0 16px 12px 42px;
+  color: var(--text-muted);
+}
+.phx-netbanner-more::after {
+  content: "Details";
+  white-space: nowrap;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.phx-netbanner details[open] .phx-netbanner-more::after {
+  content: "Hide";
+}
+/* Wrong network: nothing can be built or signed. */
+.phx-netbanner[data-tone="fail"] {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, var(--danger));
+  color: var(--danger);
+}
+/* Paper: a lighter tint keeps the banner text at AA (>= 4.5:1). */
+:root[data-theme="light"] .phx-netbanner {
+  background: color-mix(in srgb, var(--bg) 94%, var(--amber));
+}
+:root[data-theme="light"] .phx-netbanner[data-tone="fail"] {
+  background: color-mix(in srgb, var(--bg) 94%, var(--danger));
+}
+
+/* ======================================================== MOBILE SHEET === */
+dialog.phx-sheet {
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  background:
+    radial-gradient(90% 50% at 50% -10%, color-mix(in srgb, var(--signal) 9%, transparent), transparent 70%),
+    var(--bg);
+  overflow-y: auto;
+}
+dialog.phx-sheet[open] {
+  animation: phx-fade-in 0.2s ease-out;
+}
+dialog.phx-sheet::backdrop {
+  background: var(--bg);
+}
+.phx-sheet-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: var(--nav-top) 12px 24px;
+}
+.phx-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--nav-h);
+  padding: 0 7px 0 16px;
+  border: 1px solid var(--nav-line);
+  border-radius: 999px;
+  background: var(--panel);
+}
+.phx-sheet-links {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+  padding-inline: 6px;
+}
+.phx-sheet-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 4px;
+  border-bottom: 1px solid var(--line);
+  font: 400 var(--px-1) / 1.1 var(--font-pixel);
+  letter-spacing: 0;
+  color: var(--text);
+  animation: phx-rise 0.4s var(--ease-out) both;
+}
+.phx-sheet-link:nth-child(2) {
+  animation-delay: 0.03s;
+}
+.phx-sheet-link:nth-child(3) {
+  animation-delay: 0.06s;
+}
+.phx-sheet-link:nth-child(4) {
+  animation-delay: 0.09s;
+}
+.phx-sheet-link:nth-child(5) {
+  animation-delay: 0.12s;
+}
+.phx-sheet-link > svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--text-dim);
+}
+.phx-sheet-link[aria-current="page"] {
+  color: var(--signal);
+}
+.phx-sheet-link[aria-current="page"] > svg {
+  color: var(--signal);
+}
+.phx-sheet-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 24px;
+}
+.phx-sheet-tools > button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--panel);
+  font: 400 var(--ui-px) / 1.1 var(--font-ui);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.2s var(--ease-out),
+    background-color 0.2s var(--ease-out);
+}
+.phx-sheet-tools > button:hover:not(:disabled) {
+  border-color: var(--signal-line);
+}
+.phx-sheet-tools > button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.phx-sheet-tools > button > span:last-child {
+  font: 400 12px/1.3 var(--font-body);
+  color: var(--text-muted);
+}
+.phx-sheet-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding: 24px 6px 0;
+  font: 400 var(--ui-px) / 1.2 var(--font-label);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* ===================================================== COMMAND PALETTE === */
+dialog.phx-palette {
+  --phx-corner: var(--signal);
+  margin: min(14vh, 120px) auto auto;
+  width: min(680px, calc(100vw - 24px));
+  max-height: min(72vh, 620px);
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-pop);
+  overflow: visible;
+}
+dialog.phx-palette[open] {
+  animation: phx-pop-in 0.22s var(--ease-out);
+}
+dialog.phx-palette::backdrop {
+  background:
+    repeating-linear-gradient(180deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 3px),
+    var(--backdrop);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+dialog.phx-palette::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--phx-corner), var(--phx-corner)) left 0 top 4px / 9px 1px no-repeat,
+    linear-gradient(var(--phx-corner), var(--phx-corner)) left 4px top 0 / 1px 9px no-repeat,
+    linear-gradient(var(--phx-corner), var(--phx-corner)) right 0 top 4px / 9px 1px no-repeat,
+    linear-gradient(var(--phx-corner), var(--phx-corner)) right 4px top 0 / 1px 9px no-repeat,
+    linear-gradient(var(--phx-corner), var(--phx-corner)) left 0 bottom 4px / 9px 1px no-repeat,
+    linear-gradient(var(--phx-corner), var(--phx-corner)) left 4px bottom 0 / 1px 9px no-repeat,
+    linear-gradient(var(--phx-corner), var(--phx-corner)) right 0 bottom 4px / 9px 1px no-repeat,
+    linear-gradient(var(--phx-corner), var(--phx-corner)) right 4px bottom 0 / 1px 9px no-repeat;
+}
+.phx-pal {
+  display: flex;
+  flex-direction: column;
+  max-height: min(72vh, 620px);
+}
+.phx-pal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 32px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.phx-pal-bar b {
+  color: var(--signal);
+  font-weight: 500;
+}
+.phx-pal-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  font: 500 15px/1 var(--font-mono);
+}
+.phx-pal-prompt {
+  flex: none;
+  color: var(--signal);
+  font-weight: 600;
+}
+.phx-pal-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.phx-pal-field input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  caret-color: var(--signal);
+  font: inherit;
+}
+.phx-pal-field input::placeholder {
+  color: var(--text-dim);
+}
+.phx-pal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 0;
+  scrollbar-width: thin;
+}
+.phx-pal-group {
+  padding: 8px 16px 6px;
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.phx-pal-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 16px;
+  text-align: left;
+  font: 500 13px/1.3 var(--font-mono);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.phx-pal-item[aria-selected="true"] {
+  color: var(--text);
+  background: linear-gradient(90deg, var(--signal-soft), transparent 70%);
+  box-shadow: inset 2px 0 0 var(--signal);
+}
+.phx-pal-item .cmd {
+  color: var(--text);
+}
+.phx-pal-item .cmd mark {
+  background: none;
+  color: var(--signal);
+}
+.phx-pal-item .arg {
+  color: var(--text-dim);
+}
+.phx-pal-item .desc {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.phx-pal-item .glyph {
+  width: 14px;
+  color: var(--text-dim);
+}
+.phx-pal-item[aria-selected="true"] .glyph {
+  color: var(--signal);
+}
+.phx-pal-out {
+  padding: 10px 16px 14px;
+  font: 500 12.5px/1.75 var(--font-mono);
+  color: var(--text-muted);
+}
+.phx-pal-line {
+  display: flex;
+  gap: 10px;
+  min-height: 1.75em;
+  white-space: pre-wrap;
+}
+.phx-pal-line[data-tone="ok"] .t,
+.phx-pal-line[data-tone="ok"] .val {
+  color: var(--phosphor);
+}
+.phx-pal-line[data-tone="warn"] .t,
+.phx-pal-line[data-tone="warn"] .val {
+  color: var(--amber);
+}
+.phx-pal-line[data-tone="fail"] .t,
+.phx-pal-line[data-tone="fail"] .val {
+  color: var(--danger);
+}
+.phx-pal-line[data-tone="dim"] {
+  color: var(--text-dim);
+}
+.phx-pal-line[data-tone="cmd"] {
+  color: var(--text);
+}
+.phx-pal-line[data-tone="cmd"] .t {
+  color: var(--signal);
+}
+/* "» verify AEGS · Aegis · G2kw…3BYA": pinned while its checks stream below. */
+.phx-pal-line[data-tone="subj"] {
+  position: sticky;
+  top: -10px;
+  z-index: 1;
+  margin: 2px -16px 4px;
+  padding: 4px 16px;
+  border-block: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.phx-pal-line[data-tone="subj"] .t {
+  color: var(--signal);
+}
+.phx-pal-line .t {
+  flex: none;
+}
+.phx-pal-line:has(> .btn) {
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line-strong);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.phx-pal-line .lead {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.phx-pal-line .dots {
+  flex: 1 1 24px;
+  min-width: 18px;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--line-strong);
+}
+.phx-pal-line .dots::before {
+  content: "....................................................................................................................";
+}
+.phx-pal-line .val {
+  flex: none;
+  max-width: 50%;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.phx-pal-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-2);
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.phx-pal-foot kbd {
+  margin-right: 5px;
+}
+/* Touch screens have no arrow keys to hint at. */
+@media (hover: none) and (pointer: coarse) {
+  .phx-pal-foot {
+    display: none;
+  }
+}
+/* Narrow screens: check lines wrap instead of being cut at ~25 characters. */
+@media (max-width: 640px) {
+  .phx-pal-line {
+    flex-wrap: wrap;
+  }
+  .phx-pal-line .lead {
+    flex: 1 1 auto;
+    white-space: normal;
+    overflow: visible;
+  }
+  .phx-pal-line .dots {
+    display: none;
+  }
+  .phx-pal-line .val {
+    max-width: none;
+    margin-left: auto;
+    white-space: normal;
+  }
+}
+.phx-pal-foot .grow {
+  flex: 1;
+}
+
+/* ============================================================== FOOTER === */
+.phx-footer {
+  position: relative;
+  margin-top: 24px;
+  border-top: 1px solid var(--line);
+  overflow: hidden;
+}
+.phx-footer-inner {
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding: 64px var(--gutter) 28px;
+}
+.phx-footer-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 32px 48px;
+}
+.phx-footer-brand {
+  max-width: 360px;
+}
+.phx-footer-brand p {
+  margin-top: 16px;
+  font: 400 15px/1.6 var(--font-display);
+  color: var(--text-muted);
+}
+.phx-footer-links ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.phx-footer-links a {
+  font: 400 var(--ui-px) / 1.3 var(--font-ui);
+  letter-spacing: 0;
+  color: var(--text-muted);
+  border-radius: 4px;
+  transition: color 0.2s var(--ease-out);
+}
+.phx-footer-links a:hover,
+.phx-footer-links a[aria-current="page"] {
+  color: var(--text);
+}
+/* "Autopilot coming": a product teaser, not a link. */
+.phx-footer-soon {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font: 400 var(--ui-px) / 1.3 var(--font-ui);
+  color: var(--text-dim);
+  cursor: default;
+}
+.phx-footer-soon small {
+  padding: 1px 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  font: 500 10px/1.4 var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* "Autopilot · coming" (live builds): a link to the Autopilot pages, which say what is coming. */
+.phx-footer-soon-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  font: 500 10px/1.4 var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.phx-footer-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.phx-footer-net {
+  display: grid;
+  grid-template-columns: auto minmax(0, 240px);
+  align-items: center;
+  gap: 6px 12px;
+}
+.phx-footer-net label {
+  font: 500 13px/1.3 var(--font-display);
+  color: var(--text-muted);
+}
+.phx-footer-net .select {
+  min-height: 36px;
+  height: 36px;
+  font-size: 13px;
+}
+.phx-footer-help {
+  grid-column: 2;
+  font: 400 12px/1.4 var(--font-display);
+  color: var(--text-dim);
+}
+.phx-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+/* Footer settings (legacy; the v5.1 footer settings bar was removed on purpose: never re-add it). */
+.phx-pref {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font: 500 13px/1.3 var(--font-label, var(--font-body));
+  font-stretch: var(--label-stretch, 100%);
+  color: var(--text-muted);
+}
+.phx-pref .select {
+  width: auto;
+  min-width: 132px;
+  min-height: 36px;
+  height: 36px;
+  font-size: 13px;
+}
+.phx-footer-colophon {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin-top: 28px;
+  font: 500 12px/1.4 var(--font-display);
+  color: var(--text-dim);
+}
+/* The dot-matrix NOISED wordmark, cropped by the page bottom. */
+.phx-footer-wordmark {
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.phx-footer-wordmark svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.phx-wm-stop-a {
+  stop-color: color-mix(in srgb, var(--text) 18%, transparent);
+}
+.phx-wm-stop-m {
+  stop-color: color-mix(in srgb, var(--text) 11%, transparent);
+}
+.phx-wm-stop-b {
+  stop-color: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.phx-wm-stop-pa {
+  stop-color: var(--signal);
+}
+.phx-wm-stop-pm {
+  stop-color: color-mix(in srgb, var(--signal) 62%, transparent);
+}
+.phx-wm-stop-pb {
+  stop-color: color-mix(in srgb, var(--primary-2) 30%, transparent);
+}
+
+/* On / off switch (footer "Animations"). */
+.phx-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  font: 500 13px/1 var(--font-display);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.phx-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.phx-switch-track {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--panel-3);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  transition: background-color 0.25s var(--ease-out);
+}
+.phx-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition:
+    transform 0.25s var(--ease-out),
+    background-color 0.25s var(--ease-out);
+}
+.phx-switch[aria-checked="true"] .phx-switch-track {
+  background: color-mix(in srgb, var(--signal) 28%, var(--panel-3));
+}
+.phx-switch[aria-checked="true"] .phx-switch-thumb {
+  transform: translateX(14px);
+  background: var(--signal);
+}
+
+/* ===================================================== PAGE HEADINGS === */
+/* Legacy page header markup: <header class="terminal-page-heading"><p class="terminal-eyebrow"/><h1/><p/></header>. */
+.terminal-page-heading,
+.phx-page-head {
+  position: relative;
+  padding-bottom: 28px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.terminal-page-heading::after,
+.phx-page-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 72px;
+  height: 1px;
+  background: var(--signal);
+  box-shadow: 0 0 10px var(--signal);
+}
+.terminal-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 500 11px/1.4 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.terminal-page-heading .terminal-eyebrow::before,
+.phx-page-head .terminal-eyebrow::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  flex: none;
+  background:
+    linear-gradient(var(--signal), var(--signal)) center / 9px 1px no-repeat,
+    linear-gradient(var(--signal), var(--signal)) center / 1px 9px no-repeat;
+}
+.terminal-page-heading h1,
+.phx-page-head h1 {
+  margin-top: 18px;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 5.6vw, 84px);
+  font-weight: 740;
+  line-height: 0.94;
+  letter-spacing: -0.058em;
+  color: var(--text);
+}
+/* UI v3: page headings glitch for two frames on hover. */
+:root[data-motion="on"] :is(.terminal-page-heading, .phx-page-head) h1:hover {
+  animation: phx-glitch 0.18s steps(1, end) 1;
+}
+.terminal-page-heading h1 > .text-accent:last-child,
+.phx-page-head h1 > .text-accent:last-child {
+  display: inline-block;
+  margin-left: 0.02em;
+  color: var(--signal);
+  animation: phx-blink 1.06s steps(2, start) infinite;
+}
+.terminal-page-heading h1 + p,
+.phx-page-head h1 + p {
+  margin-top: 18px;
+  max-width: 68ch;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* Disclosure (details/summary) panels used across pages. */
+.terminal-disclosure {
+  position: relative;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.terminal-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 0 18px;
+  list-style: none;
+  font: 500 11px/1.4 var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition:
+    color 0.2s,
+    background-color 0.2s;
+}
+.terminal-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.terminal-disclosure > summary::before {
+  content: ">";
+  color: var(--text-dim);
+  transition: transform 0.25s var(--ease-out);
+}
+.terminal-disclosure > summary > span:last-child {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+.terminal-disclosure > summary:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.terminal-disclosure[open] > summary {
+  color: var(--signal);
+  border-bottom: 1px solid var(--line);
+}
+.terminal-disclosure[open] > summary::before {
+  transform: rotate(90deg);
+  color: var(--signal);
+}
+.terminal-disclosure > :not(summary) {
+  margin: 16px;
+}
+.terminal-field-guide {
+  margin-top: 6px;
+}
+.terminal-field-guide summary {
+  display: inline-flex;
+  gap: 8px;
+  list-style: none;
+  font: 500 11px/1.4 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.terminal-field-guide summary::-webkit-details-marker {
+  display: none;
+}
+.terminal-field-guide summary::before {
+  content: "//";
+  color: color-mix(in srgb, var(--signal) 75%, var(--text-dim));
+}
+.terminal-field-guide[open] summary {
+  color: var(--signal);
+  margin-bottom: 6px;
+}
+.terminal-field-guide p {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+.terminal-field-guide p + p {
+  margin-top: 4px;
+}
+
+/* Footer/sheet motion switch (AmbientMotionToggle). */
+.terminal-motion-toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  padding: 0;
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.terminal-motion-toggle:hover:not(:disabled) {
+  color: var(--signal);
+}
+.terminal-motion-toggle:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.terminal-motion-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 12px;
+}
+.terminal-motion-bars i {
+  width: 2px;
+  height: 10px;
+  background: var(--signal);
+  animation: terminal-breathe 1.5s ease-in-out infinite alternate;
+}
+.terminal-motion-bars i:nth-child(2) {
+  animation-delay: -0.6s;
+}
+.terminal-motion-bars i:nth-child(3) {
+  animation-delay: -1.1s;
+}
+.terminal-motion-toggle[aria-pressed="true"] .terminal-motion-bars i {
+  animation: none;
+  transform: scaleY(0.35);
+  background: var(--text-dim);
+}
+.terminal-cursor {
+  color: var(--signal);
+  animation: phx-blink 1.06s steps(2, start) infinite;
+}
+.terminal-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal);
+}
+
+/* Legacy gold landing kit (components/landing, launch.tsx): signal colour, sharp. */
+:root {
+  --lx-spot: var(--signal-faint);
+  --lx-spot-edge: color-mix(in srgb, var(--signal) 50%, transparent);
+  --lx-glass: none;
+  --lx-shadow: none;
+}
+:root .lx-card {
+  border-radius: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+:root .lx-pill {
+  border-radius: var(--r-chip);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+:root .lx-skel {
+  border-radius: 0;
+}
+
+/* ========================================================== RESPONSIVE === */
+@media (max-width: 1120px) {
+  .phx-link {
+    padding-inline: 11px;
+  }
+}
+@media (max-width: 980px) {
+  :root {
+    --nav-offset: 104px;
+  }
+  .phx-links,
+  .phx-nav-pref {
+    display: none;
+  }
+  .phx-tools {
+    margin-left: auto;
+    gap: 4px;
+  }
+  .phx-menu-btn {
+    display: inline-grid;
+  }
+}
+@media (max-width: 640px) {
+  :root {
+    --gutter: 16px;
+    --nav-top: 10px;
+    --nav-h: 54px;
+    --nav-offset: 100px;
+  }
+  .phx-nav-wrap {
+    padding-inline: 10px;
+    gap: 6px;
+  }
+  .phx-nav {
+    padding-left: 16px;
+    padding-right: 6px;
+  }
+  .phx-wallet {
+    margin-left: 0;
+  }
+  .phx-wallet .btn {
+    padding: 0 16px;
+  }
+  .phx-wallet .btn-secondary > svg,
+  .phx-wallet .btn-secondary > img,
+  .phx-wallet .btn-secondary .badge {
+    display: none;
+  }
+  .phx-wallet [role="menu"] {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    top: calc(var(--nav-top) + var(--nav-h) + 6px);
+    width: auto;
+    margin-top: 0;
+  }
+  .phx-main[data-home="false"] {
+    padding-top: calc(var(--nav-offset) + 12px);
+  }
+  .phx-footer-inner {
+    padding-top: 44px;
+  }
+  .phx-footer-links ul {
+    gap: 12px 22px;
+  }
+  .phx-footer-net {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+  .phx-footer-help {
+    grid-column: 1;
+  }
+  .terminal-page-heading,
+  .phx-page-head {
+    padding-bottom: 22px;
+  }
+  .terminal-page-heading h1,
+  .phx-page-head h1 {
+    font-size: clamp(36px, 11vw, 52px);
+  }
+  dialog.phx-palette {
+    margin-top: 12px;
+    max-height: calc(100dvh - 24px);
+  }
+  .phx-pal {
+    max-height: calc(100dvh - 24px);
+  }
+  .phx-pal-item .desc {
+    display: none;
+  }
+}
+@media (max-width: 360px) {
+  .phx-word {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phx-route,
+  .phx-sheet-link,
+  .phx-wallet::after,
+  .terminal-motion-bars i,
+  .terminal-cursor,
+  .terminal-page-heading h1 > .text-accent:last-child {
+    animation: none !important;
+  }
+  .phx-mode,
+  .phx-mark circle {
+    transition: none;
+  }
+}
+
+/* ======================================== LEGACY: DotField (WebGL fallback) ===
+ * components/DotField.tsx still renders these class names next to its own .df-* ones.
+ */
+.terminal-dot-field {
+  position: relative;
+  min-width: 0;
+  min-height: 360px;
+  animation: terminal-field-reveal 1.6s ease both;
+}
+.terminal-dot-field canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.terminal-field-corner {
+  position: absolute;
+  right: 27px;
+  top: 26px;
+  color: var(--signal);
+  font-size: 25px;
+  animation: terminal-cross-turn 9s cubic-bezier(0.65, 0, 0.35, 1) infinite reverse;
+}
+.terminal-field-caption {
+  position: absolute;
+  inset: auto 28px 23px 54px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+.terminal-field-caption > span > span {
+  margin-inline: 10px;
+  color: var(--line-strong);
+}
+.terminal-field-orbit {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px dotted var(--line-strong);
+  border-radius: 50%;
+  font-size: 17px;
+  color: var(--signal);
+  animation: terminal-orbit-turn 18s linear infinite;
+}
+@keyframes terminal-cross-turn {
+  0%,
+  60% {
+    transform: rotate(0);
+  }
+  80%,
+  100% {
+    transform: rotate(90deg);
+  }
+}
+@keyframes terminal-orbit-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes terminal-field-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+:root[data-motion="still"] :is(.terminal-field-corner, .terminal-field-orbit) {
+  animation-play-state: paused;
+}
+@media (max-width: 640px) {
+  .terminal-dot-field {
+    min-height: 235px;
+  }
+  .terminal-field-corner {
+    display: none;
+  }
+  .terminal-field-caption {
+    inset: auto 14px 6px 22px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .terminal-dot-field,
+  .terminal-field-corner,
+  .terminal-field-orbit {
+    animation: none !important;
+  }
+}
+
+
+/* ============================================================ v6 PIXEL CHROME === */
+/* PIXEL_V6: the glass chrome keeps its material but takes stepped "pixel" corners (two steps of --px-c) and a 1px
+   rim that follows the steps. Elements that hold focusable or overflowing children (the navbar holds the wallet
+   menu) keep no clip themselves: their glass moves to ::after, clipped there. */
+.phx-nav,
+.phx-mode,
+.phx-sheet-head,
+.phx-sheet-tools > button {
+  border-radius: 0;
+}
+.phx-nav::before,
+.phx-mode::before,
+.phx-sheet-head::before,
+.phx-sheet-tools > button::before {
+  padding: 0;
+  border-radius: 0;
+  -webkit-mask: none;
+  mask: none;
+  clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)), 0px calc(var(--px-c) * 2), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), 0px calc(var(--px-c) * 2));
+}
+.phx-nav {
+  --px-c: 4px;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--glass-shadow);
+}
+.phx-nav::after {
+  border-radius: 0;
+  opacity: 1;
+  background:
+    radial-gradient(var(--glass-spec-size) circle at var(--mx, 50%) var(--my, -120%), var(--nav-spec, transparent), transparent 62%),
+    var(--glass-fill),
+    var(--nav-tint, var(--glass-tint));
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: var(--glass-inset);
+  clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+  transition: --nav-spec 0.45s var(--ease-out);
+}
+.phx-nav:hover {
+  --nav-spec: var(--glass-spec);
+}
+.phx-nav-wrap[data-scrolled="true"] .phx-nav {
+  --nav-tint: var(--glass-strong-tint);
+  background: none;
+}
+.phx-mode,
+.phx-sheet-head,
+.phx-sheet-tools > button {
+  --px-c: 3px;
+  clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+}
+.phx-mode {
+  --px-c: 2px;
+}
+/* Clipped buttons draw their focus ring inside the box. */
+.phx-sheet-tools > button:focus-visible {
+  outline-offset: -4px;
+}
+/* The sliding active-link lens and the icon buttons: square pixels, not pills. */
+.phx-link-active {
+  --px-c: 2px;
+  border-radius: 0;
+  clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+}
+.phx-icon-btn,
+.phx-link {
+  border-radius: 0;
+}
+.phx-wallet [role="menu"] {
+  border-radius: 0;
+}
+/* The demo-mode dot: a round dot that breathes slowly. */
+.phx-mode-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--signal) 70%, transparent);
+}
+:root[data-motion="on"] .phx-mode-dot {
+  animation: phx-dot-breathe 2.4s ease-in-out infinite;
+}
+@keyframes phx-dot-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+/* Footer wordmark: crisp square pixels. */
+.phx-footer-wordmark svg {
+  shape-rendering: crispEdges;
+}
+/* Footer: a few wordmark sub-pixels dim for a moment on slow, staggered clocks (a 1-bit twinkle; tiny area, never
+   faster than one change per second each). Only while ambient motion is on. */
+:root[data-motion="on"] .phx-footer-wordmark .phx-wm-tw {
+  animation: phx-wm-twinkle 7s steps(1, end) infinite;
+}
+:root[data-motion="on"] .phx-footer-wordmark .phx-wm-tw1 {
+  animation-duration: 8.2s;
+  animation-delay: -0.9s;
+}
+:root[data-motion="on"] .phx-footer-wordmark .phx-wm-tw2 {
+  animation-duration: 6.4s;
+  animation-delay: -1.8s;
+}
+:root[data-motion="on"] .phx-footer-wordmark .phx-wm-tw3 {
+  animation-duration: 9.1s;
+  animation-delay: -2.7s;
+}
+:root[data-motion="on"] .phx-footer-wordmark .phx-wm-tw4 {
+  animation-duration: 7.6s;
+  animation-delay: -3.6s;
+}
+:root[data-motion="on"] .phx-footer-wordmark .phx-wm-tw5 {
+  animation-duration: 5.9s;
+  animation-delay: -4.5s;
+}
+:root[data-motion="on"] .phx-footer-wordmark .phx-wm-tw6 {
+  animation-duration: 8.8s;
+  animation-delay: -5.4s;
+}
+:root[data-motion="on"] .phx-footer-wordmark .phx-wm-tw7 {
+  animation-duration: 6.9s;
+  animation-delay: -6.3s;
+}
+@keyframes phx-wm-twinkle {
+  0%,
+  86% {
+    opacity: 1;
+  }
+  87%,
+  93% {
+    opacity: 0.2;
+  }
+  94%,
+  100% {
+    opacity: 1;
+  }
+}
+.phx-footer-inner,
+.phx-footer-wordmark {
+  position: relative;
+  z-index: 1;
+}

@@ -1,0 +1,32 @@
+{
+  "source": "Printed by the autopilot program's own launchpad::activation_payload / freeze_payload / revoke_payload (programs/phalanx-autopilot/src/launchpad.rs), built for the host from this repository on 2026-10-10 (generator: a scratch crate kept by the maintainers).",
+  "cases": [
+    {
+      "autopilot": "6URwbPipuA4MJLG7LCRRZuWnms3JZ9cRG3z9indXWz8G",
+      "graphHash": "5252525252525252525252525252525252525252525252525252525252525252",
+      "activateAt": -1234567,
+      "operator": "6cGXszer5keoaWm8Co5G9f4KGBThuGz4NsKTqYij1emg",
+      "activation": "5592290aa77a360e4051a12c8e4cfa350f981186aed2e14b9259d84ba914a311",
+      "freeze": "fe9e1365083e6f5f20c908d5587710a8ef073b0afb19690b1c6f3a51bcc82371",
+      "revoke": "aa7365d2a7d92b3971588e6336e5dfca69e314354837bc62858149fff8c31b8c"
+    },
+    {
+      "autopilot": "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
+      "graphHash": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+      "activateAt": 1800000000,
+      "operator": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+      "activation": "5a8648ea0ea1f4fe31a32472844df843c6a620e359db5bc1024dcefb7a1a6c96",
+      "freeze": "7a22e27e75717ca1e8f1ae379384295f2aa9d617549ba490d1ff1293653e33f6",
+      "revoke": "551f445b554921861db207efb35b82f0e09495960f364067d139127addb201ae"
+    },
+    {
+      "autopilot": "JAQ5MVHbCkSYRzXunsrNuM2m1LS859PGveHfoYPAmcvZ",
+      "graphHash": "0101010101010101010101010101010101010101010101010101010101010101",
+      "activateAt": 0,
+      "operator": "5TeWSsjg2gbxCyWVniXeCmwM7UtHTCK7svzJr5xYJzHf",
+      "activation": "d7d6b7b838e6b2380c49d14286da9a8f3a18a655ac23b6662eb56317c9c5fc15",
+      "freeze": "4f7fa0f06e8b0015596e8508a849cee4f376e176810a7ea3f49975b2d2b82660",
+      "revoke": "c06daa3d37e3bacba1219da30e25c347f01c9f040b16ce83e2f4bf9f453e4e2b"
+    }
+  ]
+}

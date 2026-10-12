@@ -1,0 +1,749 @@
+{
+  "address": "cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia",
+  "metadata": {
+    "name": "noised_hook",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Launch Guard: a bounded, stateless Token-2022 transfer hook for Meteora DBC launches"
+  },
+  "instructions": [
+    {
+      "name": "create_policy",
+      "docs": [
+        "Write the launch policy for a mint. Only the launchpad can sign. The",
+        "creator's rules, if any, must verify for this guard (`InvalidRules`)."
+      ],
+      "discriminator": [
+        27,
+        81,
+        33,
+        27,
+        196,
+        103,
+        246,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchpad_authority",
+          "docs": [
+            "The launchpad's PDA; only the launchpad program can produce this signature."
+          ],
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                173,
+                83,
+                141,
+                198,
+                211,
+                176,
+                14,
+                30,
+                72,
+                5,
+                249,
+                126,
+                188,
+                79,
+                223,
+                227,
+                193,
+                45,
+                8,
+                110,
+                106,
+                70,
+                227,
+                237,
+                185,
+                115,
+                202,
+                93,
+                52,
+                127,
+                105,
+                109
+              ]
+            }
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "PolicyParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "end_snipe_shield",
+      "docs": [
+        "End the snipe shield now. Only the launchpad can sign, and it does so",
+        "only in `execute_batch`, after the batch bought for the launch's own",
+        "policy: from then on the shield has nothing left to protect, so public",
+        "trading opens at once instead of at the end of the execution window.",
+        "",
+        "The only effect is `snipe_shield_end_ts = min(snipe_shield_end_ts,",
+        "now)` (`rules::shield_end_after_batch`): the end never moves later,",
+        "and every other field, the guard rules and their end included, stays",
+        "as written. Defense in depth: the top-level instruction must be the",
+        "launchpad's `execute_batch` (`NotInBatch`). The mint is not read and",
+        "its hook need not be active: when the batch completes the curve, DBC",
+        "revokes the hook inside that same swap, and `execute_batch` must",
+        "still succeed."
+      ],
+      "discriminator": [
+        219,
+        182,
+        248,
+        52,
+        26,
+        6,
+        73,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "launchpad_authority",
+          "docs": [
+            "The launchpad's PDA; only the launchpad program can produce this",
+            "signature (it does so only in `execute_batch`, after the batch buy)."
+          ],
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                173,
+                83,
+                141,
+                198,
+                211,
+                176,
+                14,
+                30,
+                72,
+                5,
+                249,
+                126,
+                188,
+                79,
+                223,
+                227,
+                193,
+                45,
+                8,
+                110,
+                106,
+                70,
+                227,
+                237,
+                185,
+                115,
+                202,
+                93,
+                52,
+                127,
+                105,
+                109
+              ]
+            }
+          }
+        },
+        {
+          "name": "policy",
+          "docs": [
+            "A Launch Guard policy PDA (`[\"policy\", mint]`); the launchpad passes",
+            "its own launch's. Only `snipe_shield_end_ts` changes."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "policy.mint",
+                "account": "HookPolicy"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions",
+          "docs": [
+            "top-level instruction must be the launchpad's `execute_batch`."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "execute",
+      "docs": [
+        "Token-2022 `Execute`: decide one transfer, as `rules::evaluate`",
+        "does. Sells and everything after the guard are decided from the",
+        "policy's head (`PolicyHead`) before the policy is decoded. Then the",
+        "built-in checks (`rules::built_ins`) read the source's owner, and the",
+        "destination's owner, balance and extensions (`has_immutable_owner`),",
+        "from their own account data; only a transfer they leave to the",
+        "creator rules, under a policy that has some, also reads the mint's",
+        "supply and the transaction's top-level instructions (`top_level`)."
+      ],
+      "discriminator": [
+        105,
+        37,
+        101,
+        197,
+        75,
+        251,
+        102,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "source"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "authority"
+        },
+        {
+          "name": "extra_account_meta_list"
+        },
+        {
+          "name": "policy"
+        },
+        {
+          "name": "instructions",
+          "docs": [
+            "when it is read (buys during the snipe shield, and transfers that",
+            "reach creator rules)."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_extra_account_meta_list",
+      "docs": [
+        "Create the mint's ExtraAccountMetaList. Permissionless and",
+        "deterministic: the list always holds exactly the policy PDA and the",
+        "instructions sysvar."
+      ],
+      "discriminator": [
+        92,
+        197,
+        174,
+        197,
+        41,
+        124,
+        19,
+        3
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "extra_account_meta_list",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "HookPolicy",
+      "discriminator": [
+        103,
+        114,
+        246,
+        85,
+        15,
+        22,
+        190,
+        195
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "PolicyCreated",
+      "discriminator": [
+        59,
+        189,
+        65,
+        121,
+        86,
+        157,
+        108,
+        10
+      ]
+    },
+    {
+      "name": "SnipeShieldEnded",
+      "discriminator": [
+        207,
+        137,
+        254,
+        18,
+        206,
+        221,
+        221,
+        195
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "SnipeShield",
+      "msg": "Launch guard: buying opens when the snipe-shield countdown ends"
+    },
+    {
+      "code": 6001,
+      "name": "TransfersLocked",
+      "msg": "Launch guard: wallet-to-wallet transfers are paused until the guard ends"
+    },
+    {
+      "code": 6002,
+      "name": "MaxBuy",
+      "msg": "Launch guard: transfer is larger than the max-buy cap"
+    },
+    {
+      "code": 6003,
+      "name": "MaxWallet",
+      "msg": "Launch guard: receiving account would exceed the max-wallet cap"
+    },
+    {
+      "code": 6004,
+      "name": "WrongHookProgram",
+      "msg": "Mint's transfer hook is not this program"
+    },
+    {
+      "code": 6005,
+      "name": "PolicyMismatch",
+      "msg": "Policy belongs to a different mint"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidPolicy",
+      "msg": "Policy is outside the hook's hard bounds"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidPool",
+      "msg": "Pool is not a Meteora DBC account"
+    },
+    {
+      "code": 6008,
+      "name": "MalformedTokenAccount",
+      "msg": "Malformed token account"
+    },
+    {
+      "code": 6009,
+      "name": "NotInBatch",
+      "msg": "Only the launchpad's execute_batch can end the snipe shield"
+    },
+    {
+      "code": 6010,
+      "name": "MutableOwner",
+      "msg": "Launch guard: the receiving token account must have an immutable owner while the guard is on"
+    },
+    {
+      "code": 6011,
+      "name": "RuleDenied",
+      "msg": "Launch rule: this transfer is not allowed right now"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidRules",
+      "msg": "Launch rules do not verify (PXR1) for this guard"
+    }
+  ],
+  "types": [
+    {
+      "name": "HookPolicy",
+      "docs": [
+        "Per-mint launch policy. Written once by the launchpad; no instruction can",
+        "close it, and the only change any instruction can make is",
+        "`end_snipe_shield` moving `snipe_shield_end_ts` earlier once the batch has",
+        "bought. It stops mattering when DBC revokes the hook at curve completion.",
+        "Its space is exactly its content (`HookPolicy::space`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "docs": [
+              "Meteora DBC pool of this launch."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "base_vault",
+            "docs": [
+              "DBC base vault: transfers into it (sells) are always allowed and",
+              "transfers out of it are buys."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "launch_ts",
+            "type": "i64"
+          },
+          {
+            "name": "snipe_shield_end_ts",
+            "docs": [
+              "Until this time nobody can buy from the pool except the batch. Written",
+              "as the end of the launchpad's execution window; when the batch",
+              "executes earlier, `end_snipe_shield` sets it to that moment."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "guard_end_ts",
+            "docs": [
+              "From this time on every transfer is allowed."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "max_wallet",
+            "docs": [
+              "Max balance of a receiving account during the guard (0 = off)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_buy",
+            "docs": [
+              "Max tokens received per transfer during the guard (0 = off)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "p2p_locked",
+            "docs": [
+              "Pause wallet-to-wallet transfers during the guard."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "exempt",
+            "docs": [
+              "Owners whose transfers skip the rules (launchpad PDAs). Unused slots",
+              "are `Pubkey::default()`, which never matches."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                4
+              ]
+            }
+          },
+          {
+            "name": "rules",
+            "docs": [
+              "The creator's launch rules (PXR1, `noised_rules::rules`), verified",
+              "by `create_policy` against `guard_secs`; empty for none. They can",
+              "only refuse, and are checked after every built-in allow and denial",
+              "(`rules::evaluate`)."
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PolicyCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "snipe_shield_end_ts",
+            "type": "i64"
+          },
+          {
+            "name": "guard_end_ts",
+            "type": "i64"
+          },
+          {
+            "name": "max_wallet",
+            "type": "u64"
+          },
+          {
+            "name": "max_buy",
+            "type": "u64"
+          },
+          {
+            "name": "p2p_locked",
+            "type": "bool"
+          },
+          {
+            "name": "rules_len",
+            "docs": [
+              "Bytes of the creator's rules (0: none)."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PolicyParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "snipe_shield_secs",
+            "type": "u32"
+          },
+          {
+            "name": "guard_secs",
+            "type": "u32"
+          },
+          {
+            "name": "max_wallet",
+            "type": "u64"
+          },
+          {
+            "name": "max_buy",
+            "type": "u64"
+          },
+          {
+            "name": "p2p_locked",
+            "type": "bool"
+          },
+          {
+            "name": "exempt",
+            "type": {
+              "array": [
+                "pubkey",
+                4
+              ]
+            }
+          },
+          {
+            "name": "rules",
+            "docs": [
+              "PXR1 bytes (empty for none), stored as given once they verify."
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SnipeShieldEnded",
+      "docs": [
+        "`execute_batch` ended the snipe shield (`end_snipe_shield`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "scheduled_end_ts",
+            "docs": [
+              "The end the policy held before the call: from `execute_batch`, the",
+              "scheduled end written by `create_policy` (the end of the launchpad's",
+              "execution window), which the launch certificate keeps."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "snipe_shield_end_ts",
+            "docs": [
+              "The end from now on: `min(scheduled_end_ts, now)`. Buys pass from",
+              "then on, under the guard rules until the unchanged `guard_end_ts`."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

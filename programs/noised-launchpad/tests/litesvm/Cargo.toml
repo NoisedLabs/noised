@@ -1,0 +1,60 @@
+[package]
+name = "noised-launchpad-litesvm"
+version = "0.1.0"
+description = "LiteSVM tests: the launchpad, hook and vault builds against mainnet Meteora DBC, DAMM v2 and Token-2022"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+# Its own workspace, like tests/integration (see the root Cargo.toml): LiteSVM
+# pins older solana-* crates that must not leak into the programs' graph.
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[dev-dependencies]
+litesvm = "=0.17.0"
+anchor-lang = "=1.2.1"
+anchor-spl = "=1.2.1"
+noised-launchpad = { path = "../..", features = ["no-entrypoint"] }
+noised-hook = { path = "../../../noised-hook", features = ["no-entrypoint"] }
+# Treasury and payout-owner vaults (instruction builders and state).
+noised-vault = { path = "../../../noised-vault", features = ["no-entrypoint"] }
+# The creator's LMS identity (key generation and signing) and the vaults'
+# LM-OTS keys.
+noised-lmots = { path = "../../../../crates/noised-lmots", features = ["signer", "sha2-backend"] }
+# PXR1 encoding and evaluation (the creator rules the tests publish, and the
+# reference decision for random rule sets).
+noised-rules = { path = "../../../../crates/noised-rules", features = ["alloc", "sha2-backend"] }
+solana-account = "4.3.0"
+solana-clock = "3.2.0"
+solana-compute-budget-interface = "3.1.0"
+solana-instruction = "3.5.0"
+solana-keypair = "3.1.2"
+solana-message = { version = "4.2.4", features = ["wincode"] }
+solana-sha256-hasher = { version = "=3.1.0", features = ["sha2"] }
+solana-signer = "3.0.1"
+solana-transaction = { version = "4.1.5", features = ["wincode"] }
+solana-transaction-error = "3.4.0"
+base64 = "0.22"
+serde_json = "1"
+wincode = "0.6.2"
+
+[profile.dev]
+debug = "line-tables-only"
+
+# LiteSVM's interpreter runs optimized; the test itself stays debuggable.
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+# Every launch needs an attestation, and each test binary generates an LMS
+# identity (about 1.14 million SHA-256 compressions): hash at full speed.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.noised-lmots]
+opt-level = 3

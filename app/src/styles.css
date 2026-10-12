@@ -1,0 +1,3432 @@
+/*
+ * NOISED // v6 "Pixel Glass" — design system. Latest spec: PIXEL_V6 (pixel type, stepped pixel corners,
+ * dithered light) on GLASS_V51 (graphite two-tone glass) and earlier specs (the maintainers' design notes).
+ * Handoff for page owners: V6_READY (fonts, sizes, classes, fx/pixel APIs), also in the design notes.
+ *
+ * One system in two files:
+ *   styles.css    tokens (dark + light), fonts, base, keyframes, every shared
+ *                 component class (.card .btn .badge .input .alert .kv .table
+ *                 .meter .seg dialog.modal .toast ...) and utilities.
+ *   terminal.css  the shell (floating navbar, simulation strip, boot, command
+ *                 palette, page transitions, footer, global FX layers) and the
+ *                 legacy page classes (.terminal-*, .lx-*).
+ *
+ * CSP: style-src 'self' and font-src 'self'. Everything here is static: no
+ * remote URL, no @import of third-party CSS; images are data: URIs only
+ * (img-src 'self' data:). Components animate with keyframes declared here
+ * and set custom properties through React style props (allowed by the CSP).
+ *
+ * Legacy class names (.card .btn-* .badge-* .kv .table .meter .seg ...) and
+ * legacy token names (--surface --fg --accent --gold --steel ...) keep working:
+ * they map onto the new tokens.
+ */
+@import "tailwindcss" source("./");
+
+/* ------------------------------------------------------------------ fonts --- */
+/* Vendored woff2 files (SIL OFL 1.1), see src/assets/fonts/FONTS.md. PIXEL_V6 section 1:
+   Geist Pixel = headlines and big numbers (its pixel is 38/1000 em: pixel-exact at 26.3158px x n, --px-1 .. --px-5).
+   Jersey 10   = small pixel UI text: nav, buttons, labels, chips, badges (pixel-exact at 18.6667px, --ui-px).
+   Geist       = paragraphs and long text.   Geist Mono = addresses, hashes, code.
+   A browser downloads a file only when the page uses one of its characters in that family. */
+@font-face {
+  font-family: "Geist Pixel";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./assets/fonts/geist-pixel/geist-pixel-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Geist Pixel";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./assets/fonts/geist-pixel/geist-pixel-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* Jersey 10: the small pixel UI face (nav, buttons, labels, chips). Its pixel is 75/1400 em: crisp at 18.6667px. */
+@font-face {
+  font-family: "Jersey 10";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./assets/fonts/jersey-10/jersey-10-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Jersey 10";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./assets/fonts/jersey-10/jersey-10-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* Geist (sans): variable, weight 100-900. */
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./assets/fonts/geist/geist-latin-ext-wght-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./assets/fonts/geist/geist-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* Geist Mono: addresses, hashes, code (technical pages). */
+@font-face {
+  font-family: "Geist Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./assets/fonts/geist-mono/geist-mono-symbols2-wght-normal.woff2") format("woff2");
+  unicode-range: U+2000-2001, U+2004-2008, U+200A, U+23B8-23BD, U+2500-259F;
+}
+@font-face {
+  font-family: "Geist Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./assets/fonts/geist-mono/geist-mono-latin-ext-wght-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Geist Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./assets/fonts/geist-mono/geist-mono-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Animatable custom properties (static at-rules: allowed by style-src 'self'). */
+/* The button sheen colour animates on hover (pixel buttons, v6). */
+@property --nav-spec {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --surf-spec {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --btn-spec-now {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+/* The pixel spinner's lit pixel (steps round in 45deg jumps). */
+@property --spin-a {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@property --phx-corner {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgb(255 255 255 / 0.14);
+}
+@property --phx-sweep {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@property --phx-travel {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: -30%;
+}
+
+/* ----------------------------------------------------------------- tokens --- */
+/*
+ * UI v3 palettes (UI_V3 section 1, the maintainers' design notes). Two html attributes, both set by settings.tsx:
+ *   data-theme   = "dark" | "light"                  (light/dark: many consumers key off [data-theme="light"])
+ *   data-palette = "cryo" | "acid" | "uv" | "light"  (which palette; CRYO is the base below)
+ * The base block carries CRYO plus every DERIVED token (soft fills, glows, nav glass, hatching): those are
+ * written with color-mix() against the base colors, so ACID / UV / light only override base colors.
+ * Contrast (WCAG 2.x) is measured per palette by contrast.mjs (a script kept outside the repository).
+ */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ---- GRAPHITE (GLASS_V51 section 1): pure graphite, white primary, no hue anywhere. ---- */
+  --bg: #070707;
+  --bg-deep: #030303;
+  --panel: #0e0e0e;
+  --panel-2: #141414;
+  --panel-3: #1b1b1b;
+  --line: rgb(255 255 255 / 0.1);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --dotgrid: rgb(255 255 255 / 0.05);
+  --text: #f5f5f5;
+  --text-muted: #a3a3a3;
+  /* #737373 (the spec's first guess) is only 4.25:1 on #070707. QA v6: #8a8a8a measured 4.05:1 on the lit glass of a
+     selected card (#2c2c2c); #969696 keeps >= 4.7:1 up to #2c2c2c and 5.2:1 on the usual #242424 glass. */
+  --text-dim: #969696;
+  /* Signal = the palette's primary (the token name predates v3; --primary is an alias). PRIMARY = WHITE. */
+  --signal: #ffffff;
+  --signal-hi: #ffffff;
+  --signal-lo: #d4d4d4;
+  /* Silver: the end of the (rare) primary gradient. */
+  --primary-2: #9a9a9a;
+  --on-signal: #0a0a0a;
+  /* Status colours (meaning only, small): #4ADE80 / #FACC15 / #F87171 desaturated 15%. */
+  --phosphor: #55d383;
+  --amber: #e9c226;
+  --violet: #c8c8c8;
+  --danger: #ee7b7b;
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4h8L6 9z' fill='%23a3a3a3'/%3E%3C/svg%3E");
+  --prompt: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 1.5 6.5 5 2 8.5' fill='none' stroke='%23f5f5f5' stroke-width='1.5' stroke-linecap='square'/%3E%3C/svg%3E");
+  --prompt-dim: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 1.5 6.5 5 2 8.5' fill='none' stroke='%238a8a8a' stroke-width='1.5' stroke-linecap='square'/%3E%3C/svg%3E");
+
+  /* ---- Derived from the base colors (every palette). ---- */
+  --primary: var(--signal);
+  --on-primary: var(--on-signal);
+  /* Solid primary (white on Graphite, black on Paper): the gradient runs signal-hi -> signal, i.e. flat. */
+  --primary-grad: linear-gradient(180deg, var(--signal-hi) 0%, var(--signal) 100%);
+  --signal-soft: color-mix(in srgb, var(--signal) 13%, transparent);
+  --signal-line: color-mix(in srgb, var(--signal) 45%, transparent);
+  --signal-faint: color-mix(in srgb, var(--signal) 6%, transparent);
+  --signal-glow: 0 0 22px color-mix(in srgb, var(--signal) 14%, transparent);
+  --primary-2-soft: color-mix(in srgb, var(--primary-2) 14%, transparent);
+  --phosphor-soft: color-mix(in srgb, var(--phosphor) 10%, transparent);
+  --amber-soft: color-mix(in srgb, var(--amber) 10%, transparent);
+  --violet-soft: color-mix(in srgb, var(--violet) 12%, transparent);
+  --danger-soft: color-mix(in srgb, var(--danger) 12%, transparent);
+
+  /* Chrome. */
+  --nav-bg: color-mix(in srgb, var(--bg) 72%, transparent);
+  --nav-bg-strong: color-mix(in srgb, var(--bg) 90%, transparent);
+  --highlight: color-mix(in srgb, var(--text) 5%, transparent);
+  --hover: color-mix(in srgb, var(--text) 4%, transparent);
+  --press: color-mix(in srgb, var(--text) 7%, transparent);
+  --backdrop: color-mix(in srgb, var(--bg-deep) 58%, transparent);
+  --scanline: color-mix(in srgb, var(--text) 2.5%, transparent);
+  --vignette: rgb(0 0 0 / 0.55);
+  --grain-opacity: 0.04;
+  --shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.4), 0 40px 120px -30px rgb(0 0 0 / 0.9);
+  /* Surface depth: a lit top edge, a hard contact line and a soft drop (primary panels add a signal wash). */
+  --depth: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent), 0 1px 0 rgb(0 0 0 / 0.6), 0 24px 48px -24px rgb(0 0 0 / 0.7);
+  --depth-wash: radial-gradient(60% 80% at 0 0, var(--signal-faint), transparent);
+  /* Disabled controls: diagonal hatching instead of a dimmed fill. */
+  --hatch: repeating-linear-gradient(135deg, color-mix(in srgb, var(--text) 4.5%, transparent) 0 2px, transparent 2px 6px);
+  /* Cross lines (UI v3 section 2): ink for construction lines, hatch tones, + nodes. */
+  --cross-ink: color-mix(in srgb, var(--signal) 22%, var(--line-strong));
+  --cross-node: color-mix(in srgb, var(--signal) 70%, var(--text));
+  --hatch-ink: color-mix(in srgb, var(--text) 4%, transparent);
+  --hatch-ink-hi: color-mix(in srgb, var(--signal) 9%, transparent);
+  --crosshatch:
+    repeating-linear-gradient(45deg, var(--hatch-ink) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, var(--hatch-ink) 0 1px, transparent 1px 7px);
+  --crosshatch-hi:
+    repeating-linear-gradient(45deg, var(--hatch-ink-hi) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, var(--hatch-ink-hi) 0 1px, transparent 1px 7px);
+  /* Crosshatch drawn in the on-signal ink: texture on top of primary fills (button hover sweep). */
+  --crosshatch-on:
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--on-signal) 13%, transparent) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(-45deg, color-mix(in srgb, var(--on-signal) 13%, transparent) 0 1px, transparent 1px 5px);
+
+  /* Legacy aliases: pages written before TERMINAL v2 use these names. */
+  --surface: var(--panel);
+  --surface-2: var(--panel-2);
+  --surface-3: var(--panel-3);
+  --raised: var(--panel-3);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --fg: var(--text);
+  --fg-muted: var(--text-muted);
+  --fg-subtle: var(--text-dim);
+  --muted: var(--text-muted);
+  --subtle: var(--text-dim);
+  --dim: var(--text-dim);
+  --accent: var(--signal);
+  --accent-strong: var(--signal);
+  --accent-fg: var(--on-signal);
+  --gold: var(--signal);
+  --gold-1: var(--signal-hi);
+  --gold-2: var(--signal);
+  --gold-3: var(--signal-lo);
+  --gold-gradient: var(--primary-grad);
+  --gold-text-gradient: var(--primary-grad);
+  --glow-gold: var(--signal-glow);
+  --steel: var(--violet);
+  --ok: var(--phosphor);
+  --warn: var(--amber);
+  --fail: var(--danger);
+  --info: var(--violet);
+  --focus: var(--signal);
+  --bg-tint: var(--signal-faint);
+  --card-sheen: none;
+  --shadow-card: none;
+  --glass: color-mix(in srgb, var(--text) 2%, transparent);
+  --glass-strong: color-mix(in srgb, var(--panel) 92%, transparent);
+  --dot-color: var(--dotgrid);
+  --grid-color: var(--line);
+
+  /* Type (PIXEL_V6 section 1). One family, three cuts:
+     --font-pixel  Geist Pixel: headlines, big numbers, labels / eyebrows, buttons, nav, chips (the pixel voice).
+     --font-body   Geist: paragraphs, long text, form values (stays comfortable in docs).
+     --font-mono   Geist Mono: addresses, hashes, code only.
+     Geist Pixel has ONE weight (400) and its pixel is 0.038em: it is pixel-exact at --px-1 x n (26.3158px x n).
+     Never fake-bold it (the @font-face covers 100-900 so the browser does not synthesise bold). */
+  --font-pixel: "Geist Pixel", "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-body: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-head: var(--font-pixel);
+  /* Small pixel UI text: Jersey 10 at --ui-px (its only crisp size below 37px). */
+  --font-ui: "Jersey 10", var(--font-pixel);
+  --font-label: var(--font-ui);
+  --ui-px: 18.6667px;
+  --ui-px-2: 37.3333px;
+  --font-accent: var(--font-head);
+  /* Pixel-exact sizes for Geist Pixel (1 font pixel = n CSS px). Use these for headlines and big numbers. */
+  /* Stepped corner unit (.px-corners / .px-frame / .btn) and rim width. */
+  --px-c: 3px;
+  --px-w: 1px;
+  --px-1: 26.3158px;
+  --px-1h: 39.4737px;
+  --px-2: 52.6316px;
+  --px-2h: 65.7895px;
+  --px-3: 78.9474px;
+  --px-4: 105.2632px;
+  --px-5: 131.5789px;
+  --head-stretch: 100%;
+  --label-stretch: 100%;
+  --head-weight: 400;
+  --head-tracking: 0em;
+  --head-lh: 1;
+  --head-scale: 1;
+  --title-weight: 400;
+  --title-tracking: 0em;
+  --accent-style: normal;
+  --accent-weight: 400;
+  --accent-tracking: 0em;
+  --accent-scale: 1;
+  --body-weight: 400;
+  --body-tracking: 0em;
+  /* --ui-weight is for --font-body UI text; pixel UI text is always 400. */
+  --ui-weight: 500;
+  /* Whole-pixel tracking keeps Jersey 10 on its grid. */
+  --label-tracking: 1px;
+  /* Numbers: Geist Pixel figures are fixed-width already (every advance is a multiple of the pixel). */
+  --font-num: var(--font-pixel);
+  --num-weight: 400;
+  --num-tracking: 0em;
+  /* Legacy names: --font-display = the UI / body sans; --font-dot = the pixel numerals. */
+  --font-display: var(--font-body);
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-dot: var(--font-pixel);
+  /* Hero headline: stepped, pixel-exact (2x on phones, 3x on tablets, 4x on desktop; see the media queries below). */
+  --text-hero: var(--px-4);
+  --text-h1: var(--px-3);
+  --text-h2: var(--px-2);
+  --text-title: var(--px-2);
+
+  /* Shape, motion, layout. */
+  --r-0: 0px;
+  --r-chip: 2px;
+  --r-sm: 0px;
+  --r-md: 0px;
+  --r-lg: 0px;
+  --r-xl: 0px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-snap: cubic-bezier(0.2, 0.9, 0.1, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --page-max: 1280px;
+  --gutter: 24px;
+  --section-y: 120px;
+  --nav-top: 14px;
+  --nav-h: 58px;
+  --nav-max: 1120px;
+  --nav-line: color-mix(in srgb, var(--text) 11%, transparent);
+  --strip-h: 30px;
+  /* v4 radii: soft cards, pill buttons. */
+  /* v6: squared (pixel) radii. Core surfaces use stepped corners instead (.card / .glass / .btn ...). */
+  --r-card: 4px;
+  --r-input: 3px;
+  --r-pill: 999px;
+  /* Space the fixed navbar + the mode pill take at the top of every page. */
+  --nav-offset: 112px;
+
+  /* ---- v5.1 GRAPHITE glass + monochrome light (GLASS_V51 section 1; V51_READY, in the design notes) ---- */
+  --aurora-bg: #070707;
+  /* The "aurora" is now 2-3 quiet light pools: white and soft grays only (no hue). */
+  --aurora-1: #ffffff;
+  --aurora-2: #d9d9d9;
+  --aurora-3: #f2f2f2;
+  --aurora-4: #bfbfbf;
+  /* Pool strengths = peak opacity of each pool (<= 8%), and the corner vignette; read by fx/aurora/renderer.ts. */
+  --aurora-alpha: 0.075 0.05 0.06 0;
+  --aurora-vignette: 0.5;
+  /* The light pools are smooth (no ordered dithering into square pixels; the "signal from noise" effects carry the
+     texture now). 1 would dither them again (fx/aurora); --aurora-pixel = CSS px per dot when dithering. */
+  --aurora-dither: 0;
+  --aurora-levels: 4;
+  --aurora-pixel: 3;
+  /* Glass: a neutral graphite tint under a faint white sheen (white 4-7%), blur 28px, saturate 120%. */
+  --glass-tint: rgb(12 12 12 / 0.46);
+  --glass-hi: rgb(255 255 255 / 0.07);
+  --glass-lo: rgb(255 255 255 / 0.04);
+  --glass-fill: linear-gradient(180deg, var(--glass-hi), var(--glass-lo));
+  --glass-fill-hover: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.06));
+  --glass-blur: 28px;
+  --glass-sat: 120%;
+  --glass-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  /* 1px hairline rim lit from the top (strong 16% at the top, 10% hairline, 6% at the flank). */
+  --glass-edge: linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.1) 30%, rgb(255 255 255 / 0.06) 68%, rgb(255 255 255 / 0.1));
+  --glass-edge-hover: linear-gradient(180deg, rgb(255 255 255 / 0.26), rgb(255 255 255 / 0.14) 32%, rgb(255 255 255 / 0.08) 68%, rgb(255 255 255 / 0.14));
+  --glass-inset: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 -10px 24px -18px rgb(255 255 255 / 0.05);
+  --glass-shadow: 0 30px 70px -34px rgb(0 0 0 / 0.9), 0 10px 26px -16px rgb(0 0 0 / 0.65);
+  --glass-shadow-hover: 0 40px 90px -36px rgb(0 0 0 / 0.95), 0 16px 34px -16px rgb(0 0 0 / 0.7);
+  /* Pointer-following highlight (fx/aurora/glassPointer.ts sets --mx / --my on the surface). */
+  --glass-spec: rgb(255 255 255 / 0.07);
+  --glass-spec-size: 360px;
+  /* Overlays (dialogs, menus, toasts, the mobile sheet): denser glass. */
+  --glass-strong-tint: rgb(14 14 14 / 0.8);
+  --r-glass: 4px;
+  --r-glass-sm: 3px;
+  /* Headline helpers: no colour. The second headline line is a subtle silver (top #F5F5F5 -> bottom #9A9A9A). */
+  --head-glow: rgb(255 255 255 / 0.08);
+  --head-2: rgb(245 245 245 / 0.55);
+  --silver: linear-gradient(180deg, #f5f5f5 0%, #9a9a9a 100%);
+  /* Links: white (ink on Paper) with an underline. */
+  --link: var(--text);
+  --link-line: rgb(255 255 255 / 0.36);
+  --link-line-hover: rgb(255 255 255 / 0.9);
+  /* Hairlines, wells, lenses, tracks (shared by the glass components). */
+  --hairline: rgb(255 255 255 / 0.08);
+  --hairline-strong: rgb(255 255 255 / 0.14);
+  --field-bg: rgb(0 0 0 / 0.36);
+  --field-line: rgb(255 255 255 / 0.12);
+  --field-line-hover: rgb(255 255 255 / 0.22);
+  --lens: linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.05));
+  --lens-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(255 255 255 / 0.04), 0 6px 16px -8px rgb(0 0 0 / 0.6);
+  --track: rgb(255 255 255 / 0.08);
+}
+
+/* ---- PAPER (light theme toggle, GLASS_V51 section 1): warm white paper, ink, black primary. ---- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f4f2;
+  --bg-deep: #eaeae7;
+  --panel: #fbfbfa;
+  --panel-2: #efefec;
+  --panel-3: #e6e6e2;
+  --line: rgb(10 10 10 / 0.1);
+  --line-strong: rgb(10 10 10 / 0.18);
+  --dotgrid: rgb(10 10 10 / 0.07);
+  --text: #0a0a0a;
+  --text-muted: #4d4d4d;
+  --text-dim: #616161;
+  --signal: #0a0a0a;
+  --signal-hi: #000000;
+  --signal-lo: #262626;
+  --primary-2: #5c5c5c;
+  --on-signal: #ffffff;
+  --phosphor: #166b3f;
+  --amber: #6b5200;
+  --violet: #3d3d3d;
+  --danger: #b3261e;
+  --phosphor-soft: rgb(22 107 63 / 0.09);
+  --amber-soft: rgb(107 82 0 / 0.09);
+  --violet-soft: rgb(10 10 10 / 0.06);
+  --danger-soft: rgb(179 38 30 / 0.08);
+  --signal-soft: rgb(10 10 10 / 0.07);
+  --signal-glow: 0 0 22px rgb(10 10 10 / 0.1);
+
+  --highlight: rgb(255 255 255 / 0.8);
+  --hover: rgb(10 10 10 / 0.04);
+  --press: rgb(10 10 10 / 0.07);
+  --backdrop: rgb(16 16 16 / 0.36);
+  --scanline: rgb(0 0 0 / 0.02);
+  --vignette: rgb(0 0 0 / 0.08);
+  --grain-opacity: 0.045;
+  --shadow-pop: 0 0 0 1px rgb(10 10 10 / 0.06), 0 40px 100px -30px rgb(0 0 0 / 0.24);
+  --depth: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 1px 0 rgb(10 10 10 / 0.05), 0 24px 48px -30px rgb(0 0 0 / 0.2);
+  --hatch: repeating-linear-gradient(135deg, rgb(10 10 10 / 0.05) 0 2px, transparent 2px 6px);
+  --hatch-ink: rgb(10 10 10 / 0.05);
+  --hatch-ink-hi: rgb(10 10 10 / 0.08);
+  --cross-ink: color-mix(in srgb, var(--signal) 26%, var(--line-strong));
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4h8L6 9z' fill='%234d4d4d'/%3E%3C/svg%3E");
+  --prompt: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 1.5 6.5 5 2 8.5' fill='none' stroke='%230a0a0a' stroke-width='1.5' stroke-linecap='square'/%3E%3C/svg%3E");
+  --prompt-dim: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 1.5 6.5 5 2 8.5' fill='none' stroke='%23616161' stroke-width='1.5' stroke-linecap='square'/%3E%3C/svg%3E");
+  --glass: rgb(255 255 255 / 0.5);
+  --glass-strong: rgb(251 251 250 / 0.95);
+  --aurora-bg: #f4f4f2;
+  --aurora-1: #ffffff;
+  --aurora-2: #d9d9d5;
+  --aurora-3: #ffffff;
+  --aurora-4: #e2e2de;
+  --aurora-alpha: 0.8 0.32 0.6 0;
+  --aurora-vignette: 0;
+  /* Paper glass: white ~65% + blur. */
+  --glass-tint: rgb(255 255 255 / 0.45);
+  --glass-hi: rgb(255 255 255 / 0.5);
+  --glass-lo: rgb(255 255 255 / 0.3);
+  --glass-fill-hover: linear-gradient(180deg, rgb(255 255 255 / 0.78), rgb(255 255 255 / 0.5));
+  --glass-sat: 110%;
+  --glass-edge: linear-gradient(180deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.5) 34%, rgb(10 10 10 / 0.07) 70%, rgb(10 10 10 / 0.11));
+  --glass-edge-hover: linear-gradient(180deg, rgb(255 255 255 / 1), rgb(255 255 255 / 0.6) 34%, rgb(10 10 10 / 0.11) 70%, rgb(10 10 10 / 0.15));
+  --glass-inset: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 -10px 24px -18px rgb(255 255 255 / 0.6);
+  --glass-shadow: 0 26px 60px -32px rgb(0 0 0 / 0.2), 0 8px 20px -14px rgb(0 0 0 / 0.13);
+  --glass-shadow-hover: 0 34px 80px -34px rgb(0 0 0 / 0.26), 0 12px 26px -14px rgb(0 0 0 / 0.17);
+  --glass-spec: rgb(255 255 255 / 0.75);
+  --glass-strong-tint: rgb(250 250 249 / 0.88);
+  --head-glow: transparent;
+  --head-2: rgb(10 10 10 / 0.5);
+  --silver: linear-gradient(180deg, #2a2a2a 0%, #6b6b6b 100%);
+  --link-line: rgb(10 10 10 / 0.34);
+  --link-line-hover: rgb(10 10 10 / 0.9);
+  --hairline: rgb(10 10 10 / 0.08);
+  --hairline-strong: rgb(10 10 10 / 0.14);
+  --field-bg: rgb(255 255 255 / 0.72);
+  --field-line: rgb(10 10 10 / 0.14);
+  --field-line-hover: rgb(10 10 10 / 0.26);
+  --lens: linear-gradient(180deg, rgb(255 255 255 / 1), rgb(255 255 255 / 0.72));
+  --lens-shadow: inset 0 1px 0 rgb(255 255 255 / 1), 0 0 0 1px rgb(10 10 10 / 0.07), 0 6px 16px -8px rgb(0 0 0 / 0.22);
+  --track: rgb(10 10 10 / 0.08);
+}
+
+/* ---- Font (PIXEL_V6 section 1): one pixel system; html[data-font] (an old setting) is ignored. ---- */
+/* Pixel-exact hero steps: 2x below 640px, 3x below 1100px, 4x above. */
+@media (max-width: 1099px) {
+  :root {
+    --text-hero: var(--px-3);
+    --text-h1: var(--px-2h);
+  }
+}
+@media (max-width: 639px) {
+  :root {
+    --text-hero: var(--px-2);
+    --text-h1: var(--px-2);
+    --text-h2: var(--px-1h);
+    --text-title: var(--px-1h);
+  }
+}
+@media (max-width: 379px) {
+  :root {
+    --text-hero: var(--px-1h);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-panel-3: var(--panel-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-dim: var(--text-dim);
+  --color-signal: var(--signal);
+  --color-signal-hi: var(--signal-hi);
+  --color-signal-soft: var(--signal-soft);
+  --color-on-signal: var(--on-signal);
+  --color-primary: var(--primary);
+  --color-primary-2: var(--primary-2);
+  --color-on-primary: var(--on-primary);
+  --color-phosphor: var(--phosphor);
+  --color-amber: var(--amber);
+  --color-violet: var(--violet);
+  --color-danger: var(--danger);
+  /* Legacy utility names (text-muted, bg-surface-2, border-border, text-accent ...). */
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-raised: var(--raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-gold: var(--gold);
+  --color-gold-1: var(--gold-1);
+  --color-gold-2: var(--gold-2);
+  --color-gold-3: var(--gold-3);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-fg: var(--accent-fg);
+  --color-steel: var(--steel);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-fail: var(--fail);
+  --color-info: var(--info);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
+  --font-dot: var(--font-dot);
+  --font-serif: var(--font-accent);
+  --font-pixel: var(--font-pixel);
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-glow: var(--signal-glow);
+  --ease-out-phx: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Sharp terminal geometry: panels and buttons 0, chips 2px (rounded-full stays for dots). */
+@theme {
+  --radius-xs: 0px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 2px;
+  --radius-3xl: 2px;
+  --radius-4xl: 2px;
+}
+
+/* ------------------------------------------------------------------- base --- */
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scrollbar-color: color-mix(in srgb, var(--text) 22%, transparent) transparent;
+    scroll-padding-top: var(--nav-offset);
+  }
+  body {
+    min-height: 100vh;
+    background: radial-gradient(1100px 520px at 50% -220px, var(--bg-tint), transparent 72%), var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-weight: var(--body-weight);
+    font-size: 15px;
+    line-height: 1.6;
+    letter-spacing: var(--body-tracking);
+    /* Addresses and hashes are long unbreakable words: never let one widen the page. */
+    overflow-wrap: anywhere;
+    overflow-x: clip;
+  }
+  ::selection {
+    background: var(--signal);
+    color: var(--on-signal);
+  }
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 3px;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  /* v6: plain h1-h3 speak in the pixel headline face (classes and page CSS still win: this is the base layer).
+     Geist Pixel has one weight and must not be tracked tighter. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-head);
+    font-weight: 400;
+    letter-spacing: 0;
+    font-stretch: var(--head-stretch);
+  }
+  p {
+    text-wrap: pretty;
+  }
+  code,
+  kbd,
+  pre,
+  samp,
+  .mono {
+    font-family: var(--font-mono);
+    font-feature-settings: "ss01", "ss02";
+    letter-spacing: 0;
+    font-variant-ligatures: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .tabular-nums,
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  hr {
+    border-color: var(--line);
+  }
+  summary {
+    cursor: pointer;
+  }
+  img,
+  svg,
+  canvas,
+  video {
+    max-width: 100%;
+  }
+  /* Terminal checkboxes / radios (zero specificity: any page class overrides). */
+  :where(input[type="checkbox"], input[type="radio"]) {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-grid;
+    place-content: center;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    border: 1px solid var(--field-line-hover);
+    border-radius: 5px;
+    background: var(--field-bg);
+    vertical-align: -3px;
+    cursor: pointer;
+    transition:
+      border-color 0.2s,
+      background-color 0.2s,
+      box-shadow 0.2s;
+  }
+  :where(input[type="radio"]) {
+    border-radius: 999px;
+  }
+  :where(input[type="checkbox"])::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    background: var(--on-signal);
+    clip-path: polygon(14% 44%, 0 62%, 42% 100%, 100% 18%, 84% 2%, 40% 66%);
+    transform: scale(0);
+    transition: transform 0.16s var(--ease-out);
+  }
+  :where(input[type="radio"])::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--on-signal);
+    transform: scale(0);
+    transition: transform 0.16s var(--ease-out);
+  }
+  :where(input[type="checkbox"], input[type="radio"]):checked {
+    border-color: var(--signal);
+    background: var(--signal);
+    box-shadow: 0 0 12px -3px var(--signal);
+  }
+  :where(input[type="checkbox"], input[type="radio"]):checked::before {
+    transform: scale(1);
+  }
+  :where(input[type="checkbox"], input[type="radio"]):hover:not(:disabled) {
+    border-color: var(--signal-line);
+  }
+  :where(input[type="checkbox"], input[type="radio"]):disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  /* Theme switch: cross-fade surfaces and text for one beat (settings.tsx sets the flag). */
+  @media (prefers-reduced-motion: no-preference) {
+    :root[data-theme-switching] *,
+    :root[data-theme-switching] *::before,
+    :root[data-theme-switching] *::after {
+      transition:
+        background-color 0.35s var(--ease-out),
+        border-color 0.35s var(--ease-out),
+        color 0.35s var(--ease-out),
+        fill 0.35s var(--ease-out) !important;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ------------------------------------------------------------- keyframes --- */
+
+@keyframes phx-blink {
+  to {
+    visibility: hidden;
+  }
+}
+@keyframes phx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes phx-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  80%,
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+@keyframes phx-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+@keyframes phx-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes phx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes phx-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+@keyframes phx-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+@keyframes phx-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes phx-shimmer {
+  from {
+    background-position: 150% 0, 0 0;
+  }
+  to {
+    background-position: -50% 0, 0 0;
+  }
+}
+@keyframes phx-travel {
+  from {
+    --phx-travel: -30%;
+  }
+  to {
+    --phx-travel: 130%;
+  }
+}
+@keyframes phx-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap, 0px)));
+  }
+}
+@keyframes phx-marquee-y {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-100% - var(--gap, 0px)));
+  }
+}
+@keyframes phx-scan {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes phx-sweep-down {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh);
+    opacity: 0;
+  }
+}
+@keyframes phx-decode-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes phx-bracket-l {
+  from {
+    transform: translateX(6px);
+    opacity: 0;
+  }
+}
+@keyframes phx-bracket-r {
+  from {
+    transform: translateX(-6px);
+    opacity: 0;
+  }
+}
+@keyframes phx-dash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes phx-float {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+/* Travelling highlight on lit dots: only the pre-rendered glow layer's opacity animates (compositor-only, no repaint). */
+@keyframes phx-dot-glint {
+  0%,
+  14%,
+  100% {
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+}
+/* A ring that ripples out of an element (transform + opacity only). */
+@keyframes phx-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  70%,
+  100% {
+    transform: scale(1.18, 1.55);
+    opacity: 0;
+  }
+}
+/* Departure-board digit roll (slot ticker). */
+@keyframes phx-roll-in {
+  from {
+    transform: translateY(-100%);
+    opacity: 0.3;
+  }
+}
+@keyframes phx-dot-fill {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+/* UI v3: crosshatch drift = one pattern period (7px along each diagonal = 7 * sqrt 2 on x). */
+@keyframes phx-hatch-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(9.8995px, 0, 0);
+  }
+}
+/* UI v3: two-frame heading glitch. */
+@keyframes phx-glitch {
+  0% {
+    transform: translateX(1px);
+    text-shadow:
+      2px 0 var(--signal),
+      -2px 0 var(--primary-2);
+  }
+  50% {
+    transform: translateX(-1px) skewX(-3deg);
+    text-shadow:
+      -2px 0 var(--signal),
+      2px 0 var(--primary-2);
+  }
+  100% {
+    transform: none;
+    text-shadow: none;
+  }
+}
+
+/* v5: a word / a page comes into focus (BlurText, route change). Fill "backwards": nothing stays applied. */
+@keyframes phx-blur-in {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+    transform: translateY(8px);
+  }
+}
+
+/* v5: a slow light sheen across progress fills (transform only). */
+@keyframes phx-sheen {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+/* v5: a glass sheet settles in (dialogs). */
+@keyframes phx-glass-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+
+/* ------------------------------------------------------------- components --- */
+
+@layer components {
+  /* ---- layout ------------------------------------------------------------- */
+  .skip-link {
+    position: fixed;
+    left: 16px;
+    top: -80px;
+    z-index: 200;
+    padding: 10px 14px;
+    background: var(--signal);
+    color: var(--on-signal);
+    font: 600 12px/1 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .skip-link:focus {
+    top: 16px;
+  }
+  .page {
+    width: 100%;
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: 16px;
+  }
+  @media (min-width: 640px) {
+    .page {
+      padding-inline: var(--gutter);
+    }
+  }
+  .app-main {
+    padding-top: var(--nav-offset);
+    padding-bottom: 64px;
+  }
+  .section {
+    padding-block: 72px;
+  }
+  @media (min-width: 768px) {
+    .section {
+      padding-block: var(--section-y);
+    }
+  }
+  .prose-width {
+    max-width: 640px;
+  }
+
+  /* ---- type --------------------------------------------------------------- */
+  /* Headlines use the pairing's display face (--font-head); weights and tracking come from the pairing. */
+  .display,
+  .t-display {
+    font-family: var(--font-head);
+    font-stretch: var(--head-stretch);
+    font-size: var(--text-hero);
+    font-weight: var(--head-weight);
+    line-height: var(--head-lh);
+    letter-spacing: var(--head-tracking);
+    text-wrap: balance;
+  }
+  .caps,
+  .t-display.caps {
+    letter-spacing: -0.02em;
+    font-kerning: normal;
+  }
+  .h1,
+  .t-h1 {
+    font-family: var(--font-head);
+    font-stretch: var(--head-stretch);
+    font-size: var(--text-h1);
+    font-weight: var(--head-weight);
+    line-height: 1;
+    letter-spacing: var(--head-tracking);
+  }
+  .h2,
+  .t-h2 {
+    font-family: var(--font-head);
+    font-stretch: var(--head-stretch);
+    font-size: var(--text-h2);
+    font-weight: var(--title-weight);
+    line-height: 1.04;
+    letter-spacing: var(--title-tracking);
+  }
+  .h3,
+  .t-h3 {
+    font-family: var(--font-head);
+    font-stretch: var(--head-stretch);
+    /* On Geist Pixel's grid (--px-1): smaller sizes render as a soft sans, not pixels. */
+    font-size: var(--px-1);
+    font-weight: var(--title-weight);
+    line-height: 1.12;
+    letter-spacing: calc(var(--title-tracking) * 0.6);
+  }
+  .lead {
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--text-muted);
+    max-width: 62ch;
+  }
+  .caption {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  /* Small label (sentence case in v5; legacy markup may still be uppercase). */
+  .label-mono,
+  .eyebrow,
+  .t-label {
+    font-family: var(--font-label);
+    font-size: var(--ui-px);
+    line-height: 1;
+    font-weight: 400;
+    letter-spacing: var(--label-tracking);
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .t-label > b,
+  .eyebrow > b,
+  .t-index {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+  /* Big numbers: Geist Pixel figures (fixed width already). */
+  .num,
+  .t-dot {
+    font-family: var(--font-num);
+    font-stretch: var(--head-stretch);
+    font-weight: var(--num-weight);
+    font-variation-settings: normal;
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: var(--num-tracking);
+  }
+  /* Small numbers: tabular figures of the body face. */
+  .t-num {
+    font-family: var(--font-body);
+    font-weight: 550;
+    font-variation-settings: normal;
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.01em;
+  }
+  .t-dot-square {
+    font-variation-settings: "ROND" 0;
+  }
+  /* ---- v5 headline type (GLASS_V5 section 2) ------------------------------ */
+  /* The hero headline: clamp(48px, 7.2vw, 112px) (wide faces shrink it), line-height .95, the pairing's tracking. */
+  .t-hero {
+    font-family: var(--font-head);
+    font-stretch: var(--head-stretch);
+    font-size: var(--text-hero);
+    font-weight: var(--head-weight);
+    line-height: var(--head-lh);
+    letter-spacing: var(--head-tracking);
+    text-wrap: balance;
+    font-kerning: normal;
+    font-optical-sizing: auto;
+  }
+  /* Section titles (h2 size) and card titles (h3 size) in the display face. */
+  .t-title {
+    font-family: var(--font-head);
+    font-stretch: var(--head-stretch);
+    font-size: var(--text-title);
+    font-weight: var(--title-weight);
+    line-height: 1.04;
+    letter-spacing: var(--title-tracking);
+    text-wrap: balance;
+  }
+  .t-card-title {
+    font-family: var(--font-head);
+    font-stretch: var(--head-stretch);
+    font-size: var(--px-1);
+    font-weight: var(--title-weight);
+    line-height: 1.12;
+    letter-spacing: calc(var(--title-tracking) * 0.55);
+  }
+  /* One sentence under a headline. */
+  .t-sub {
+    font-family: var(--font-body);
+    font-size: clamp(16px, 1.3vw, 19px);
+    font-weight: var(--body-weight);
+    line-height: 1.55;
+    letter-spacing: var(--body-tracking);
+    color: var(--text-muted);
+    text-wrap: pretty;
+  }
+  /* Each headline line on its own row. */
+  .t-line {
+    display: block;
+  }
+  /* The accent word: Instrument Serif italic in pairing 3; the display face elsewhere. */
+  .t-accent {
+    font-family: var(--font-accent);
+    font-stretch: var(--head-stretch);
+    font-style: var(--accent-style);
+    font-weight: var(--accent-weight);
+    letter-spacing: var(--accent-tracking);
+    font-size: calc(1em * var(--accent-scale));
+    padding-right: 0.04em;
+  }
+  /* Frosted letters: white that softens towards the baseline, with a faint luminous halo. */
+  .t-frost {
+    color: var(--text);
+    background: linear-gradient(180deg, #ffffff 10%, color-mix(in srgb, var(--text) 74%, transparent) 115%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: none;
+  }
+  :root[data-theme="light"] .t-frost {
+    background: linear-gradient(180deg, var(--text) 30%, color-mix(in srgb, var(--text) 78%, transparent) 120%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    filter: none;
+  }
+  /* The second headline line (GLASS_V51 section 1): a subtle silver, #F5F5F5 at the top to #9A9A9A at the
+     baseline (ink to graphite on Paper). Never a hue, no glow. Words inside a <BlurText> get the same gradient,
+     placed where they sit on the line (BlurText measures them), so the reveal never breaks the run. */
+  .t-grad {
+    --grad-text: var(--silver);
+    color: var(--text-muted);
+    background-image: var(--grad-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ---- v5 liquid glass (GLASS_V5 section 1) ------------------------------- */
+  /*
+   * <div class="glass">...</div>                 a glass surface: radius 24, tint + sheen, backdrop blur, a rim lit
+   *                                              from the top, a deep soft shadow, the pointer-following highlight
+   * + .glass-strong   denser tint (dialogs, text-heavy panels)      + .glass-clear  lighter tint (decorative only)
+   * + .glass-pill     999px radius                                  + .glass-sm     18px radius
+   * + .glass-hover    hover brightens + lifts 2px, press compresses (links / buttons / clickable cards)
+   * + .glass-flat     no drop shadow (glass inside glass)
+   * The element must not use its own ::before / ::after (rim and highlight live there). Content sits above both.
+   */
+  /* v6 pixel glass: the material (--surf-fill + blur + inset light) is painted by ::after, clipped to stepped
+     corners (two steps of --px-c); ::before draws the 1px rim along the same steps. The element itself is not
+     clipped, so tooltips, menus and focus rings inside are never cut. Variants set --surf-fill (a layer list). */
+  .glass,
+  .glass-card {
+    --px-c: 4px;
+    --surf-fill: var(--glass-fill), var(--glass-tint);
+    position: relative;
+    isolation: isolate;
+    border-radius: 0;
+    background: none;
+    box-shadow: var(--glass-shadow);
+    transition:
+      transform 0.35s var(--ease-out),
+      box-shadow 0.35s var(--ease-out),
+      background-color 0.35s var(--ease-out);
+  }
+  .glass::before,
+  .glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: var(--glass-edge);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)), 0px calc(var(--px-c) * 2), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), 0px calc(var(--px-c) * 2));
+    pointer-events: none;
+  }
+  .glass::after,
+  .glass-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(var(--glass-spec-size) circle at var(--mx, 50%) var(--my, -140%), var(--surf-spec), transparent 64%),
+      var(--surf-fill);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+    box-shadow: var(--glass-inset);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+    transition: --surf-spec 0.5s var(--ease-out);
+    pointer-events: none;
+  }
+  .glass:hover,
+  .glass-card:hover,
+  .glass:focus-within {
+    --surf-spec: var(--glass-spec);
+  }
+  .glass-strong {
+    --surf-fill: var(--glass-fill), var(--glass-strong-tint);
+  }
+  .glass-clear {
+    --surf-fill: var(--glass-fill), color-mix(in srgb, var(--glass-tint) 45%, transparent);
+  }
+  .glass-pill {
+    --px-c: 3px;
+    border-radius: 0;
+  }
+  .glass-sm {
+    --px-c: 3px;
+    border-radius: 0;
+  }
+  .glass-flat {
+    box-shadow: none;
+  }
+  .glass-hover {
+    cursor: pointer;
+  }
+  .glass-hover:hover {
+    --surf-fill: var(--glass-fill-hover), var(--glass-tint);
+    box-shadow: var(--glass-shadow-hover);
+    transform: translateY(-2px);
+  }
+  .glass-hover:hover::before {
+    background: var(--glass-edge-hover);
+  }
+  .glass-hover:active {
+    transform: translateY(0) scale(0.985);
+    transition-duration: 0.12s;
+  }
+  /* Glass without backdrop-filter support (very old engines): a solid panel keeps contrast. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass,
+    .glass-card {
+      background: var(--panel);
+    }
+  }
+  /* BlurText (components/BlurText.tsx): each word comes into focus. */
+  .bt-w {
+    display: inline-block;
+  }
+  .bt-run[data-play="true"] .bt-w {
+    animation: phx-blur-in var(--bt-dur, 0.7s) var(--ease-out) backwards;
+    animation-delay: calc(var(--bt-delay, 0s) + var(--i, 0) * var(--bt-step, 0.05s));
+  }
+  .bt-run[data-play="false"] .bt-w {
+    opacity: 0;
+  }
+  /* A word inside a gradient line carries the line's gradient, offset to where it sits (set by BlurText). */
+  .t-grad .bt-w,
+  .bt-w.bt-grad {
+    background-image: var(--grad-text);
+    background-size: var(--bt-bw, 100%) var(--bt-bh, 100%);
+    background-position: calc(var(--bt-bx, 0px) * -1) calc(var(--bt-by, 0px) * -1);
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .t-grad:has(.bt-w) {
+    background-image: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bt-run[data-play] .bt-w {
+      animation: none;
+      opacity: 1;
+    }
+  }
+  .t-muted {
+    color: var(--text-muted);
+  }
+  .t-dim {
+    color: var(--text-dim);
+  }
+  .t-signal {
+    color: var(--signal);
+  }
+  /* Legacy gold text: now plain signal. */
+  .gold-text {
+    color: var(--signal);
+  }
+  .text-gradient-fg {
+    color: var(--text);
+  }
+  .serif,
+  em.serif,
+  .serif-italic {
+    font-family: var(--font-display);
+    font-style: normal;
+    color: var(--signal);
+  }
+  /* Comment line ("// field help"). */
+  .t-comment {
+    max-inline-size: 72ch;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .t-comment::before {
+    content: "// ";
+    color: color-mix(in srgb, var(--signal) 70%, var(--text-dim));
+  }
+
+  /* Blinking block cursor: <span class="cursor" aria-hidden="true">_</span>. */
+  .cursor,
+  .phx-cursor {
+    display: inline-block;
+    color: var(--signal);
+    font-weight: inherit;
+    animation: phx-blink 1.06s steps(2, start) infinite;
+  }
+  .cursor-block {
+    display: inline-block;
+    width: 0.58em;
+    height: 0.9em;
+    margin-left: 0.08em;
+    vertical-align: -0.08em;
+    background: var(--signal);
+    animation: phx-blink 1.06s steps(2, start) infinite;
+  }
+
+  /* Eyebrow chip: status dot + label. */
+  .eyebrow-pill,
+  .chip {
+    --px-c: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 0;
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+    border: 0;
+    background: var(--glass-fill), color-mix(in srgb, var(--glass-tint) 70%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    backdrop-filter: blur(16px) saturate(160%);
+    box-shadow: var(--glass-inset), inset 0 0 0 1px var(--hairline-strong);
+    font-family: var(--font-label);
+    font-size: var(--ui-px);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: var(--label-tracking);
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .eyebrow-pill::before {
+    content: "";
+    width: 4px;
+    height: 4px;
+    border-radius: 0;
+    background: var(--signal);
+    box-shadow: none;
+  }
+  .section-header {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .section-header[data-align="center"] {
+    align-items: center;
+    text-align: center;
+  }
+
+  /* ---- panels --------------------------------------------------------------- */
+  /*
+   * v5: .card / .panel are liquid-glass surfaces (tint + sheen + backdrop blur, a 1px rim lit from the top, a
+   * pointer-following highlight, a deep soft shadow). .is-primary adds an ice wash and a brighter rim; .is-flat
+   * drops the shadow. The v3 corner marks are gone (.no-corners / .corners are kept as no-ops).
+   */
+  .card,
+  .panel {
+    --px-c: 4px;
+    --surf-fill: var(--glass-fill), var(--glass-tint);
+    position: relative;
+    isolation: isolate;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: var(--glass-shadow);
+    transition:
+      transform 0.35s var(--ease-out),
+      box-shadow 0.35s var(--ease-out);
+  }
+  .card::before,
+  .panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: var(--glass-edge);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)), 0px calc(var(--px-c) * 2), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), 0px calc(var(--px-c) * 2));
+    pointer-events: none;
+  }
+  .card::after,
+  .panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(var(--glass-spec-size) circle at var(--mx, 50%) var(--my, -140%), var(--surf-spec), transparent 64%),
+      var(--surf-fill);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+    box-shadow: var(--glass-inset);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+    transition: --surf-spec 0.5s var(--ease-out);
+    pointer-events: none;
+  }
+  .card:hover,
+  .card:focus-within,
+  .panel:hover,
+  .panel:focus-within {
+    --surf-spec: var(--glass-spec);
+  }
+  /* The one panel a view is about (action column, selected preset, live stage): an ice wash + an ice rim. */
+  .card.is-primary,
+  .panel.is-primary {
+    --surf-fill:
+      radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--signal) 10%, transparent), transparent 62%),
+      var(--glass-fill),
+      var(--glass-tint);
+  }
+  .card.is-primary::before,
+  .panel.is-primary::before {
+    background: linear-gradient(160deg, color-mix(in srgb, var(--signal) 60%, transparent), color-mix(in srgb, var(--signal) 14%, transparent) 38%, rgb(255 255 255 / 0.04) 70%, color-mix(in srgb, var(--primary-2) 30%, transparent));
+  }
+  /* Reference panels (certificates, account lists) stay flat. */
+  .card.is-flat,
+  .panel.is-flat {
+    box-shadow: none;
+  }
+  .corners {
+    position: relative;
+  }
+  .panel-2 {
+    background: var(--hover);
+  }
+  .card:has(> .card-header) {
+    counter-increment: phx-panel;
+  }
+  .card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 20px 24px 2px;
+  }
+  .card-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 26px;
+  }
+  /* v4/v5: no "01 /" panel numbers. */
+  .card-index {
+    display: none;
+  }
+  /* Readout tile (Stat). */
+  .stat {
+    --px-c: 3px;
+    min-width: 0;
+    padding: 14px 16px;
+    border-radius: 0;
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+    background: var(--hover);
+    box-shadow: inset 0 0 0 1px var(--hairline);
+  }
+  .stat-label {
+    font-family: var(--font-label);
+    font-size: var(--ui-px);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: var(--label-tracking);
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .stat-value {
+    margin-top: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-num);
+    font-stretch: var(--head-stretch);
+    font-weight: var(--num-weight);
+    font-size: var(--px-1);
+    line-height: 1.1;
+    letter-spacing: var(--num-tracking);
+    font-variant-numeric: tabular-nums lining-nums;
+    color: var(--text);
+  }
+  .stat-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .help-comment::before {
+    content: none;
+  }
+  .countdown {
+    font-variant-numeric: tabular-nums;
+  }
+  .card-header h2,
+  .card-header h3,
+  .card-title {
+    min-width: 0;
+    /* Small card titles: Jersey 10 at its native size (crisp pixels), not Geist Pixel off its grid. */
+    font-family: var(--font-ui);
+    font-stretch: normal;
+    font-size: var(--ui-px);
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text);
+  }
+  .card-rule {
+    flex: 1;
+    min-width: 12px;
+  }
+  .card-status {
+    flex: none;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: 0;
+    color: var(--text-dim);
+  }
+  .card-actions {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-subtitle,
+  .card-header p {
+    max-width: 72ch;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-muted);
+  }
+  .card-body {
+    padding: 20px 24px 24px;
+  }
+  .card-header + .card-body {
+    padding-top: 14px;
+  }
+  .card-body > p,
+  .alert p,
+  .alert > div:last-child,
+  .help {
+    max-inline-size: 72ch;
+  }
+  @media (max-width: 640px) {
+    .card-header {
+      padding: 16px 18px 2px;
+    }
+    .card-body {
+      padding: 16px 18px 18px;
+    }
+    .card-bar {
+      flex-wrap: wrap;
+      row-gap: 8px;
+    }
+  }
+  /* Interactive panel: brightens and lifts 2px. */
+  .card-hover {
+    cursor: pointer;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    background: var(--glass-fill-hover), var(--glass-tint);
+    box-shadow: var(--glass-inset), var(--glass-shadow-hover);
+  }
+  .card-hover:hover::before {
+    background: var(--glass-edge-hover);
+  }
+  .card-hover:active {
+    transform: translateY(0) scale(0.985);
+    transition-duration: 0.12s;
+  }
+  .hairline {
+    border-color: var(--hairline);
+  }
+  .divider,
+  .rule {
+    height: 1px;
+    width: 100%;
+    background: var(--hairline);
+  }
+  .rule-dashed {
+    height: 1px;
+    width: 100%;
+    background: var(--hairline);
+  }
+
+  /* Cursor spotlight (legacy .spotlight: --mx/--my set from pointermove). */
+  .spotlight {
+    --mx: 50%;
+    --my: -200px;
+    isolation: isolate;
+  }
+  .spotlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(360px circle at var(--mx) var(--my), var(--glass-spec), transparent 60%);
+    opacity: 0;
+    transition: opacity 0.35s var(--ease-out);
+  }
+  .spotlight:hover::after,
+  .spotlight:focus-within::after {
+    opacity: 1;
+  }
+  .spotlight > * {
+    position: relative;
+    z-index: 1;
+  }
+  .border-beam {
+    display: none;
+  }
+
+  /* ---- buttons -------------------------------------------------------------- */
+  /*
+   * v5 liquid pills. Primary = a luminous ice -> indigo drop with a glassy top light; secondary = a glass pill;
+   * ghost = text with a glass wash on hover; danger = red-tinted glass. Every button catches a pointer-following
+   * highlight (::after), has a 1px rim (::before, --btn-rim), lifts on hover and compresses on press.
+   */
+  /* v6 pixel buttons: stepped "pixel" corners (two 3px steps), a 1px stepped rim, a pointer-lit sheen and a small
+     magnetic pull (fx/pixel/magnetic.ts sets --mag-x / --mag-y). The fill lives on ::after (clipped to the stepped
+     shape) so the focus outline on the element itself is never clipped. Variants set --btn-bg / --btn-rim /
+     --btn-inset instead of background / box-shadow. */
+  .btn {
+    --px-c: 3px;
+    --px-w: 1px;
+    --btn-bg: transparent;
+    --btn-rim: transparent;
+    --btn-inset: none;
+    --btn-spec: rgb(255 255 255 / 0.16);
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 22px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    translate: var(--mag-x, 0px) var(--mag-y, 0px);
+    font-family: var(--font-ui);
+    font-size: var(--ui-px);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    cursor: pointer;
+    overflow: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      color 0.25s var(--ease-out),
+      --btn-spec-now 0.3s var(--ease-out),
+      box-shadow 0.35s var(--ease-out),
+      transform 0.25s var(--ease-out),
+      translate 0.4s var(--ease-out),
+      opacity 0.2s;
+  }
+  /* The rim: a 1px ring that follows the stepped outline. */
+  .btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: var(--btn-rim);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)), 0px calc(var(--px-c) * 2), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), 0px calc(var(--px-c) * 2));
+    pointer-events: none;
+  }
+  /* The fill (+ the pointer sheen on hover), clipped to the stepped shape. */
+  .btn::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(140px circle at var(--mx, 50%) var(--my, -50%), var(--btn-spec-now), transparent 70%), var(--btn-bg);
+    box-shadow: var(--btn-inset);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+  }
+  .btn:hover:not(:disabled):not([aria-disabled="true"]) {
+    --btn-spec-now: var(--btn-spec);
+  }
+  .btn:hover:not(:disabled):not([aria-disabled="true"]) {
+    transform: translateY(-1px);
+  }
+  .btn:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: translateY(0) scale(0.97);
+    transition-duration: 0.1s;
+  }
+  .btn > svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    transition: transform 0.3s var(--ease-out);
+  }
+  .btn :is(.mono, code, kbd, .nocase) {
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .btn[aria-busy="true"] {
+    cursor: progress;
+  }
+  /* Arrow nudge: last svg / .btn-arrow shifts on hover. */
+  .btn-arrow {
+    display: inline-block;
+    transition: transform 0.3s var(--ease-out);
+  }
+  .btn:hover:not(:disabled) > .btn-arrow,
+  .btn:hover:not(:disabled) > svg:last-child:not(:first-child),
+  :where(a, button):hover .nudge {
+    transform: translate(2px, -2px);
+  }
+  .btn:hover:not(:disabled) > .btn-arrow[data-dir="down"] {
+    transform: translateY(2px);
+  }
+  .btn:hover:not(:disabled) > .btn-arrow[data-dir="right"] {
+    transform: translateX(3px);
+  }
+  .nudge {
+    transition: transform 0.25s var(--ease-out);
+  }
+  .btn-label,
+  .scramble-host {
+    position: relative;
+    display: inline-block;
+  }
+  .btn-label[data-scramble]::after,
+  .scramble-host[data-scramble]::after {
+    content: none;
+  }
+
+  /* Primary = solid white with near-black text on Graphite, solid black with white text on Paper. */
+  .btn-primary {
+    --btn-rim: transparent;
+    --btn-spec: color-mix(in srgb, var(--on-signal) 9%, transparent);
+    --btn-bg: var(--signal);
+    /* A 2px pixel "bevel" at the bottom edge. */
+    --btn-inset: inset 0 -2px 0 color-mix(in srgb, var(--on-signal) 14%, transparent);
+    color: var(--on-signal);
+    box-shadow: 0 10px 28px -14px color-mix(in srgb, var(--signal) 32%, transparent);
+  }
+  .btn-primary:hover:not(:disabled):not([aria-disabled="true"]) {
+    --btn-bg: color-mix(in srgb, var(--signal) 90%, var(--bg));
+    box-shadow: 0 16px 36px -14px color-mix(in srgb, var(--signal) 38%, transparent);
+  }
+  /* Disabled primary: a quiet empty glass pill (busy buttons keep their fill + spinner). */
+  .btn-primary:disabled:not([aria-busy="true"]),
+  .btn-primary[aria-disabled="true"] {
+    --btn-rim: var(--glass-edge);
+    --btn-bg: var(--hover);
+    --btn-inset: none;
+    opacity: 1;
+    color: var(--text-dim);
+    box-shadow: none;
+  }
+  .btn-primary:is(:disabled:not([aria-busy="true"]), [aria-disabled="true"]) > .btn-arrow {
+    opacity: 0.5;
+  }
+  .btn-secondary {
+    --btn-rim: var(--glass-edge);
+    --btn-bg: var(--glass-fill), color-mix(in srgb, var(--glass-tint) 75%, transparent);
+    --btn-inset: var(--glass-inset);
+    color: var(--text);
+    box-shadow: 0 10px 26px -16px rgb(0 0 0 / 0.7);
+  }
+  .btn-secondary::after {
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+  }
+  .btn-secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+    --btn-rim: var(--glass-edge-hover);
+    --btn-bg: var(--glass-fill-hover), color-mix(in srgb, var(--glass-tint) 75%, transparent);
+    box-shadow: 0 16px 34px -16px rgb(0 0 0 / 0.75);
+  }
+  /* Ghost: text only; a glass wash on hover. */
+  .btn-ghost {
+    --btn-spec: color-mix(in srgb, var(--text) 10%, transparent);
+    color: var(--text-muted);
+    padding-inline: 14px;
+  }
+  .btn-ghost:hover:not(:disabled):not([aria-disabled="true"]) {
+    --btn-bg: var(--hover);
+    color: var(--text);
+  }
+  .bracket-frame {
+    position: relative;
+    border-radius: 0;
+    transition: background-color 0.2s var(--ease-out);
+  }
+  .bracket-frame:hover,
+  .bracket-frame[data-active="true"] {
+    background-color: var(--hover);
+  }
+  .btn-danger {
+    --btn-rim: linear-gradient(180deg, color-mix(in srgb, var(--danger) 75%, transparent), color-mix(in srgb, var(--danger) 30%, transparent));
+    --btn-spec: color-mix(in srgb, var(--danger) 28%, transparent);
+    --btn-bg: color-mix(in srgb, var(--danger) 9%, transparent);
+    color: var(--danger);
+  }
+  .btn-danger:hover:not(:disabled):not([aria-disabled="true"]) {
+    --btn-bg: color-mix(in srgb, var(--danger) 15%, transparent);
+  }
+  /* Solid ink button (inverse). */
+  .btn-white,
+  .btn-ink {
+    --btn-spec: rgb(255 255 255 / 0.5);
+    --btn-bg: linear-gradient(180deg, color-mix(in srgb, var(--text) 100%, #fff), color-mix(in srgb, var(--text) 86%, var(--bg)));
+    color: var(--bg);
+    box-shadow: 0 10px 28px -14px rgb(0 0 0 / 0.6);
+  }
+  .btn-sm {
+    --px-c: 2px;
+    min-height: 36px;
+    padding: 0 16px;
+    gap: 6px;
+    font-size: var(--ui-px);
+  }
+  .btn-lg {
+    min-height: 54px;
+    padding: 0 28px;
+    font-size: var(--ui-px);
+  }
+  .btn-pill {
+    border-radius: 0;
+  }
+  .btn-icon {
+    --px-c: 2px;
+    min-height: 34px;
+    min-width: 34px;
+    padding: 0 8px;
+    gap: 0;
+  }
+  .btn-icon > svg {
+    width: 15px;
+    height: 15px;
+  }
+  .btn-block {
+    width: 100%;
+  }
+  /* Phones: a label longer than the button wraps inside it instead of being clipped (.btn is nowrap +
+     overflow: hidden), and never pushes the page sideways. */
+  @media (max-width: 640px) {
+    .btn:not(.btn-icon) {
+      max-width: 100%;
+      white-space: normal;
+      text-align: center;
+      padding-block: 8px;
+      line-height: 1.3;
+    }
+  }
+
+  /* ---- pixel utilities (PIXEL_V6) ------------------------------------------------ */
+  /* <TickNumber> digit cells: fixed width so proportional pixel figures never jitter while ticking. */
+  .tick-d {
+    display: inline-block;
+    width: var(--tick-w, 0.69em);
+    text-align: center;
+  }
+  /* Stepped "pixel" corners: two steps of --px-c (default 3px). NOTE: clip-path also clips box-shadows and focus
+     outlines drawn outside the box: use it on containers, not on focusable controls (.btn does it on ::after). */
+  .px-corners {
+    border-radius: 0;
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+  }
+  /* A 1px rim along the stepped outline, drawn by ::before (colour --px-frame-color, width --px-w). Pair it with
+     .px-corners on the same box. */
+  .px-frame {
+    position: relative;
+  }
+  .px-frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    padding: 0;
+    border-radius: 0;
+    -webkit-mask: none;
+    mask: none;
+    background: var(--px-frame-color, var(--hairline-strong));
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)), 0px calc(var(--px-c) * 2), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), 0px calc(var(--px-c) * 2));
+    pointer-events: none;
+  }
+  /* A token's own pixel icon sits on a dark stepped tile in both themes (like an app icon), so a creator's
+     colours and the demo's silver art read the same on Graphite and Paper. Pair with .px-corners .px-frame. */
+  .px-icon-tile {
+    --px-c: 4px;
+    --px-frame-color: rgb(255 255 255 / 0.13);
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(120% 90% at 30% 12%, rgb(255 255 255 / 0.11), transparent 62%),
+      linear-gradient(180deg, #1d1d1d, #0d0d0d);
+  }
+  /* Geist Pixel on anything; .px-crisp turns font smoothing off (macOS): use it only with the --px-n sizes. */
+  .t-pixel {
+    font-family: var(--font-pixel);
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+  .px-crisp {
+    -webkit-font-smoothing: none;
+  }
+  .t-px1 {
+    font-size: var(--px-1);
+  }
+  .t-px2 {
+    font-size: var(--px-2);
+  }
+  .t-px3 {
+    font-size: var(--px-3);
+  }
+  .t-px4 {
+    font-size: var(--px-4);
+  }
+  .t-px5 {
+    font-size: var(--px-5);
+  }
+
+  /* ---- badges / chips -------------------------------------------------------- */
+  /* Small glass chips, sentence case: the tone colours the text and tints the glass. */
+  .badge {
+    --badge-tone: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    --px-c: 2px;
+    min-height: 24px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--badge-tone) 13%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--badge-tone) 26%, transparent);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+    color: var(--badge-tone);
+    font-family: var(--font-label);
+    font-size: var(--ui-px);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .badge::before,
+  .badge::after {
+    content: none;
+  }
+  .badge > svg {
+    width: 12px;
+    height: 12px;
+    flex: none;
+  }
+  .badge :is(.mono, code) {
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .badge-ok {
+    --badge-tone: var(--phosphor);
+  }
+  .badge-warn {
+    --badge-tone: var(--amber);
+  }
+  .badge-fail {
+    --badge-tone: var(--danger);
+  }
+  .badge-info {
+    --badge-tone: var(--violet);
+  }
+  .badge-accent {
+    --badge-tone: var(--signal);
+  }
+  .badge-white {
+    --badge-tone: var(--text);
+  }
+  .badge-solid {
+    color: var(--on-signal);
+    background: var(--primary-grad);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35);
+  }
+  /* Status dot (optionally pulsing). */
+  .dot {
+    position: relative;
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 0;
+    background: currentColor;
+    flex: none;
+  }
+  .dot-pulse::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    animation: phx-ping 1.8s var(--ease-out) infinite;
+  }
+  .dot-glow {
+    box-shadow: 0 0 10px currentColor;
+  }
+  .kbd,
+  kbd.kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 2px;
+    border: 0;
+    background: var(--hover);
+    box-shadow:
+      inset 0 0 0 1px var(--hairline),
+      inset 0 -1px 0 var(--hairline);
+    font: 600 11px/1 var(--font-body);
+    letter-spacing: 0;
+    color: var(--text-muted);
+  }
+
+  /* ---- fields --------------------------------------------------------------- */
+  /* Frosted inset fields: a darker glass well, 14px radius, an ice focus ring. Body face; add .mono for addresses. */
+  .input,
+  .select,
+  .textarea {
+    width: 100%;
+    min-height: 46px;
+    padding: 11px 16px;
+    border-radius: var(--r-input);
+    border: 1px solid var(--field-line);
+    background: var(--field-bg);
+    color: var(--text);
+    caret-color: var(--signal);
+    font-family: var(--font-body);
+    font-size: 15px;
+    font-weight: 450;
+    line-height: 1.45;
+    letter-spacing: -0.005em;
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.22);
+    transition:
+      border-color 0.25s var(--ease-out),
+      box-shadow 0.25s var(--ease-out),
+      background-color 0.25s var(--ease-out);
+  }
+  .input.mono,
+  .textarea.mono {
+    font-family: var(--font-mono);
+    font-size: 14px;
+  }
+  .textarea {
+    line-height: 1.6;
+  }
+  .select {
+    appearance: none;
+    /* No vertical padding: the browser centres the value in the box, whatever height a page gives it (fixed-height
+       selects clipped the value at the bottom with 11px padding and a tall-metric display face). */
+    padding: 0 42px 0 16px;
+    background: var(--select-chevron) right 16px center / 12px 12px no-repeat, var(--field-bg);
+    cursor: pointer;
+  }
+  .select option {
+    background: var(--panel);
+    color: var(--text);
+  }
+  .input::placeholder,
+  .textarea::placeholder {
+    color: var(--text-dim);
+    opacity: 1;
+  }
+  .input:hover:not(:disabled):not(:focus),
+  .select:hover:not(:disabled):not(:focus),
+  .textarea:hover:not(:disabled):not(:focus) {
+    border-color: var(--field-line-hover);
+  }
+  .input:focus,
+  .textarea:focus,
+  .select:focus,
+  .input:focus-visible,
+  .textarea:focus-visible,
+  .select:focus-visible {
+    outline: none;
+    border-color: var(--signal-line);
+    box-shadow:
+      inset 0 1px 3px rgb(0 0 0 / 0.18),
+      0 0 0 4px color-mix(in srgb, var(--signal) 16%, transparent),
+      0 0 32px -8px color-mix(in srgb, var(--signal) 45%, transparent);
+  }
+  .input[aria-invalid="true"],
+  .select[aria-invalid="true"],
+  .textarea[aria-invalid="true"] {
+    border-color: color-mix(in srgb, var(--danger) 70%, transparent);
+  }
+  .input[aria-invalid="true"]:focus,
+  .textarea[aria-invalid="true"]:focus {
+    box-shadow:
+      inset 0 1px 3px rgb(0 0 0 / 0.18),
+      0 0 0 4px color-mix(in srgb, var(--danger) 18%, transparent);
+  }
+  .input:disabled,
+  .select:disabled,
+  .textarea:disabled,
+  .input[readonly] {
+    opacity: 0.6;
+  }
+  .input:disabled,
+  .select:disabled,
+  .textarea:disabled {
+    cursor: not-allowed;
+  }
+  .input-plain {
+    padding-left: 16px;
+    background-image: none;
+  }
+  .label {
+    display: block;
+    margin-bottom: 8px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-muted);
+  }
+  .label :is(.mono, code) {
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .help {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
+  .field-error {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    font-weight: 500;
+    color: var(--danger);
+  }
+  /* A small "!" disc: the error does not rely on colour alone. */
+  .field-error::before {
+    content: "!";
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--danger) 18%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 50%, transparent);
+    font: 700 11px/1 var(--font-body);
+    transform: translateY(2px);
+  }
+
+  /* Command bar: a big glass search pill. */
+  .cmdbar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 54px;
+    padding: 0 8px 0 18px;
+    border: 1px solid var(--field-line);
+    border-radius: 0;
+    background: var(--glass-fill), var(--glass-tint);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+    box-shadow: var(--glass-inset), var(--glass-shadow);
+    transition:
+      border-color 0.25s var(--ease-out),
+      box-shadow 0.25s var(--ease-out);
+  }
+  .cmdbar:focus-within {
+    border-color: var(--signal-line);
+    box-shadow:
+      var(--glass-inset),
+      0 0 0 4px color-mix(in srgb, var(--signal) 14%, transparent),
+      0 18px 50px -24px var(--signal);
+  }
+  .cmdbar input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    background: transparent;
+    border: 0;
+    outline: none;
+    font: 450 15px/1 var(--font-body);
+    color: var(--text);
+    caret-color: var(--signal);
+  }
+  .cmdbar input::placeholder {
+    color: var(--text-dim);
+  }
+  .prompt-glyph {
+    color: var(--signal);
+    font-weight: 600;
+  }
+
+  /* ---- alerts ----------------------------------------------------------------- */
+  /* Tinted glass notice: the tone tints the glass and the rim, an icon carries the meaning. */
+  .alert {
+    --alert-tone: var(--text-muted);
+    position: relative;
+    display: flex;
+    gap: 12px;
+    padding: 14px 18px 14px 16px;
+    /* GLASS_V51: status colour only where it carries meaning and never large. The box is neutral graphite glass;
+       the tone colours the icon only (a failure also tints the rim, see .alert-fail). */
+    border: 1px solid var(--hairline-strong);
+    border-radius: 0;
+    --px-c: 3px;
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+    background: var(--glass-fill), var(--glass-tint);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .alert-tag {
+    flex: none;
+    display: inline-flex;
+    padding-top: 2px;
+    color: var(--alert-tone);
+    font: 600 12px/1.6 var(--font-body);
+    white-space: nowrap;
+  }
+  .alert-icon {
+    width: 18px;
+    height: 18px;
+  }
+  .alert-title {
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.5;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text);
+  }
+  .alert-ok {
+    --alert-tone: var(--phosphor);
+  }
+  .alert-warn {
+    --alert-tone: var(--amber);
+  }
+  .alert-fail {
+    --alert-tone: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 38%, var(--hairline-strong));
+  }
+  .alert-info {
+    --alert-tone: var(--violet);
+  }
+
+  /* ---- links ------------------------------------------------------------------- */
+  .link {
+    color: var(--text);
+    text-decoration: underline;
+    text-decoration-color: var(--signal-line);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    transition:
+      color 0.2s,
+      text-decoration-color 0.2s;
+  }
+  .link:hover {
+    color: var(--signal);
+    text-decoration-color: var(--signal);
+  }
+
+  /* ---- data readouts ------------------------------------------------------------ */
+  .kv {
+    display: grid;
+    grid-template-columns: minmax(8rem, max-content) 1fr;
+    gap: 0 24px;
+    font-size: 14px;
+  }
+  .kv > dt,
+  .kv > dd {
+    padding-block: 11px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .kv > dt {
+    color: var(--text-dim);
+    font-size: 13px;
+    letter-spacing: 0;
+    text-transform: none;
+    line-height: 1.7;
+  }
+  .kv > dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--text);
+  }
+  @media (max-width: 520px) {
+    .kv {
+      grid-template-columns: 1fr;
+    }
+    .kv > dt {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+    .kv > dd {
+      padding-top: 2px;
+    }
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .table th {
+    text-align: left;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-dim);
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--hairline-strong);
+    white-space: nowrap;
+  }
+  .table td {
+    padding: 14px;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+    transition: background-color 0.2s;
+  }
+  .table tbody tr:hover > td {
+    background: var(--hover);
+  }
+  .table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .table .num,
+  .table td.text-right {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- progress ------------------------------------------------------------------ */
+  /* v6 pixel segments: the track and the fill are cut into square-ended segments (--seg on, --seg-gap off) by a
+     repeating mask, so every meter reads as a row of pixels. .meter is a native <progress> (exact value for
+     assistive tech); .progress is <span class="progress"><span style="width: N%"></span></span>. */
+  .meter,
+  .progress {
+    --seg: 6px;
+    --seg-gap: 2px;
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 var(--seg), transparent var(--seg) calc(var(--seg) + var(--seg-gap)));
+    mask: repeating-linear-gradient(90deg, #000 0 var(--seg), transparent var(--seg) calc(var(--seg) + var(--seg-gap)));
+  }
+  .meter {
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 8px;
+    border: none;
+    border-radius: 0;
+    overflow: hidden;
+    background: var(--track);
+    color: var(--signal);
+  }
+  .meter::-webkit-progress-bar {
+    background: var(--track);
+    border-radius: 0;
+  }
+  .meter::-webkit-progress-value {
+    background: var(--signal);
+    border-radius: 0;
+  }
+  .meter::-moz-progress-bar {
+    background: var(--signal);
+    border-radius: 0;
+  }
+  .progress {
+    position: relative;
+    height: 8px;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 0;
+    background: var(--track);
+  }
+  .progress > span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    overflow: hidden;
+    border-radius: 0;
+    background: var(--signal);
+    transition: width 0.6s steps(12, end);
+  }
+  .progress > span::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.4), transparent);
+    transform: translateX(-100%);
+    animation: phx-sheen 3.2s var(--ease-in-out) infinite;
+  }
+  :root[data-motion="still"] .progress > span::after {
+    animation: none;
+    opacity: 0;
+  }
+  /* Discrete dots: <span class="dotbar"><i data-on="true"></i>...</span>. */
+  .dotbar {
+    --dot: 6px;
+    --dot-gap: 3px;
+    --dot-on: var(--signal);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dot-gap);
+    vertical-align: middle;
+  }
+  .dotbar > i {
+    position: relative;
+    flex: none;
+    width: var(--dot);
+    height: var(--dot);
+    border-radius: 0;
+    background: var(--track);
+    transition: background-color 0.4s var(--ease-out);
+  }
+  .dotbar[data-shape="square"] > i {
+    border-radius: 2px;
+  }
+  .dotbar > i[data-on="true"] {
+    background: var(--dot-on);
+    box-shadow: none;
+    animation: phx-dot-fill 0.5s var(--ease-out) both;
+    animation-delay: var(--d, 0ms);
+  }
+  .dotbar > i[data-head="true"] {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--dot-on) 35%, transparent);
+  }
+  .dotbar[data-tone="ok"] {
+    --dot-on: var(--phosphor);
+  }
+  .dotbar[data-tone="warn"] {
+    --dot-on: var(--amber);
+  }
+  .dotbar[data-tone="violet"],
+  .dotbar[data-tone="info"] {
+    --dot-on: var(--violet);
+  }
+  .dotbar[data-tone="fail"] {
+    --dot-on: var(--danger);
+  }
+  .dotbar[data-tone="muted"] {
+    --dot-on: var(--text-muted);
+  }
+
+  /* ---- tabs / segmented ------------------------------------------------------------ */
+  /* A glass track; the selected option sits on a glass lens that glides (.seg-pill via motion layoutId). */
+  .seg {
+    position: relative;
+    display: inline-flex;
+    flex-wrap: wrap;
+    --px-c: 3px;
+    gap: 2px;
+    padding: 4px;
+    border: 0;
+    border-radius: 0;
+    background: var(--hover);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+    box-shadow:
+      inset 0 0 0 1px var(--hairline),
+      inset 0 1px 3px rgb(0 0 0 / 0.2);
+  }
+  .seg > button {
+    position: relative;
+    isolation: isolate;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 0;
+    font-family: var(--font-ui);
+    font-size: var(--ui-px);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.2s var(--ease-out);
+  }
+  .seg > button:hover:not(:disabled) {
+    color: var(--text);
+  }
+  .seg > button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .seg > button[aria-pressed="true"],
+  .seg > button[aria-selected="true"] {
+    color: var(--text);
+  }
+  /* Without the motion lens (legacy markup) the pressed state still shows. */
+  .seg > button[aria-pressed="true"]:not(:has(.seg-pill)),
+  .seg > button[aria-selected="true"]:not(:has(.seg-pill)) {
+    background: var(--lens);
+    box-shadow: var(--lens-shadow);
+  }
+  .seg-pill {
+    --px-c: 2px;
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: 0;
+    background: var(--lens);
+    box-shadow: var(--lens-shadow);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+  }
+  /* The track is clipped (stepped corners): focus rings go inside. */
+  .seg > button:focus-visible {
+    outline-offset: -3px;
+  }
+  @media (max-width: 640px) {
+    .seg > button {
+      min-height: 34px;
+      padding: 0 10px;
+    }
+  }
+  .seg-count {
+    margin-left: 6px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    background: var(--signal-soft);
+    color: var(--signal);
+    font-size: 11px;
+    letter-spacing: 0;
+  }
+
+  /* ---- dialogs ---------------------------------------------------------------------- */
+  /* Native <dialog>: a dense liquid-glass sheet over a blurred, dimmed page (Modal in ui.tsx). */
+  dialog.modal {
+    margin: auto;
+    width: min(44rem, calc(100vw - 24px));
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    --px-c: 4px;
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+    background: var(--glass-fill), var(--glass-strong-tint);
+    -webkit-backdrop-filter: blur(44px) saturate(180%);
+    backdrop-filter: blur(44px) saturate(180%);
+    color: var(--text);
+    box-shadow:
+      var(--glass-inset),
+      inset 0 0 0 1px var(--hairline-strong);
+    overflow: hidden;
+  }
+  dialog.modal[open] {
+    animation: phx-glass-in 0.32s var(--ease-out) backwards;
+  }
+  dialog.modal::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    padding: 1px;
+    border-radius: inherit;
+    background: var(--glass-edge);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    pointer-events: none;
+  }
+  dialog.modal::backdrop {
+    background: var(--backdrop);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    backdrop-filter: blur(12px) saturate(120%);
+    animation: phx-fade-in 0.25s ease-out;
+  }
+  .modal-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 18px 14px 26px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .modal-head-tag {
+    display: none;
+  }
+  .modal-title {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-head);
+    font-stretch: var(--head-stretch);
+    font-size: var(--px-1);
+    font-weight: var(--title-weight);
+    line-height: 1.12;
+    letter-spacing: calc(var(--title-tracking) * 0.6);
+    text-transform: none;
+  }
+  .modal-body {
+    padding: 20px 26px;
+  }
+  .modal-foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--hairline);
+    background: var(--hover);
+  }
+  @media (max-width: 640px) {
+    dialog.modal {
+      border-radius: 24px;
+    }
+    .modal-head {
+      padding: 16px 12px 12px 18px;
+    }
+    .modal-body {
+      padding: 16px 18px;
+    }
+    .modal-foot {
+      flex-direction: column-reverse;
+      align-items: stretch;
+      padding: 12px;
+    }
+    .modal-foot > .btn {
+      width: 100%;
+    }
+  }
+  /* Full-height sheet (legacy). */
+  dialog.sheet {
+    margin: 0;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    padding: 0;
+    border: 0;
+    background: var(--glass-fill), var(--glass-strong-tint);
+    -webkit-backdrop-filter: blur(40px) saturate(170%);
+    backdrop-filter: blur(40px) saturate(170%);
+    color: var(--text);
+    overflow: auto;
+  }
+  dialog.sheet[open] {
+    animation: phx-fade-in 0.2s ease-out;
+  }
+  dialog.sheet::backdrop {
+    background: var(--backdrop);
+  }
+
+  /* ---- loading ---------------------------------------------------------------------- */
+  /* A ring of eight round dots; the light steps round them, one dot at a time (CSS only). */
+  .spinner {
+    --spin-a: 0deg;
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    flex: none;
+    border: 0;
+    border-radius: 50%;
+    background: conic-gradient(
+      from calc(var(--spin-a) - 22.5deg),
+      currentColor 0 45deg,
+      color-mix(in srgb, currentColor 62%, transparent) 45deg 90deg,
+      color-mix(in srgb, currentColor 38%, transparent) 90deg 135deg,
+      color-mix(in srgb, currentColor 22%, transparent) 135deg 360deg
+    );
+    -webkit-mask:
+      radial-gradient(circle at 6.00px 1.60px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 9.11px 2.89px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 10.40px 6.00px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 9.11px 9.11px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 6.00px 10.40px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 2.89px 9.11px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 1.60px 6.00px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 2.89px 2.89px, #000 1.15px, transparent 1.6px);
+    mask:
+      radial-gradient(circle at 6.00px 1.60px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 9.11px 2.89px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 10.40px 6.00px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 9.11px 9.11px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 6.00px 10.40px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 2.89px 9.11px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 1.60px 6.00px, #000 1.15px, transparent 1.6px),
+      radial-gradient(circle at 2.89px 2.89px, #000 1.15px, transparent 1.6px);
+    animation: phx-px-spin 0.9s steps(8, end) infinite;
+  }
+  .skeleton {
+    border-radius: 0;
+    background:
+      linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--text) 9%, transparent) 50%, transparent 70%) 0 0 / 200% 100% no-repeat,
+      var(--hover);
+    animation: phx-shimmer 1.6s ease-in-out infinite;
+  }
+
+  /* ---- sub-navigation (stepper / page lists) ----------------------------------------- */
+  .nav-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 0;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      color 0.2s var(--ease-out),
+      background-color 0.2s var(--ease-out);
+  }
+  .nav-link:hover {
+    color: var(--text);
+    background: var(--hover);
+  }
+  .nav-link[aria-current="page"],
+  .nav-link[aria-current="step"],
+  .nav-link.active {
+    color: var(--text);
+    background: var(--lens);
+    box-shadow: var(--lens-shadow);
+  }
+
+  /* ---- tooltip ------------------------------------------------------------------------ */
+  .tip {
+    position: relative;
+    display: inline-flex;
+  }
+  .tip-content {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    z-index: 60;
+    width: max-content;
+    max-width: 260px;
+    padding: 7px 11px;
+    border: 0;
+    border-radius: 0;
+    background: var(--glass-fill), var(--glass-strong-tint);
+    -webkit-backdrop-filter: blur(24px) saturate(170%);
+    backdrop-filter: blur(24px) saturate(170%);
+    box-shadow:
+      inset 0 0 0 1px var(--hairline-strong),
+      0 14px 34px -14px rgb(0 0 0 / 0.7);
+    font: 500 12px/1.5 var(--font-body);
+    color: var(--text);
+    text-align: left;
+    white-space: normal;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, 4px);
+    transition:
+      opacity 0.18s var(--ease-out),
+      transform 0.18s var(--ease-out);
+  }
+  .tip:hover > .tip-content,
+  .tip:focus-within > .tip-content {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  /* ---- toasts (Toaster in ui.tsx): glass capsules, bottom-left ------------------------- */
+  .toast-region {
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    z-index: 120;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    width: min(440px, calc(100vw - 32px));
+    pointer-events: none;
+  }
+  .toast {
+    --toast-tone: var(--signal);
+    pointer-events: auto;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 100%;
+    padding: 11px 10px 11px 14px;
+    border: 0;
+    border-radius: 0;
+    --px-c: 3px;
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)));
+    background:
+      linear-gradient(100deg, color-mix(in srgb, var(--toast-tone) 10%, transparent), transparent 60%),
+      var(--glass-fill),
+      var(--glass-strong-tint);
+    -webkit-backdrop-filter: blur(28px) saturate(170%);
+    backdrop-filter: blur(28px) saturate(170%);
+    box-shadow: var(--glass-inset);
+    font: 500 14px/1.45 var(--font-body);
+    color: var(--text);
+    animation: phx-toast-in 0.4s var(--ease-out) both;
+  }
+  .toast::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: var(--hairline-strong);
+    clip-path: polygon(0px calc(var(--px-c) * 2), var(--px-c) calc(var(--px-c) * 2), var(--px-c) var(--px-c), calc(var(--px-c) * 2) var(--px-c), calc(var(--px-c) * 2) 0px, calc(100% - calc(var(--px-c) * 2)) 0px, calc(100% - calc(var(--px-c) * 2)) var(--px-c), calc(100% - var(--px-c)) var(--px-c), calc(100% - var(--px-c)) calc(var(--px-c) * 2), 100% calc(var(--px-c) * 2), 100% calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - calc(var(--px-c) * 2)), calc(100% - var(--px-c)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) calc(100% - var(--px-c)), calc(100% - calc(var(--px-c) * 2)) 100%, calc(var(--px-c) * 2) 100%, calc(var(--px-c) * 2) calc(100% - var(--px-c)), var(--px-c) calc(100% - var(--px-c)), var(--px-c) calc(100% - calc(var(--px-c) * 2)), 0px calc(100% - calc(var(--px-c) * 2)), 0px calc(var(--px-c) * 2), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - var(--px-c) - var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(100% - calc(var(--px-c) * 2) - var(--px-w)), calc(100% - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(100% - var(--px-c) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(100% - calc(var(--px-c) * 2) - var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-w)), calc(calc(var(--px-c) * 2) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(var(--px-c) + var(--px-w)), calc(var(--px-c) + var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), calc(var(--px-w)) calc(calc(var(--px-c) * 2) + var(--px-w)), 0px calc(var(--px-c) * 2));
+    pointer-events: none;
+  }
+  .toast-tag {
+    flex: none;
+    display: inline-flex;
+    font-weight: 600;
+    color: var(--toast-tone);
+  }
+  .toast-icon {
+    width: 17px;
+    height: 17px;
+  }
+  .toast[data-tone="ok"] {
+    --toast-tone: var(--phosphor);
+  }
+  .toast[data-tone="warn"] {
+    --toast-tone: var(--amber);
+  }
+  .toast[data-tone="fail"] {
+    --toast-tone: var(--danger);
+  }
+  .toast-close {
+    margin-left: auto;
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 0;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition:
+      color 0.2s,
+      background-color 0.2s;
+  }
+  .toast-close:hover {
+    color: var(--text);
+    background: var(--hover);
+  }
+  /* Clipped toasts draw the close button's focus ring inside. */
+  .toast-close:focus-visible {
+    outline-offset: -2px;
+  }
+  /* 1-bit sparkles on a success toast (ui.tsx <ToastSparkles>): plus-shaped pixel stars that grow and vanish once,
+     in 1px steps. Decorative; none under reduced motion / motion off. */
+  .toast-sparkles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .toast-sparkles > i {
+    position: absolute;
+    left: var(--sx);
+    top: var(--sy);
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    --sparkle: var(--text);
+    background: var(--sparkle);
+    opacity: 0;
+    animation: phx-sparkle 0.9s cubic-bezier(0.22, 1, 0.36, 1) var(--sd, 0ms) both;
+  }
+  :root:not([data-motion="on"]) .toast-sparkles {
+    display: none;
+  }
+
+  .toast[data-leaving="true"] {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateX(-8px);
+    transition:
+      opacity 0.25s,
+      filter 0.25s,
+      transform 0.25s;
+  }
+
+  /* ---- backgrounds & fx --------------------------------------------------------------- */
+  .mask-radial {
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 75%);
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 75%);
+  }
+  .mask-fade-y {
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 15%, #000 85%, transparent);
+    mask-image: linear-gradient(180deg, transparent, #000 15%, #000 85%, transparent);
+  }
+  .mask-fade-x {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  }
+  .bg-dots {
+    background-image: radial-gradient(var(--dotgrid) 1px, transparent 1.2px);
+    background-size: 16px 16px;
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .bg-scan {
+    background-image: repeating-linear-gradient(180deg, var(--scanline) 0 1px, transparent 1px 3px);
+  }
+  .glow-gold,
+  .glow-signal {
+    box-shadow: var(--signal-glow);
+  }
+  .noise {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.06;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .aurora {
+    position: absolute;
+    inset: -10%;
+    pointer-events: none;
+    background: radial-gradient(40% 50% at 50% 50%, var(--signal-soft), transparent 70%);
+  }
+  .meteor,
+  .bg-hex {
+    display: none;
+  }
+
+  /* Marquee (CSS only, pauses on hover; reduced motion: static). */
+  .marquee {
+    --gap: 32px;
+    --duration: 48s;
+    display: flex;
+    gap: var(--gap);
+    overflow: hidden;
+  }
+  .marquee[data-vertical="true"] {
+    flex-direction: column;
+  }
+  .marquee-track {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: space-around;
+    gap: var(--gap);
+    animation: phx-marquee var(--duration) linear infinite;
+  }
+  .marquee[data-vertical="true"] > .marquee-track {
+    flex-direction: column;
+    animation-name: phx-marquee-y;
+  }
+  .marquee[data-reverse="true"] > .marquee-track {
+    animation-direction: reverse;
+  }
+  .marquee[data-pause-on-hover="true"]:hover > .marquee-track,
+  .marquee:focus-within > .marquee-track {
+    animation-play-state: paused;
+  }
+
+  /* Scan line (verify visuals). */
+  .scanline {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .scanline::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 46%, var(--signal-soft) 50%, transparent 54%);
+    animation: phx-scan 2.8s var(--ease-in-out) infinite;
+  }
+  .float {
+    animation: phx-float 6s ease-in-out infinite;
+  }
+  .pulse-soft {
+    animation: phx-pulse 2.4s ease-in-out infinite;
+  }
+  .beam-svg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+  }
+  /* Decode-in entrance for a block (pairs with useScramble on its text). */
+  .decode-in {
+    animation: phx-decode-in 0.5s var(--ease-out) both;
+  }
+
+  /* Hover/focus brackets "[ ]" for any interactive element: add .brackets. */
+  .brackets {
+    position: relative;
+  }
+  .brackets::before,
+  .brackets::after {
+    position: absolute;
+    top: 50%;
+    color: var(--signal);
+    font: 400 1em/1 var(--font-mono);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 0.18s,
+      transform 0.25s var(--ease-out);
+  }
+  .brackets::before {
+    content: "[";
+    left: -0.9em;
+    transform: translate(6px, -50%);
+  }
+  .brackets::after {
+    content: "]";
+    right: -0.9em;
+    transform: translate(-6px, -50%);
+  }
+  .brackets:hover::before,
+  .brackets:hover::after,
+  .brackets:focus-visible::before,
+  .brackets:focus-visible::after {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+
+  /* ---- page helpers kept from v1 --------------------------------------------------------- */
+  .phrase-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    counter-reset: word;
+  }
+  @media (min-width: 640px) {
+    .phrase-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .phrase-grid > li {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    background: var(--bg-deep);
+    font: 500 13px/1.3 var(--font-mono);
+  }
+  .phrase-grid > li > span:first-child {
+    min-width: 1.6rem;
+    text-align: right;
+    font-size: 10px;
+    color: var(--signal);
+    opacity: 0.85;
+  }
+  /*
+   * The recovery phrase while hidden: a textarea drawn like a password field
+   * without being one (browsers and password managers offer to save password
+   * fields). Where -webkit-text-security is unsupported the text is not drawn.
+   */
+  .secret-masked {
+    -webkit-text-security: disc;
+  }
+  @supports not (-webkit-text-security: disc) {
+    .secret-masked {
+      color: transparent;
+      caret-color: var(--text);
+    }
+  }
+  .hexdump {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+  }
+  /* Launch timeline (components/launch.tsx). */
+  .timeline-step {
+    position: relative;
+  }
+  .timeline-step:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 1.5rem;
+    bottom: -1rem;
+    width: 1px;
+    background: repeating-linear-gradient(180deg, var(--line-strong) 0 3px, transparent 3px 6px);
+  }
+  .timeline-step[data-state="done"]:not(:last-child)::before {
+    background: var(--signal);
+  }
+  .timeline-step[data-state="done"] .timeline-dot {
+    background: var(--signal);
+    border-color: var(--signal);
+    box-shadow: 0 0 10px var(--signal);
+  }
+  .timeline-step[data-state="current"] .timeline-dot {
+    background: var(--panel);
+    border-color: var(--signal);
+    box-shadow: 0 0 0 4px var(--signal-soft);
+  }
+  .timeline-step[data-state="upcoming"] .timeline-dot,
+  .timeline-step[data-state="skipped"] .timeline-dot {
+    background: var(--panel);
+    border-color: var(--line-strong);
+  }
+
+  /* ---- UI v3: CROSS LINES (UI_V3.md section 2) ------------------------------------------- */
+  /* Crosshatch fills: two repeating gradients at 45deg and -45deg (tokens --crosshatch / --crosshatch-hi). */
+  .hatch {
+    background-image: var(--crosshatch);
+  }
+  .hatch-hi {
+    background-image: var(--crosshatch-hi);
+  }
+  /* Drifting hatch: an oversized layer translates by exactly one pattern period (7px * sqrt 2), so the loop
+     is seamless and compositor-only (no repaint per frame). Uses ::after. */
+  .hatch-drift {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .hatch-drift::after {
+    content: "";
+    position: absolute;
+    inset: -16px;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--crosshatch);
+    animation: phx-hatch-drift 7s linear infinite;
+  }
+  .hatch-drift.hatch-hi::after {
+    background-image: var(--crosshatch-hi);
+  }
+  :root[data-motion="still"] .hatch-drift::after {
+    animation: none;
+  }
+
+  /* A "+" node (9px, 1px strokes). <i className="cross-node" aria-hidden="true" /> */
+  .cross-node {
+    display: inline-block;
+    flex: none;
+    width: 9px;
+    height: 9px;
+    color: var(--cross-node);
+    background:
+      linear-gradient(currentColor, currentColor) center / 9px 1px no-repeat,
+      linear-gradient(currentColor, currentColor) center / 1px 9px no-repeat;
+  }
+  .cross-node[data-size="lg"] {
+    width: 15px;
+    height: 15px;
+    background-size:
+      15px 1px,
+      1px 15px;
+  }
+  /* Crossing 1px grid background (48px cells). */
+  .grid-lines {
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .grid-lines-fade {
+    -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 45%, #000 25%, transparent 80%);
+    mask-image: radial-gradient(ellipse 75% 70% at 50% 45%, #000 25%, transparent 80%);
+  }
+
+  /* <TickNumber/> (fx/tick.tsx): digits keep their width while they tick. */
+  .tick-num {
+    font-variant-numeric: tabular-nums slashed-zero;
+  }
+  /* Primary gradient text ("NOT CURVES."). Both gradient ends pass AA on --bg in every palette. */
+  .text-grad {
+    color: var(--signal);
+    background: var(--primary-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  @media (forced-colors: active) {
+    .text-grad {
+      background: none;
+      -webkit-text-fill-color: currentColor;
+    }
+  }
+
+  /* Two-frame hover glitch for headings (offset ghosts in the signal and the gradient end). */
+  :root[data-motion="on"] .glitch:hover {
+    animation: phx-glitch 0.18s steps(1, end) 1;
+  }
+
+  /* Section divider: an X of two hairlines crossing at a "+" node, with a section number.
+     <XDivider index="03" label="…" /> (ui.tsx) renders the SVG version; .x-divider alone draws a CSS X. */
+  .x-divider {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 72px;
+    color: var(--cross-ink);
+    pointer-events: none;
+    user-select: none;
+  }
+  .x-divider:not(:has(> svg)) {
+    background:
+      linear-gradient(to top right, transparent calc(50% - 0.6px), currentColor 50%, transparent calc(50% + 0.6px)),
+      linear-gradient(to bottom right, transparent calc(50% - 0.6px), currentColor 50%, transparent calc(50% + 0.6px));
+  }
+  .x-divider > svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .x-divider line {
+    stroke: currentColor;
+    stroke-width: 1;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+  .x-divider .x-rail {
+    stroke: var(--line);
+  }
+  /* Draw from the centre node outward once the divider scrolls in (data-drawn set by XDivider). */
+  .x-divider[data-drawn="false"] line {
+    stroke-dashoffset: 1;
+  }
+  .x-divider[data-drawn="true"] line {
+    transition: stroke-dashoffset 1.1s var(--ease-out);
+  }
+  .x-divider-mark {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 10px;
+    background: var(--bg);
+    font: 500 10px/1 var(--font-mono);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    transition:
+      opacity 0.4s var(--ease-out) 0.35s,
+      transform 0.5s var(--ease-spring) 0.35s;
+  }
+  .x-divider-mark b {
+    font-weight: 500;
+    color: var(--signal);
+  }
+  .x-divider[data-drawn="false"] .x-divider-mark {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  .x-divider-mark .cross-node {
+    color: var(--signal);
+  }
+  @media (max-width: 640px) {
+    .x-divider {
+      height: 52px;
+    }
+    .x-divider-mark span {
+      display: none;
+    }
+  }
+}
+
+/* Under reduced motion, decorative loops stop entirely (not just shortened). */
+@media (prefers-reduced-motion: reduce) {
+  .cursor,
+  .phx-cursor,
+  .cursor-block,
+  .marquee-track,
+  .scanline::after,
+  .float,
+  .pulse-soft,
+  .dot-pulse::after,
+  .meter::-webkit-progress-value,
+  .dotbar > i,
+  .dotbar > i::after,
+  .skeleton,
+  .hatch-drift::after,
+  .glitch,
+  .progress > span::after {
+    animation: none !important;
+  }
+  .scanline::after {
+    display: none;
+  }
+}
+
+/* Offscreen sections hold their loops (AmbientMotion's IntersectionObserver sets data-inview). */
+[data-inview="false"] *,
+[data-inview="false"] *::before,
+[data-inview="false"] *::after {
+  animation-play-state: paused !important;
+}
+/* The user paused ambient motion: decorative glints hold still. */
+:root[data-motion="still"] .dotbar > i::after {
+  animation-play-state: paused;
+}
+
+/* v6 pixel keyframes. */
+@keyframes phx-px-spin {
+  to {
+    --spin-a: 360deg;
+  }
+}
+/* A toast sparkle: a round dot that blooms into a soft ring and fades. */
+@keyframes phx-sparkle {
+  /* A round dot that blooms into a soft ring and fades (smooth, once). */
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+    box-shadow: 0 0 0 0 var(--sparkle);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+    box-shadow: 0 0 0 5px transparent;
+  }
+}

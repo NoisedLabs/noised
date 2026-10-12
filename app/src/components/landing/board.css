@@ -1,0 +1,296 @@
+/*
+ * Launch display atoms (GLASS_V51 "Graphite Glass"): the identicon tile (components/Identicon.tsx) and the
+ * verification / certificate / trust readouts of components/verify.tsx. Two tones; status colours only on
+ * small marks. The v3 launch board, timeline and loading strip that used to live here are gone (the home page
+ * shows glass launch cards, sections.css; the token page has its own readouts, pages/inner).
+ */
+
+/* ------------------------------------------------------------ identicon --- */
+
+.ld-identicon {
+  flex: none;
+  display: block;
+  border-radius: 6px;
+  image-rendering: pixelated;
+}
+
+/* --------------------------------------------------- verification readouts --- */
+
+.ld-vsum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.ld-vsum-text {
+  font-size: 13px;
+  color: var(--ld-muted);
+}
+
+/* One segment per check: neutral when it passed, the status colour only when it needs attention. */
+.ld-vmeter {
+  display: flex;
+  gap: 3px;
+  margin-top: 14px;
+}
+
+.ld-vmeter i {
+  flex: 1;
+  max-width: 18px;
+  height: 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--ld-text) 55%, transparent);
+}
+
+.ld-vmeter i[data-s="warn"] {
+  background: var(--ld-warn);
+}
+
+.ld-vmeter i[data-s="fail"] {
+  background: var(--ld-bad);
+}
+
+.ld-readout {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+}
+
+.ld-readout > li {
+  border-bottom: 1px solid var(--ld-line);
+}
+
+.ld-readout > li:last-child {
+  border-bottom: 0;
+}
+
+.ld-check {
+  display: block;
+}
+
+.ld-check > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 2px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.ld-check > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ld-check > summary:hover .ld-check-label {
+  color: var(--ld-text);
+}
+
+.ld-check > summary:focus-visible {
+  outline: 2px solid var(--ld-text);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.ld-check-mark {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ld-muted);
+}
+
+.ld-check[data-status="warn"] .ld-check-mark {
+  color: var(--ld-warn);
+}
+
+.ld-check[data-status="fail"] .ld-check-mark {
+  color: var(--ld-bad);
+}
+
+.ld-check-label {
+  color: var(--ld-muted);
+  transition: color 0.2s;
+}
+
+.ld-check[data-status="warn"] .ld-check-label,
+.ld-check[data-status="fail"] .ld-check-label {
+  color: var(--ld-text);
+}
+
+.ld-check-more {
+  font-size: 12px;
+  color: var(--ld-dim);
+}
+
+.ld-check[open] .ld-check-more {
+  color: var(--ld-text);
+}
+
+.ld-check-detail {
+  margin: 0 0 12px 34px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--ld-chip);
+  box-shadow: var(--ld-chip-edge);
+  color: var(--ld-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ld-check-id {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ld-dim);
+}
+
+.ld-passed > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--ld-chip);
+  box-shadow: var(--ld-chip-edge);
+  color: var(--ld-muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ld-passed > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ld-passed > summary:hover,
+.ld-passed[open] > summary {
+  color: var(--ld-text);
+}
+
+.ld-passed > summary:focus-visible {
+  outline: 2px solid var(--ld-text);
+  outline-offset: 2px;
+}
+
+.ld-passed > .ld-readout {
+  padding: 4px 16px 6px;
+}
+
+.ld-cert-flags {
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+}
+
+.ld-cert-flags li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.ld-cert-flags li > span:first-child {
+  font-weight: 600;
+  color: var(--ld-muted);
+}
+
+.ld-cert-flags li[data-ok="false"] > span:first-child {
+  color: var(--ld-bad);
+}
+
+.ld-cert-flags li > span:last-child {
+  color: var(--ld-muted);
+}
+
+.ld-kv {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) minmax(0, 1fr);
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.ld-kv > dt,
+.ld-kv > dd {
+  margin: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--ld-line);
+}
+
+.ld-kv > dt {
+  padding-right: 18px;
+  color: var(--ld-dim);
+}
+
+.ld-kv > dd {
+  min-width: 0;
+  color: var(--ld-text);
+  overflow-wrap: anywhere;
+}
+
+.ld-kv-note {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--ld-dim);
+}
+
+.ld-trust {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ld-trust > li {
+  position: relative;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--ld-chip);
+  box-shadow: var(--ld-chip-edge);
+}
+
+.ld-trust-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.ld-trust-name {
+  font-weight: 600;
+  color: var(--ld-text);
+}
+
+.ld-trust-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ld-muted);
+}
+
+.ld-trust-intro {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ld-muted);
+}
+
+@media (max-width: 640px) {
+  .ld-kv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ld-kv > dt {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  .ld-check-detail {
+    margin-left: 0;
+  }
+}

@@ -1,0 +1,2206 @@
+{
+  "address": "D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx",
+  "metadata": {
+    "name": "noised_autopilot",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Noised Autopilot: PXG1 automation graphs that run a launched token's treasury (buy back and burn, burn, pay declared recipients) inside fixed on-chain bounds, changed only by the creator's post-quantum identity after a 72-hour timelock"
+  },
+  "instructions": [
+    {
+      "name": "activate",
+      "docs": [
+        "Queue a published graph to take effect at `activate_at`, authorized",
+        "by the launch's post-quantum identity (permissionless)."
+      ],
+      "discriminator": [
+        194,
+        203,
+        35,
+        100,
+        151,
+        55,
+        170,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "autopilot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  111,
+                  112,
+                  105,
+                  108,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch"
+        },
+        {
+          "name": "graph",
+          "docs": [
+            "The published graph to queue."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch"
+              },
+              {
+                "kind": "account",
+                "path": "graph.graph_hash",
+                "account": "GraphRecord"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authorization",
+          "docs": [
+            "(`launchpad::check_authorization`)."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "activate_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "apply_pending",
+      "docs": [
+        "Make the queued graph active at or after its time (permissionless)."
+      ],
+      "discriminator": [
+        88,
+        86,
+        232,
+        48,
+        42,
+        150,
+        180,
+        196
+      ],
+      "accounts": [
+        {
+          "name": "autopilot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  111,
+                  112,
+                  105,
+                  108,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "autopilot.launch",
+                "account": "Autopilot"
+              }
+            ]
+          }
+        },
+        {
+          "name": "graph",
+          "docs": [
+            "The queued graph."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "autopilot.launch",
+                "account": "Autopilot"
+              },
+              {
+                "kind": "account",
+                "path": "autopilot.pending_graph",
+                "account": "Autopilot"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "bind_mint",
+      "docs": [
+        "Bind the autopilot to the launch's certified mint once the launch is",
+        "live; create the treasury's token account (permissionless, once)."
+      ],
+      "discriminator": [
+        252,
+        89,
+        36,
+        147,
+        181,
+        231,
+        160,
+        219
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone: pays the treasury token account's rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "autopilot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  111,
+                  112,
+                  105,
+                  108,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch"
+        },
+        {
+          "name": "certificate",
+          "docs": [
+            "(`launchpad::check_certificate`)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  101,
+                  114,
+                  116,
+                  105,
+                  102,
+                  105,
+                  99,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                173,
+                83,
+                141,
+                198,
+                211,
+                176,
+                14,
+                30,
+                72,
+                5,
+                249,
+                126,
+                188,
+                79,
+                223,
+                227,
+                193,
+                45,
+                8,
+                110,
+                106,
+                70,
+                227,
+                237,
+                185,
+                115,
+                202,
+                93,
+                52,
+                127,
+                105,
+                109
+              ]
+            }
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The launch's mint (Token-2022)."
+          ]
+        },
+        {
+          "name": "treasury",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "account",
+                "path": "token_2022_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "bind_pool",
+      "docs": [
+        "Bind the autopilot to the DAMM v2 pool DBC's migration created for",
+        "the launch: from then on it has graduated (permissionless, once)."
+      ],
+      "discriminator": [
+        42,
+        253,
+        183,
+        246,
+        58,
+        106,
+        92,
+        243
+      ],
+      "accounts": [
+        {
+          "name": "autopilot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  111,
+                  112,
+                  105,
+                  108,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "autopilot.launch",
+                "account": "Autopilot"
+              }
+            ]
+          }
+        },
+        {
+          "name": "damm_config",
+          "docs": [
+            "(`external::check_migration_config`)."
+          ]
+        },
+        {
+          "name": "damm_pool",
+          "docs": [
+            "(`external::read_pool`)."
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "freeze",
+      "docs": [
+        "Make the active graph permanent, authorized by the launch's",
+        "post-quantum identity until `not_after`, which the authorization",
+        "signs (permissionless)."
+      ],
+      "discriminator": [
+        255,
+        91,
+        207,
+        84,
+        251,
+        194,
+        254,
+        63
+      ],
+      "accounts": [
+        {
+          "name": "autopilot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  111,
+                  112,
+                  105,
+                  108,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch"
+        },
+        {
+          "name": "authorization"
+        }
+      ],
+      "args": [
+        {
+          "name": "not_after",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "init_autopilot",
+      "docs": [
+        "Create a launch's autopilot and its treasury's wSOL account",
+        "(permissionless, once)."
+      ],
+      "discriminator": [
+        120,
+        236,
+        35,
+        34,
+        115,
+        30,
+        166,
+        245
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone: pays the autopilot's and the treasury wSOL account's rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch"
+        },
+        {
+          "name": "dbc_config",
+          "docs": [
+            "(`external::migration_sqrt_price`)."
+          ]
+        },
+        {
+          "name": "autopilot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  111,
+                  112,
+                  105,
+                  108,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "this program's CPIs."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wsol_mint",
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "name": "treasury_wsol",
+          "docs": [
+            "The treasury's wSOL account (created if `distribute` has not yet)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "wsol_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "publish_graph",
+      "docs": [
+        "Publish a verified PXG1 graph at the address its content hashes to",
+        "(permissionless, idempotent)."
+      ],
+      "discriminator": [
+        107,
+        216,
+        172,
+        115,
+        29,
+        125,
+        3,
+        224
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone: pays the record's rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch"
+        },
+        {
+          "name": "graph",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bytes",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "revoke_operator",
+      "docs": [
+        "Clear the operator, authorized by the launch's post-quantum identity",
+        "(permissionless)."
+      ],
+      "discriminator": [
+        185,
+        25,
+        87,
+        77,
+        88,
+        8,
+        30,
+        175
+      ],
+      "accounts": [
+        {
+          "name": "autopilot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  111,
+                  112,
+                  105,
+                  108,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch"
+        },
+        {
+          "name": "authorization"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "run",
+      "docs": [
+        "Run one due node of the active graph and tip the caller",
+        "(permissionless; operator-gated nodes need the operator and its",
+        "amount; a keeper may choose a smaller buyback amount)."
+      ],
+      "discriminator": [
+        203,
+        27,
+        228,
+        218,
+        208,
+        69,
+        35,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone: the keeper (or the operator). Receives the tip."
+          ],
+          "signer": true
+        },
+        {
+          "name": "operator",
+          "docs": [
+            "The graph's operator: required for operator-gated nodes."
+          ],
+          "signer": true,
+          "optional": true
+        },
+        {
+          "name": "autopilot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  111,
+                  112,
+                  105,
+                  108,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "autopilot.launch",
+                "account": "Autopilot"
+              }
+            ]
+          }
+        },
+        {
+          "name": "graph",
+          "docs": [
+            "The active graph."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  112,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "autopilot.launch",
+                "account": "Autopilot"
+              },
+              {
+                "kind": "account",
+                "path": "autopilot.active_graph",
+                "account": "Autopilot"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "autopilot.launch",
+                "account": "Autopilot"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_wsol",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "wsol_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "treasury_token",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "account",
+                "path": "token_2022_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Writable: burns reduce the supply."
+          ],
+          "writable": true
+        },
+        {
+          "name": "wsol_mint",
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "name": "damm_pool",
+          "docs": [
+            "layout (`external::read_pool`); none before. Writable in the",
+            "transaction only for a buyback."
+          ],
+          "optional": true
+        },
+        {
+          "name": "tip_account",
+          "docs": [
+            "Any wSOL account: receives the tip."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": [
+        {
+          "name": "node",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_price",
+      "docs": [
+        "Observe the pool's price and move the reference toward what the",
+        "observations agree on (permissionless, any time after graduation)."
+      ],
+      "discriminator": [
+        61,
+        34,
+        117,
+        155,
+        75,
+        34,
+        123,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "autopilot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  111,
+                  112,
+                  105,
+                  108,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "autopilot.launch",
+                "account": "Autopilot"
+              }
+            ]
+          }
+        },
+        {
+          "name": "damm_pool"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Autopilot",
+      "discriminator": [
+        113,
+        195,
+        229,
+        57,
+        158,
+        250,
+        49,
+        134
+      ]
+    },
+    {
+      "name": "GraphRecord",
+      "discriminator": [
+        118,
+        95,
+        92,
+        21,
+        103,
+        22,
+        179,
+        120
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AutopilotInitialized",
+      "discriminator": [
+        253,
+        56,
+        229,
+        45,
+        213,
+        208,
+        230,
+        246
+      ]
+    },
+    {
+      "name": "GraphActivated",
+      "discriminator": [
+        90,
+        74,
+        13,
+        95,
+        27,
+        203,
+        114,
+        27
+      ]
+    },
+    {
+      "name": "GraphFrozen",
+      "discriminator": [
+        11,
+        115,
+        120,
+        89,
+        92,
+        55,
+        86,
+        18
+      ]
+    },
+    {
+      "name": "GraphPublished",
+      "discriminator": [
+        93,
+        40,
+        45,
+        124,
+        250,
+        139,
+        155,
+        19
+      ]
+    },
+    {
+      "name": "GraphQueued",
+      "discriminator": [
+        192,
+        247,
+        91,
+        23,
+        239,
+        238,
+        253,
+        1
+      ]
+    },
+    {
+      "name": "MintBound",
+      "discriminator": [
+        234,
+        244,
+        192,
+        242,
+        103,
+        41,
+        255,
+        18
+      ]
+    },
+    {
+      "name": "NodeRan",
+      "discriminator": [
+        181,
+        67,
+        182,
+        114,
+        33,
+        181,
+        84,
+        224
+      ]
+    },
+    {
+      "name": "OperatorRevoked",
+      "discriminator": [
+        234,
+        41,
+        78,
+        23,
+        191,
+        224,
+        103,
+        64
+      ]
+    },
+    {
+      "name": "PoolBound",
+      "discriminator": [
+        234,
+        212,
+        32,
+        69,
+        240,
+        237,
+        33,
+        28
+      ]
+    },
+    {
+      "name": "ReferencePriceUpdated",
+      "discriminator": [
+        84,
+        187,
+        73,
+        53,
+        203,
+        174,
+        5,
+        238
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotALaunch",
+      "msg": "Account is not a Noised launchpad launch"
+    },
+    {
+      "code": 6001,
+      "name": "LaunchNotLive",
+      "msg": "The launch is not live yet"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidCertificate",
+      "msg": "Certificate is not the launchpad's for this launch and mint, or lacks a safety check"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidDbcConfig",
+      "msg": "DBC config is not the launch's (wSOL quote, migration price)"
+    },
+    {
+      "code": 6004,
+      "name": "MintAlreadyBound",
+      "msg": "The autopilot's mint is already bound"
+    },
+    {
+      "code": 6005,
+      "name": "MintNotBound",
+      "msg": "The autopilot's mint is not bound yet (bind_mint once the launch is live)"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidGraph",
+      "msg": "Graph bytes do not verify as PXG1"
+    },
+    {
+      "code": 6007,
+      "name": "GraphMismatch",
+      "msg": "Graph record is not the one this autopilot names"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidAuthorization",
+      "msg": "Authorization is not the launch identity's authorization of this action"
+    },
+    {
+      "code": 6009,
+      "name": "StaleAuthorization",
+      "msg": "Authorization landed before one already used"
+    },
+    {
+      "code": 6010,
+      "name": "Frozen",
+      "msg": "The graph is frozen forever"
+    },
+    {
+      "code": 6011,
+      "name": "NoActiveGraph",
+      "msg": "No graph is active"
+    },
+    {
+      "code": 6012,
+      "name": "NoPendingUpdate",
+      "msg": "No graph update is pending"
+    },
+    {
+      "code": 6013,
+      "name": "ActivationInPast",
+      "msg": "A first graph must activate now or later"
+    },
+    {
+      "code": 6014,
+      "name": "TimelockTooShort",
+      "msg": "A graph update must take effect at least 72 hours after it is queued"
+    },
+    {
+      "code": 6015,
+      "name": "UpdateNotDue",
+      "msg": "The pending graph update is not due yet"
+    },
+    {
+      "code": 6016,
+      "name": "PendingUpdateDue",
+      "msg": "A graph update is due: apply it first"
+    },
+    {
+      "code": 6017,
+      "name": "NoOperator",
+      "msg": "There is no operator"
+    },
+    {
+      "code": 6018,
+      "name": "NoSuchNode",
+      "msg": "No such node in the active graph"
+    },
+    {
+      "code": 6019,
+      "name": "NodeNotDue",
+      "msg": "The node is not due"
+    },
+    {
+      "code": 6020,
+      "name": "NotGraduated",
+      "msg": "The token has not graduated to its DAMM v2 pool"
+    },
+    {
+      "code": 6021,
+      "name": "MaxRunsReached",
+      "msg": "The node ran as often as allowed this epoch"
+    },
+    {
+      "code": 6022,
+      "name": "BudgetSpent",
+      "msg": "The node spent its budget for this epoch"
+    },
+    {
+      "code": 6023,
+      "name": "ConditionFalse",
+      "msg": "The node's condition does not hold"
+    },
+    {
+      "code": 6024,
+      "name": "WrongOperator",
+      "msg": "Only the graph's operator can run this node"
+    },
+    {
+      "code": 6025,
+      "name": "AmountNotAllowed",
+      "msg": "Only operator-gated nodes and buybacks take an amount"
+    },
+    {
+      "code": 6026,
+      "name": "InvalidAmount",
+      "msg": "The amount must be above zero and within the node's cap and the treasury"
+    },
+    {
+      "code": 6027,
+      "name": "NothingToDo",
+      "msg": "The treasury holds nothing this node could move"
+    },
+    {
+      "code": 6028,
+      "name": "PremiumExceeded",
+      "msg": "The pool price is above the reference price plus the node's premium"
+    },
+    {
+      "code": 6029,
+      "name": "PriceOutOfRange",
+      "msg": "The reference price is out of range for this swap"
+    },
+    {
+      "code": 6030,
+      "name": "SwapShortfall",
+      "msg": "The swap did not take exactly the amount in or returned less than the minimum"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidPool",
+      "msg": "Pool is not the launch's DAMM v2 pool"
+    },
+    {
+      "code": 6032,
+      "name": "InvalidDammAccounts",
+      "msg": "DAMM v2 accounts are missing or wrong"
+    },
+    {
+      "code": 6033,
+      "name": "InvalidRecipientAccounts",
+      "msg": "Recipient accounts are missing or wrong"
+    },
+    {
+      "code": 6034,
+      "name": "PriceNotObserved",
+      "msg": "Observe the pool price first (update_price), then run at least a minute later"
+    },
+    {
+      "code": 6035,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6036,
+      "name": "UnexpectedAccounts",
+      "msg": "This action takes no remaining accounts"
+    },
+    {
+      "code": 6037,
+      "name": "AmountTooSmall",
+      "msg": "A keeper's buyback must move at least 1% of the pool's SOL (or the node's whole amount)"
+    },
+    {
+      "code": 6038,
+      "name": "InvalidDammConfig",
+      "msg": "DAMM v2 config is not one DBC migrates through"
+    },
+    {
+      "code": 6039,
+      "name": "PoolAlreadyBound",
+      "msg": "The autopilot's pool is already bound"
+    },
+    {
+      "code": 6040,
+      "name": "FreezeExpired",
+      "msg": "The freeze authorization is past its not_after"
+    },
+    {
+      "code": 6041,
+      "name": "RemainderTooSmall",
+      "msg": "A keeper's partial buyback must leave at least 1% of the pool's SOL of the node's amount (or move all of it)"
+    },
+    {
+      "code": 6042,
+      "name": "NoRecipientAccount",
+      "msg": "No recipient of a share has a wSOL account to receive it"
+    }
+  ],
+  "types": [
+    {
+      "name": "AuthMark",
+      "docs": [
+        "The latest authorization of one kind that was used (`governance.rs`):",
+        "authorizations are ordered by `(slot, address)`, so each is used at most",
+        "once and never after a newer one of the kinds that could undo it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "key",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Autopilot",
+      "docs": [
+        "A launch's autopilot, at `[\"autopilot\", launch]` (spec §4). Created by",
+        "anyone; changed only by the instructions of this program: the graph only",
+        "through a post-quantum authorization of the launch's identity and the",
+        "timelock, the node states only by successful runs, the reference price",
+        "only toward what observations of the pool agree on (`reference.rs`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "treasury_bump",
+            "docs": [
+              "Bump of the treasury authority `[\"treasury\", launch]`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "The launch's mint, bound once it is live (`bind_mint`; default until",
+              "then)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "damm_pool",
+            "docs": [
+              "The launch's DAMM v2 pool, bound once DBC migrated the curve",
+              "(`bind_pool`; default until then: the launch has not graduated)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "active_graph",
+            "docs": [
+              "Hash of the graph that runs (zero: none yet)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "pending_graph",
+            "docs": [
+              "An authorized graph waiting for `activate_at` (zero: none)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "pending_activate_at",
+            "type": "i64"
+          },
+          {
+            "name": "pending_operator",
+            "docs": [
+              "The operator the pending graph gets when applied (its own, unless a",
+              "revocation took it away)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "activated_at",
+            "docs": [
+              "When the active graph took effect."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "frozen",
+            "docs": [
+              "The active graph can never change again (`freeze`)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "operator",
+            "docs": [
+              "The active graph's operator, the only signer of its operator-gated",
+              "nodes (default: none, or revoked)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "auth_marks",
+            "docs": [
+              "The latest authorization used, per kind (activate, freeze, revoke)."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "AuthMark"
+                  }
+                },
+                3
+              ]
+            }
+          },
+          {
+            "name": "seq",
+            "docs": [
+              "Successful runs so far, across all nodes and graphs."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "ref_sqrt_price",
+            "docs": [
+              "The reference sqrt price (Q64.64) price conditions read and that",
+              "bounds buybacks: seeded with the launch's migration price, then moved",
+              "toward the prices observations of the pool agree on, rising at most",
+              "5% per hour."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "ref_updated_at",
+            "docs": [
+              "When the reference last moved (0: never)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "ref_allowance",
+            "docs": [
+              "The rise allowance (sqrt-bps-seconds) and when it last accrued."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "ref_allowance_at",
+            "type": "i64"
+          },
+          {
+            "name": "observations",
+            "docs": [
+              "Observations of the pool price: the current bucket, then the",
+              "previous one."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "ObsBucket"
+                  }
+                },
+                2
+              ]
+            }
+          },
+          {
+            "name": "tip_epoch_start",
+            "docs": [
+              "The tip epoch `tips_in_epoch` counts (a multiple of `TIP_EPOCH_SECS`)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "tips_in_epoch",
+            "type": "u64"
+          },
+          {
+            "name": "nodes",
+            "docs": [
+              "Indexed like the active graph's nodes."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "NodeRecord"
+                  }
+                },
+                16
+              ]
+            }
+          },
+          {
+            "name": "active_auth",
+            "docs": [
+              "The launchpad `Authorization` that activated the active graph and the",
+              "`activate_at` it signed (audit 4, A4-S; set by `apply_pending`): with",
+              "`active_graph` they give the authorization's payload hash, so anyone",
+              "can re-verify the running graph's LMS signature from this account.",
+              "A revocation names this authorization (`revoke_payload`). Default",
+              "and 0 until a graph is active."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "active_activate_at",
+            "type": "i64"
+          },
+          {
+            "name": "partial_spent",
+            "docs": [
+              "Indexed like the nodes: what keepers' partial buybacks moved since",
+              "the node last completed a run (audit 4, A4-2). Until it does, a run",
+              "moves at most `p1` minus this, so splitting a run never moves more",
+              "than the run would. Cleared by a completed run and by a new graph."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AutopilotInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "autopilot",
+            "type": "pubkey"
+          },
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "ref_sqrt_price",
+            "docs": [
+              "The launch's migration price: the first reference price."
+            ],
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GraphActivated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "autopilot",
+            "type": "pubkey"
+          },
+          {
+            "name": "graph_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "operator",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GraphFrozen",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "autopilot",
+            "type": "pubkey"
+          },
+          {
+            "name": "graph_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "cancelled",
+            "docs": [
+              "A pending update the freeze cancelled (zero: none)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GraphPublished",
+      "docs": [
+        "`publish_graph` created a graph record (not emitted when it existed)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "graph",
+            "type": "pubkey"
+          },
+          {
+            "name": "graph_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "len",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GraphQueued",
+      "docs": [
+        "An authorized graph was queued; it takes effect at `activate_at`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "autopilot",
+            "type": "pubkey"
+          },
+          {
+            "name": "graph_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "activate_at",
+            "type": "i64"
+          },
+          {
+            "name": "authorization",
+            "type": "pubkey"
+          },
+          {
+            "name": "operator",
+            "docs": [
+              "The operator the graph will have (its own)."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GraphRecord",
+      "docs": [
+        "A published PXG1 graph, at `[\"graph\", launch, graph_hash]` where",
+        "`graph_hash = SHA256(\"PHX-GRAPH-V1\" || bytes)`. Created whole by",
+        "`publish_graph` after `Graph::verify`, never modified or closed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "graph_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "bytes",
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MintBound",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "autopilot",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NodeRan",
+      "docs": [
+        "A node ran. Every lamport and token that left the treasury is here."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "autopilot",
+            "type": "pubkey"
+          },
+          {
+            "name": "node",
+            "type": "u8"
+          },
+          {
+            "name": "action",
+            "type": "u8"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "spent",
+            "docs": [
+              "What the node spent from its budget: lamports swapped (BUYBACK_BURN)",
+              "or due to the recipients (DISTRIBUTE_SOL: paid, plus `kept`), tokens",
+              "burned (BURN)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bought",
+            "docs": [
+              "Tokens bought by the swap (all burned in the same instruction)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "burned",
+            "docs": [
+              "Tokens burned (bought ones, or treasury tokens)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "tip",
+            "docs": [
+              "Lamports of wSOL paid to the caller's tip account."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "spot_sqrt_price",
+            "docs": [
+              "The pool's sqrt price before the action (0 before graduation, or if",
+              "a burn or a distribution could not read it)."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "ref_sqrt_price",
+            "docs": [
+              "The reference sqrt price after the run."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "partial",
+            "docs": [
+              "A keeper's partial buyback (audit 4, A4-2): it spent from the budget",
+              "but did not complete the node's run, so the node stays due (not a",
+              "run: `last_run`, `last_seq` and the epoch's runs are unchanged)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "skipped",
+            "docs": [
+              "DISTRIBUTE_SOL: bit `i` set when recipient `i` had no wSOL account",
+              "at its canonical address (audit 4, M4): its share was not paid."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "kept",
+            "docs": [
+              "Lamports of those shares, which stayed in the treasury (paid =",
+              "`spent - kept`)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NodeRecord",
+      "docs": [
+        "A graph node's run state (`noised_rules::NodeState`, stored)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "last_run",
+            "docs": [
+              "Unix time of the last successful run (0 = never)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_seq",
+            "docs": [
+              "`Autopilot::seq` at the last successful run (0 = never)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "epoch_start",
+            "docs": [
+              "Start of the epoch the two counters below count."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "runs_in_epoch",
+            "type": "u16"
+          },
+          {
+            "name": "spent_in_epoch",
+            "docs": [
+              "Lamports (BUYBACK_BURN, DISTRIBUTE_SOL) or raw tokens (BURN)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ObsBucket",
+      "docs": [
+        "The lowest and highest pool price observed during one bucket of",
+        "`OBS_BUCKET_SECS` (`reference.rs`). Empty while `min == 0` (no pool has a",
+        "zero price)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "docs": [
+              "`unix_time.div_euclid(OBS_BUCKET_SECS)` of the observations."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "first_at",
+            "docs": [
+              "When the first of them was made."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "min",
+            "docs": [
+              "Lowest and highest sqrt price (Q64.64) observed."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "max",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OperatorRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "autopilot",
+            "type": "pubkey"
+          },
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_cleared",
+            "docs": [
+              "The queued graph named the same operator, which it will not get."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolBound",
+      "docs": [
+        "The launch graduated: its DAMM v2 pool, created by DBC's migration",
+        "through `damm_config`, is bound."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "autopilot",
+            "type": "pubkey"
+          },
+          {
+            "name": "damm_pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "damm_config",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReferencePriceUpdated",
+      "docs": [
+        "`update_price` observed the pool price; the reference moved if the",
+        "observations of the window agreed (`old == new` otherwise)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "autopilot",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_sqrt_price",
+            "type": "u128"
+          },
+          {
+            "name": "new_sqrt_price",
+            "type": "u128"
+          },
+          {
+            "name": "spot_sqrt_price",
+            "type": "u128"
+          }
+        ]
+      }
+    }
+  ]
+}

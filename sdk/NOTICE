@@ -1,0 +1,10 @@
+@noisedlabs/sdk
+Copyright 2026 The Noised authors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This package includes third-party material under its own license:
+- src/idl/dynamic_bonding_curve.json and src/idl/cp_amm.json (also built
+  into dist/idl/): the IDLs of Meteora's Dynamic Bonding Curve and DAMM v2
+  programs, taken from Meteora's MIT-licensed SDKs. Copyright (c) 2026
+  Meteora; MIT License, full text in src/idl/LICENSE-meteora.

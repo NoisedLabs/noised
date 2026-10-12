@@ -1,0 +1,30 @@
+# pnpm 11 reads its settings from this file (it ignores pnpm-only keys in .npmrc).
+# The store, cache and state locations are machine settings, not project ones:
+# set them with the pnpm_config_store_dir / pnpm_config_cache_dir /
+# pnpm_config_state_dir environment variables or in pnpm's global config.
+
+# Supply-chain guards (same policy as sdk/, app/ and packages/noised-mcp).
+# Never resolve a version younger than 7 days (10080 minutes): most hijacked
+# releases are detected and unpublished within that window.
+minimumReleaseAge: 10080
+# Refuse a version whose publish trust (provenance / trusted publisher) is
+# weaker than an earlier version of the same package.
+trustPolicy: no-downgrade
+# Reviewed exceptions, each pinned to one exact version:
+# - undici-types@6.21.0: type declarations only (never bundled or executed),
+#   published 2024-11-13 without provenance; required by @types/node 22.x.
+trustPolicyExclude:
+  - "undici-types@6.21.0"
+# Transitive dependencies may only come from the registry (no git or tarball URLs).
+blockExoticSubdeps: true
+# Run no dependency install scripts.
+ignoreScripts: true
+# Peers are declared explicitly; nothing is installed implicitly.
+autoInstallPeers: false
+
+# One copy of each shared library: the MCP SDK the adapters use is the one the
+# keeper example imports, and LangChain's packages share one @langchain/core.
+overrides:
+  "@modelcontextprotocol/sdk": "1.32.0"
+  "@langchain/core": "1.2.14"
+  "zod": "4.6.5"

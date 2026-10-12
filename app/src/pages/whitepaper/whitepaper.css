@@ -1,0 +1,1252 @@
+/*
+ * /whitepaper (DOCS_WHITEPAPER.md, PIXEL_V6): a paper set in the app's pixel glass. Headlines in Geist Pixel at the
+ * system's pixel-exact sizes (--px-n), small labels in Jersey 10 at --ui-px, long text in Geist at 17px / 1.7, math in
+ * the system math font (MathML Core), figures on stepped-corner glass panels with numbered captions. The print
+ * stylesheet at the end turns the same page into the PDF (scripts/whitepaper-pdf.mjs, headless Chrome
+ * Page.printToPDF): graphite ink on white paper. Static CSS only (style-src 'self'); every colour is a theme token.
+ */
+
+.wp {
+  --wp-font-body: var(--font-body);
+  --wp-font-head: var(--font-head);
+  --wp-font-ui: var(--font-ui, var(--font-label, var(--font-body)));
+  --wp-ui-px: var(--ui-px, 18.6667px);
+  --wp-track: var(--label-tracking, 1px);
+  --wp-surface: var(--panel);
+  --wp-measure: 720px;
+  --wp-ink: var(--text);
+  --wp-muted: var(--text-muted);
+  --wp-dim: var(--text-dim);
+  --wp-rule: repeating-linear-gradient(90deg, var(--line-strong) 0 2px, transparent 2px 6px);
+  position: relative;
+  padding-top: 32px;
+  padding-bottom: 96px;
+  color: var(--wp-ink);
+}
+
+/* Jersey 10 label voice: one size only (--ui-px), uppercase, whole-pixel tracking. */
+.wp-eyebrow,
+.wp-meta dt,
+.wp-toc-label,
+.wp-toc-n,
+.wp-caption-label,
+.wp-table th,
+.wp-thm-kind,
+.wp-aside-title,
+.wp-tag,
+.wp-stats dt,
+.wp-contrib-n,
+.wp-h3-n,
+.wp-refs-n {
+  font-family: var(--wp-font-ui);
+  font-size: var(--wp-ui-px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: var(--wp-track);
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------- cover --- */
+.wp-cover {
+  padding: clamp(24px, 4vw, 52px);
+}
+.wp-cover-dither {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.wp-cover-inner {
+  position: relative;
+  z-index: 2;
+}
+.wp-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 0 0 22px;
+  color: var(--wp-muted);
+}
+.wp-eyebrow-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--wp-ink);
+}
+.wp-title {
+  max-width: 22ch;
+  margin: 0;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  font-family: var(--wp-font-head);
+  font-size: var(--px-3, 78.9474px);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: 0;
+}
+.wp-title-soft {
+  color: var(--wp-muted);
+}
+.wp-lede {
+  max-width: 62ch;
+  margin: 24px 0 0;
+  color: var(--wp-muted);
+  font: 400 18px/1.6 var(--wp-font-body);
+}
+.wp-meta {
+  --px-c: 3px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  margin: 30px 0 0;
+}
+.wp-meta > div {
+  padding: 14px 16px 12px;
+  background: color-mix(in srgb, var(--wp-ink) 4%, transparent);
+}
+.wp-meta dt {
+  color: var(--wp-dim);
+}
+.wp-meta dd {
+  margin: 10px 0 0;
+  font: 400 var(--px-1, 26.3158px) / 1 var(--font-num, var(--wp-font-head));
+}
+.wp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+}
+.wp-art {
+  margin-top: 34px;
+}
+.wp-art-cap {
+  margin: 12px 0 0;
+  color: var(--wp-dim);
+  font: 400 13px/1.55 var(--wp-font-body);
+}
+
+/* --------------------------------------------------------------- layout --- */
+.wp-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 40px;
+  margin-top: 40px;
+}
+@media (min-width: 1180px) {
+  .wp-layout {
+    grid-template-columns: 236px minmax(0, 1fr);
+    gap: 56px;
+  }
+}
+.wp-article {
+  min-width: 0;
+  max-width: 880px;
+  font: 400 17px/1.7 var(--wp-font-body);
+}
+.wp-article > .wp-section > p,
+.wp-article > .wp-section > ul,
+.wp-article > .wp-section > ol:not(.wp-contrib),
+.wp-article > .wp-section > .wp-thm,
+.wp-article > .wp-section > .wp-proof,
+.wp-article > .wp-section > .wp-aside,
+.wp-article > .wp-section > h3 {
+  max-width: var(--wp-measure);
+}
+.wp-article p {
+  margin: 0 0 1.05em;
+  text-wrap: pretty;
+}
+.wp-article ul,
+.wp-article ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.3em;
+}
+.wp-article li {
+  margin: 0.3em 0;
+}
+.wp-article ul > li::marker {
+  content: "\25AA\00A0 ";
+  color: var(--wp-dim);
+}
+.wp-article strong {
+  font-weight: 650;
+  color: var(--wp-ink);
+}
+.wp-article a:not(.wp-xref):not(.btn) {
+  color: var(--wp-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+/* --------------------------------------------------------- pixel panels --- */
+/* Stepped-corner panels without backdrop blur (many on one page): .px-corners clips the fill, .px-frame draws the
+   1px stepped rim (both from styles.css). */
+.wp-panel {
+  --px-c: 4px;
+  --px-frame-color: color-mix(in srgb, var(--wp-ink) 16%, transparent);
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--wp-ink) 4%, transparent), color-mix(in srgb, var(--wp-ink) 1.5%, transparent)),
+    color-mix(in srgb, var(--wp-surface) 86%, transparent);
+}
+
+/* ------------------------------------------------------------------ toc --- */
+.wp-toc {
+  display: none;
+}
+@media (min-width: 1180px) {
+  .wp-toc {
+    display: block;
+  }
+  .wp-toc-mobile {
+    display: none;
+  }
+}
+.wp-toc-sticky {
+  position: sticky;
+  top: calc(var(--nav-h, 58px) + 36px);
+}
+.wp-toc-panel {
+  padding: 18px 12px 14px;
+}
+.wp-toc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 8px;
+}
+.wp-toc-label {
+  color: var(--wp-dim);
+}
+.wp-toc-pct {
+  color: var(--wp-muted);
+  font: 400 var(--wp-ui-px) / 1 var(--wp-font-ui);
+  letter-spacing: var(--wp-track);
+}
+.wp-toc-bar {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+  gap: 2px;
+  height: 6px;
+  margin: 14px 8px 12px;
+}
+.wp-toc-bar > span {
+  background: color-mix(in srgb, var(--wp-ink) 12%, transparent);
+}
+.wp-toc-bar > span[data-on="true"] {
+  background: var(--wp-ink);
+}
+.wp-toc-bar > span[data-on="part"] {
+  background: color-mix(in srgb, var(--wp-ink) 55%, transparent);
+}
+.wp-toc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.wp-toc-link {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 8px;
+  color: var(--wp-muted);
+  font: 500 13.5px/1.35 var(--wp-font-body);
+  text-decoration: none;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+.wp-toc-link:hover {
+  color: var(--wp-ink);
+  background: var(--hover, rgb(255 255 255 / 0.04));
+}
+.wp-toc-link[aria-current="location"] {
+  color: var(--wp-ink);
+  background: var(--press, rgb(255 255 255 / 0.07));
+}
+.wp-toc-link:focus-visible,
+.wp-toc-toggle:focus-visible,
+.wp-xref:focus-visible,
+.wp-cite a:focus-visible,
+.wp-fn a:focus-visible,
+.wp-table-scroll:focus-visible {
+  outline: 2px solid var(--signal, var(--text));
+  outline-offset: 2px;
+}
+.wp-toc-n {
+  flex: none;
+  /* QA v6: Jersey 10 digits + 1px tracking are wider than 2.2ch: "02".."09" wrapped onto two lines. Tabular
+     figures keep every number the same width, so the titles still line up. */
+  min-width: 2.2ch;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--wp-dim);
+}
+.wp-toc-link[aria-current="location"] .wp-toc-n {
+  color: var(--wp-ink);
+}
+.wp-toc-mobile {
+  --px-c: 3px;
+}
+.wp-toc-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--wp-ink);
+  font: 400 var(--wp-ui-px) / 1 var(--wp-font-ui);
+  letter-spacing: var(--wp-track);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.wp-toc-mobile .wp-toc-list {
+  padding: 0 8px 10px;
+}
+.wp-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 3px;
+  pointer-events: none;
+}
+.wp-progress > span {
+  position: absolute;
+  inset: 0;
+  background: var(--wp-ink);
+  transform-origin: 0 50%;
+}
+@media (min-width: 1180px) {
+  .wp-progress {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------- headings --- */
+.wp-section {
+  position: relative;
+  scroll-margin-top: calc(var(--nav-h, 58px) + 40px);
+  padding-top: 34px;
+  margin-top: 48px;
+}
+.wp-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--wp-rule);
+}
+.wp-section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+}
+.wp-section:first-child::before {
+  display: none;
+}
+.wp-h2 {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 24px;
+  font-family: var(--wp-font-head);
+  font-size: var(--px-1h, 39.4737px);
+  font-weight: 400;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+.wp-h2-glyph {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  color: var(--wp-ink);
+}
+.wp-h2-n {
+  flex: none;
+  color: var(--wp-dim);
+  font: 400 var(--wp-ui-px) / 1 var(--wp-font-ui);
+  letter-spacing: var(--wp-track);
+  align-self: flex-start;
+  margin-top: 4px;
+}
+.wp-h2-t {
+  min-width: 0;
+}
+.wp-h3 {
+  scroll-margin-top: calc(var(--nav-h, 58px) + 40px);
+  margin: 1.9em 0 0.65em;
+  font-family: var(--wp-font-head);
+  font-size: var(--px-1, 26.3158px);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+.wp-h3-n {
+  margin-right: 10px;
+  color: var(--wp-dim);
+  vertical-align: 0.1em;
+}
+
+/* ------------------------------------------------------- figures, tables --- */
+.wp-figure,
+.wp-table-fig {
+  margin: 30px 0 32px;
+  padding: clamp(16px, 2.4vw, 26px);
+  scroll-margin-top: calc(var(--nav-h, 58px) + 40px);
+}
+.wp-figure-body {
+  position: relative;
+  z-index: 2;
+}
+.wp-caption {
+  position: relative;
+  z-index: 2;
+  display: block;
+  margin-top: 18px;
+  color: var(--wp-muted);
+  font: 400 14px/1.6 var(--wp-font-body);
+}
+.wp-caption-top {
+  margin: 0 0 16px;
+}
+.wp-caption-label {
+  margin-right: 10px;
+  color: var(--wp-ink);
+}
+.wp-caption-title {
+  color: var(--wp-ink);
+  font-weight: 600;
+}
+.wp-table-scroll {
+  position: relative;
+  z-index: 2;
+  overflow-x: auto;
+}
+.wp-table {
+  width: 100%;
+  border-collapse: collapse;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: manual;
+  font: 400 14.5px/1.5 var(--wp-font-body);
+}
+.wp-table th {
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--wp-dim);
+  text-align: left;
+  vertical-align: bottom;
+}
+.wp-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.wp-table tr:last-child td {
+  border-bottom: 0;
+}
+.wp-table td:first-child {
+  min-width: 7.5em;
+  color: var(--wp-ink);
+  font-weight: 500;
+}
+.wp-table td.mono:first-child {
+  min-width: 0;
+}
+.wp-table .num {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.wp-table .mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.wp-table .muted {
+  color: var(--wp-muted);
+}
+.wp-table th.num {
+  text-align: right;
+}
+
+/* ------------------------------------------------------------ equations --- */
+math.tex {
+  font-family: math, "Cambria Math", "STIX Two Math", "Latin Modern Math", serif;
+  font-size: 1.06em;
+}
+math.tex-block {
+  font-size: 1.1em;
+}
+.wp-eq {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 1.1em 0 1.3em;
+}
+.wp-eq-math {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+.wp-eq-n {
+  flex: none;
+  color: var(--wp-dim);
+  font: 400 13px var(--font-mono);
+}
+.tex-aligned mtd:nth-child(odd) {
+  text-align: right;
+}
+.tex-aligned mtd:nth-child(even) {
+  text-align: left;
+}
+.tex-cases mtd {
+  text-align: left;
+  padding-right: 1.2em;
+}
+.tex-tt {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+}
+.tex-bf {
+  font-weight: 700;
+}
+.tex-it {
+  font-style: italic;
+}
+.wp-article math:not(.tex-block) {
+  padding: 0 0.06em;
+}
+/* Long inline formulas cannot wrap: on narrow screens they become their own scrollable line. */
+@media screen and (max-width: 760px) {
+  .wp-article math.tex-long {
+    display: block math;
+    text-align: left;
+    max-width: 100%;
+    margin: 0.35em 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 0;
+  }
+}
+
+/* ------------------------------------------------------- theorem blocks --- */
+.wp-thm {
+  position: relative;
+  margin: 1.4em 0;
+  padding: 16px 18px 4px 22px;
+  background: color-mix(in srgb, var(--wp-ink) 3.5%, transparent);
+}
+.wp-thm::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: repeating-linear-gradient(180deg, var(--wp-ink) 0 4px, transparent 4px 8px);
+  opacity: 0.75;
+}
+.wp-thm[data-kind="definition"]::before,
+.wp-thm[data-kind="assumption"]::before,
+.wp-thm[data-kind="remark"]::before {
+  opacity: 0.32;
+}
+.wp-thm-head {
+  margin: 0 0 0.55em !important;
+}
+.wp-thm-kind {
+  color: var(--wp-ink);
+}
+.wp-thm-title {
+  color: var(--wp-muted);
+  font-style: italic;
+}
+.wp-thm-body > :last-child {
+  margin-bottom: 0.9em;
+}
+.wp-proof {
+  position: relative;
+  margin: 0 0 1.4em;
+  padding-right: 24px;
+}
+.wp-proof-head {
+  display: inline;
+  margin-right: 0.4em !important;
+  font-style: italic;
+  font-weight: 600;
+}
+.wp-proof-head + p {
+  display: inline;
+}
+.wp-qed {
+  position: absolute;
+  right: 0;
+  bottom: 1.1em;
+  width: 10px;
+  height: 10px;
+  overflow: hidden;
+  background: var(--wp-muted);
+  color: transparent;
+}
+.wp-aside {
+  margin: 1.6em 0;
+  padding: 18px 20px 4px;
+  font-size: 15.5px;
+  line-height: 1.65;
+}
+.wp-aside[data-tone="warn"] {
+  --px-frame-color: color-mix(in srgb, var(--warn, var(--wp-ink)) 55%, transparent);
+}
+.wp-aside-title {
+  margin: 0 0 0.7em !important;
+}
+.wp-aside[data-tone="warn"] .wp-aside-title {
+  color: var(--warn, var(--wp-ink));
+}
+
+/* ---------------------------------------------------------- inline bits --- */
+.wp-code {
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--wp-ink) 8%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  overflow-wrap: anywhere;
+}
+.wp-xref {
+  color: var(--wp-ink);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--wp-dim);
+  text-underline-offset: 3px;
+}
+.wp-cite {
+  color: var(--wp-muted);
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.wp-cite a {
+  color: inherit;
+  text-decoration: none;
+}
+.wp-cite a:hover {
+  color: var(--wp-ink);
+  text-decoration: underline;
+}
+.wp-fn a {
+  padding: 0 0.15em;
+  color: var(--wp-muted);
+  font: 600 0.72em var(--font-mono);
+  text-decoration: none;
+}
+.wp-tag {
+  display: inline-block;
+  margin-left: 0.35em;
+  padding: 3px 6px 2px;
+  background: color-mix(in srgb, var(--wp-ink) 10%, transparent);
+  color: var(--wp-muted);
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+.wp-tag[data-kind="model"],
+.wp-tag[data-kind="estimate"] {
+  background: transparent;
+  outline: 1px dashed color-mix(in srgb, var(--wp-ink) 30%, transparent);
+  outline-offset: -1px;
+}
+.wp-list {
+  margin: 0 0 1.1em;
+  padding-left: 1.3em;
+}
+
+/* ---------------------------------------------------- abstract & claims --- */
+.wp-abstract {
+  max-width: var(--wp-measure);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.wp-article .wp-contrib {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  margin: 26px 0 10px;
+  padding: 0;
+  list-style: none;
+}
+.wp-contrib li {
+  margin: 0;
+  padding: 18px 18px 16px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.wp-contrib li::marker {
+  content: none;
+}
+.wp-contrib b {
+  display: block;
+  margin-bottom: 8px;
+  font: 400 var(--px-1, 26.3158px)/1.15 var(--wp-font-head);
+}
+.wp-contrib-n {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--wp-dim);
+}
+
+/* --------------------------------------------------------- interactive --- */
+.wp-input {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-input, 3px);
+  background: color-mix(in srgb, var(--wp-ink) 3%, transparent);
+  color: var(--wp-ink);
+  font: 400 15px/1.4 var(--font-mono);
+}
+.wp-input:focus-visible {
+  outline: 2px solid var(--signal, var(--text));
+  outline-offset: 2px;
+}
+.wp-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: var(--wp-muted);
+  font: 400 var(--wp-ui-px) / 1 var(--wp-font-ui);
+  letter-spacing: var(--wp-track);
+  text-transform: uppercase;
+}
+.wp-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 2px;
+  margin: 16px 0 0;
+}
+.wp-stats > div {
+  padding: 12px 12px 10px;
+  background: color-mix(in srgb, var(--wp-ink) 4.5%, transparent);
+}
+.wp-stats dt {
+  color: var(--wp-dim);
+}
+.wp-stats dd {
+  margin: 8px 0 0;
+  font: 500 14px/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------- chain grid (pixels) --- */
+.wp-grid-canvas {
+  position: relative;
+  outline: none;
+}
+.wp-grid-canvas:focus-visible {
+  outline: 2px solid var(--signal, var(--text));
+  outline-offset: 4px;
+}
+.wp-grid-svg {
+  display: block;
+  max-width: 100%;
+}
+.wp-grid-svg rect[data-k="s"] {
+  fill: color-mix(in srgb, var(--wp-ink) 36%, var(--wp-surface));
+}
+.wp-grid-svg rect[data-k="y"] {
+  fill: var(--wp-ink);
+}
+.wp-grid-svg rect[data-k="v"] {
+  fill: color-mix(in srgb, var(--wp-ink) 12%, var(--wp-surface));
+}
+.wp-grid-col[data-cs="true"] rect[data-k="y"] {
+  fill: color-mix(in srgb, var(--wp-ink) 80%, var(--wp-surface));
+}
+.wp-grid-col[data-on="true"] rect[data-k="v"] {
+  fill: color-mix(in srgb, var(--wp-ink) 22%, var(--wp-surface));
+}
+.wp-grid-col[data-on="true"] rect[data-k="s"] {
+  fill: color-mix(in srgb, var(--wp-ink) 58%, var(--wp-surface));
+}
+.wp-grid-hit {
+  fill: transparent;
+}
+.wp-grid-svg[data-draw="pending"] .wp-grid-col {
+  opacity: 0;
+}
+.wp-grid-svg[data-draw="drawn"] .wp-grid-col {
+  animation: wp-col-in 0.42s steps(4, end) both;
+  animation-delay: calc(var(--col, 0) * 14ms);
+}
+@keyframes wp-col-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.wp-grid-read {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  min-height: 22px;
+  margin-top: 14px;
+  color: var(--wp-muted);
+  font: 400 12.5px/1.5 var(--font-mono);
+}
+.wp-grid-read-k {
+  color: var(--wp-ink);
+}
+.wp-grid-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--wp-font-body);
+}
+.wp-grid-key::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+}
+.wp-grid-key[data-k="s"]::before {
+  background: color-mix(in srgb, var(--wp-ink) 36%, var(--wp-surface));
+}
+.wp-grid-key[data-k="y"]::before {
+  background: var(--wp-ink);
+}
+.wp-grid-key[data-k="v"]::before {
+  background: color-mix(in srgb, var(--wp-ink) 12%, var(--wp-surface));
+}
+
+/* ------------------------------------------------- diagram decorations --- */
+.wp-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+}
+@media (min-width: 900px) {
+  .wp-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.seq-life {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+.seq-band {
+  fill: color-mix(in srgb, var(--wp-ink) 3.5%, transparent);
+}
+.seq-band-alt {
+  fill: transparent;
+}
+.chain-cell {
+  stroke: none;
+}
+.chain-s {
+  fill: color-mix(in srgb, var(--wp-ink) 36%, var(--wp-surface));
+}
+.chain-y {
+  fill: var(--wp-ink);
+}
+.chain-v {
+  fill: color-mix(in srgb, var(--wp-ink) 10%, var(--wp-surface));
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.chain-num {
+  fill: var(--wp-ink);
+  font: 500 11px var(--font-mono);
+}
+.chain-num-on {
+  fill: var(--bg);
+  font-weight: 700;
+}
+.tree-edge {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.tree-edge-on {
+  stroke: var(--wp-ink);
+  stroke-width: 2;
+}
+.tree-node path {
+  fill: color-mix(in srgb, var(--wp-ink) 3%, var(--wp-surface));
+  stroke: var(--line-strong);
+}
+.tree-node text {
+  fill: var(--wp-muted);
+  font: 500 10.5px var(--font-mono);
+}
+.tree-path path {
+  fill: var(--wp-ink);
+  stroke: var(--wp-ink);
+}
+.tree-path text {
+  fill: var(--bg);
+  font-weight: 700;
+}
+.tree-sib path {
+  fill: transparent;
+  stroke: var(--wp-ink);
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+}
+.tree-sib text {
+  fill: var(--wp-ink);
+}
+.bm-on {
+  fill: var(--wp-ink);
+}
+.bm-off {
+  fill: color-mix(in srgb, var(--wp-ink) 10%, var(--wp-surface));
+}
+.tl-axis {
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+.tl-tick {
+  stroke: var(--wp-ink);
+  stroke-width: 1.5;
+}
+.tl-shield {
+  fill: var(--wp-ink);
+}
+.tl-guard {
+  fill: color-mix(in srgb, var(--wp-ink) 42%, var(--wp-surface));
+}
+.tl-free {
+  fill: color-mix(in srgb, var(--wp-ink) 12%, var(--wp-surface));
+}
+.tl-bar-label {
+  fill: var(--wp-muted);
+  font: 500 11px var(--wp-font-body);
+}
+.tl-shield + .tl-bar-label {
+  fill: var(--bg);
+}
+.tl-guard + .tl-bar-label {
+  fill: var(--wp-ink);
+}
+.tl-mark {
+  stroke: var(--wp-ink);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 3;
+}
+
+/* ------------------------------------------------------------ references --- */
+.wp-refs {
+  max-width: var(--wp-measure);
+  margin: 0;
+  padding-left: 0 !important;
+  list-style: none;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.wp-refs li {
+  display: grid;
+  grid-template-columns: 4.2ch minmax(0, 1fr);
+  gap: 10px;
+  margin: 0 0 12px;
+  scroll-margin-top: calc(var(--nav-h, 58px) + 40px);
+}
+.wp-refs li::marker {
+  content: none;
+}
+.wp-refs-n {
+  color: var(--wp-dim);
+  text-align: right;
+  padding-top: 3px;
+}
+.wp-refs-where {
+  color: var(--wp-dim);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1099px) {
+  .wp-title {
+    font-size: var(--px-2, 52.6316px);
+  }
+}
+@media screen and (max-width: 640px) {
+  /* Tables keep readable columns and scroll sideways inside their panel. */
+  .wp-table {
+    min-width: 560px;
+  }
+}
+@media (max-width: 640px) {
+  .wp-title {
+    font-size: var(--px-1h, 39.4737px);
+  }
+  .wp-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .wp-article {
+    font-size: 16.5px;
+  }
+  .wp-h2 {
+    gap: 12px;
+    font-size: var(--px-1, 26.3158px);
+  }
+  .wp-h2-glyph {
+    width: 30px;
+    height: 30px;
+  }
+  .wp-eq {
+    gap: 8px;
+  }
+  .wp-eq-n {
+    font-size: 11.5px;
+  }
+  .wp-figure,
+  .wp-table-fig {
+    margin-inline: -6px;
+  }
+  .wp-lede {
+    font-size: 16.5px;
+  }
+}
+
+@media (max-width: 379px) {
+  .wp-title {
+    font-size: var(--px-1, 26.3158px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wp-grid-svg .wp-grid-col {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
+.wp-print-toc {
+  display: none;
+}
+
+/* ================================================================ print === */
+@page {
+  size: A4;
+  margin: 16mm 15mm 18mm;
+}
+@media print {
+  html:has(.wp),
+  html:has(.wp) body {
+    background: #fff !important;
+  }
+  html:has(.wp) .phx-nav-wrap,
+  html:has(.wp) .phx-footer,
+  html:has(.wp) .phx-aurora,
+  html:has(.wp) .phx-mode,
+  html:has(.wp) .phx-netbanner,
+  html:has(.wp) .toast-region,
+  html:has(.wp) .skip-link,
+  html:has(.wp) .phx-sheet {
+    display: none !important;
+  }
+  html:has(.wp) .phx-main,
+  html:has(.wp) .phx-page,
+  html:has(.wp) .phx-route {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    animation: none !important;
+    filter: none !important;
+    transform: none !important;
+    -webkit-mask: none !important;
+    mask: none !important;
+  }
+  .wp {
+    --text: #111111;
+    --text-muted: #3a3a3a;
+    --text-dim: #5a5a5a;
+    --line: rgb(0 0 0 / 0.13);
+    --line-strong: rgb(0 0 0 / 0.26);
+    --panel: #ffffff;
+    --bg: #ffffff;
+    --signal: #111111;
+    --wp-surface: #ffffff;
+    --glass-fill: linear-gradient(#fff, #fff);
+    --glass-edge: linear-gradient(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.2));
+    --glass-inset: none;
+    --glass-shadow: none;
+    --glass-tint: #ffffff;
+    --glass-strong-tint: #ffffff;
+    --glass-filter: none;
+    padding: 0;
+    color: #111;
+    font-size: 9.8pt;
+  }
+  .wp *,
+  .wp *::before,
+  .wp *::after {
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+  .wp-noprint,
+  .wp-toc,
+  .wp-toc-mobile,
+  .wp-progress,
+  .wp-actions,
+  .wp-grid-read,
+  .wp-field,
+  .wp-cover-dither {
+    display: none !important;
+  }
+  .wp-layout {
+    display: block;
+    margin-top: 0;
+  }
+  .wp-article {
+    max-width: none;
+    font-size: 9.8pt;
+    line-height: 1.5;
+  }
+  .wp-article > .wp-section > * {
+    max-width: none !important;
+  }
+  .wp-cover {
+    padding: 0 0 8mm;
+    box-shadow: none;
+    break-after: page;
+  }
+  .wp-cover::before,
+  .wp-cover::after {
+    display: none;
+  }
+  .wp-title {
+    font-size: 39.4737px;
+    max-width: none;
+  }
+  .wp-lede {
+    font-size: 12.5pt;
+  }
+  .wp-abstract {
+    font-size: 11.5pt;
+  }
+  .wp-contrib li {
+    font-size: 9.5pt;
+  }
+  .wp-contrib b {
+    font-size: 13pt;
+  }
+  .wp-aside {
+    font-size: 9.5pt;
+  }
+  .wp-meta dd {
+    font-size: 26.3158px;
+  }
+  .wp-section {
+    margin-top: 7mm;
+    padding-top: 4mm;
+  }
+  .wp-section:first-child {
+    margin-top: 0;
+  }
+  .wp-print-toc {
+    display: block;
+    margin-top: 10mm;
+    font-size: 10pt;
+  }
+  .wp-print-toc-h {
+    margin: 0 0 3mm;
+    font: 400 var(--wp-ui-px) / 1 var(--wp-font-ui);
+    letter-spacing: var(--wp-track);
+    text-transform: uppercase;
+  }
+  .wp-print-toc ol {
+    columns: 2;
+    column-gap: 10mm;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .wp-print-toc li {
+    margin: 0 0 1.6mm;
+    break-inside: avoid;
+  }
+  .wp-print-toc li span {
+    display: inline-block;
+    width: 7mm;
+    color: #5a5a5a;
+    font-family: var(--font-mono);
+  }
+  .wp-h2 {
+    font-size: 26.3158px;
+    break-after: avoid;
+  }
+  .wp-h2-glyph {
+    width: 26px;
+    height: 26px;
+  }
+  .wp-h3 {
+    font-size: 15pt;
+    break-after: avoid;
+  }
+  .wp-figure,
+  .wp-table-fig,
+  .wp-thm,
+  .wp-eq,
+  .wp-aside,
+  .wp-contrib li {
+    break-inside: avoid;
+  }
+  .wp-figure,
+  .wp-table-fig {
+    padding: 4mm 0;
+    background: #fff;
+    clip-path: none;
+  }
+  .wp-figure::before,
+  .wp-table-fig::before {
+    display: none;
+  }
+  .wp-table {
+    font-size: 8.5pt;
+  }
+  .wp-table td {
+    padding: 5px 8px;
+  }
+  .wp-table .num {
+    font-size: 8pt;
+  }
+  .wp-table-scroll {
+    overflow: visible;
+  }
+  .wp-refs {
+    font-size: 9pt;
+  }
+  .wp-refs-where {
+    font-size: 8pt;
+  }
+  .wp-caption {
+    font-size: 8.5pt;
+    margin-top: 3mm;
+  }
+  .wp-figure,
+  .wp-table-fig {
+    margin: 4mm 0 5mm;
+  }
+  .wp-thm {
+    margin: 3mm 0;
+    padding: 3mm 4mm 1mm 5mm;
+  }
+  a {
+    color: inherit !important;
+  }
+}

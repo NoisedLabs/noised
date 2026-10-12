@@ -1,0 +1,69 @@
+/**
+ * Why Noised: three graphite glass cards, each topped by a field of drifting dots that coalesces into one idea
+ * (fx/noise, noise/why.ts): a shield that noise bounces off, columns of dots rising to the same height (everyone
+ * pays the same price), a padlock whose shackle drops shut inside a closing loop. The dots part around the pointer.
+ * Over a very faint dot field; the cards resolve in from noise. The scenes play only on screen and show their
+ * formed still under reduced motion or with motion off.
+ */
+import { ArrowRight } from "lucide-react";
+import { memo, useMemo, useRef, type ReactNode } from "react";
+import { Link } from "react-router";
+
+import { NoiseArt, useNoiseReveal, type NoiseScene } from "../../fx/noise";
+import { SectionField, SectionHead, useReveal } from "./glass";
+import { fairScene, lockScene, shieldScene } from "./noise/why";
+
+const CARDS: { scene: () => NoiseScene; title: string; text: string }[] = [
+  {
+    scene: shieldScene,
+    title: "Safe from quantum computers",
+    text: "Launches are signed with post-quantum keys that never come from your wallet.",
+  },
+  {
+    scene: fairScene,
+    title: "Fair from the first second",
+    text: "Everyone in the opening batch pays the same price. No snipers, no insider supply.",
+  },
+  {
+    scene: lockScene,
+    title: "Locked forever",
+    text: "No admin keys. Liquidity is locked for good. Nobody can change the rules.",
+  },
+];
+
+export const WhyNoised = memo(function WhyNoised(): ReactNode {
+  const [ref, shown] = useReveal<HTMLElement>();
+  const grid = useRef<HTMLUListElement>(null);
+  useNoiseReveal(grid, { duration: 760 });
+  return (
+    <section ref={ref} id="why" className="hm-section hm-why" aria-labelledby="why-title" data-in={shown ? "" : undefined}>
+      <SectionField fade="left" seed={11} />
+      <SectionHead id="why-title" title="Why" accent="Noised" lead="Three promises, kept by code instead of people." align="center" />
+      <ul ref={grid} className="hm-why-grid" role="list">
+        {CARDS.map((c) => (
+          <WhyCard key={c.title} {...c} />
+        ))}
+      </ul>
+      <div className="hm-why-foot">
+        <Link to="/security" className="btn btn-secondary hm-more">
+          How we verify it
+          <ArrowRight aria-hidden="true" />
+        </Link>
+      </div>
+    </section>
+  );
+});
+
+function WhyCard({ scene, title, text }: { scene: () => NoiseScene; title: string; text: string }): ReactNode {
+  const card = useRef<HTMLLIElement>(null);
+  const art = useMemo(() => scene(), [scene]);
+  return (
+    <li ref={card} className="glass hm-why-card">
+      <div className="hm-why-art" aria-hidden="true">
+        <NoiseArt scene={art} host={card} />
+      </div>
+      <h3 className="t-card-title hm-card-title">{title}</h3>
+      <p className="hm-card-text">{text}</p>
+    </li>
+  );
+}

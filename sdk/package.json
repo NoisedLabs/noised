@@ -1,0 +1,101 @@
+{
+  "name": "@noisedlabs/sdk",
+  "version": "0.9.0",
+  "private": false,
+  "description": "TypeScript SDK for Noised, the quantum security layer for Solana: the QSL-1 token standard checker, launch builders, an independent on-chain verifier, post-quantum creator identities (LMS, RFC 8554), post-quantum vaults (LM-OTS) and programmable launches (launch rules, autopilot graphs and their simulators).",
+  "keywords": [
+    "solana",
+    "quantum-security-layer",
+    "qsl-1",
+    "token-standard",
+    "launchpad",
+    "token-launch",
+    "fair-launch",
+    "meteora",
+    "token-2022",
+    "post-quantum",
+    "hash-based-signatures",
+    "lms",
+    "lm-ots",
+    "rfc8554",
+    "verifier",
+    "programmable",
+    "autopilot",
+    "buyback",
+    "noised",
+    "quantum",
+    "passkey",
+    "launch-rules",
+    "transfer-hook"
+  ],
+  "homepage": "https://noised.fun",
+  "bugs": {
+    "url": "https://github.com/NoisedLabs/noised/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NoisedLabs/noised.git",
+    "directory": "sdk"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./programmable": {
+      "types": "./dist/programmable/index.d.ts",
+      "import": "./dist/programmable/index.js",
+      "default": "./dist/programmable/index.js"
+    },
+    "./idl/*.json": "./dist/idl/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p examples/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.31.1",
+    "@meteora-ag/dynamic-bonding-curve-sdk": "1.5.13",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@scure/bip39": "2.4.0",
+    "@solana/spl-token": "0.4.14",
+    "buffer": "6.0.3"
+  },
+  "peerDependencies": {
+    "@solana/web3.js": "^1.98.4"
+  },
+  "devDependencies": {
+    "@solana/web3.js": "1.98.4",
+    "@types/bn.js": "5.2.0",
+    "@types/node": "22.20.4",
+    "typescript": "6.0.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.3"
+  }
+}

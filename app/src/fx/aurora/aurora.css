@@ -1,0 +1,65 @@
+/*
+ * The living background (GLASS_V51 section 1: a quiet MONOCHROME light). Static CSS only (style-src 'self').
+ *   .phx-aurora         fixed, behind everything; its own background is the static CSS light (first paint,
+ *                       no WebGL, context lost): the same 3 soft white / gray pools at <= 8%
+ *   .phx-aurora-canvas  the WebGL aurora (fx/aurora/renderer.ts), faded in once its first frame is drawn
+ *   .phx-aurora-grain   a fine monochrome grain (an SVG turbulence image, img-src data:) at about 3%
+ */
+.phx-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(46% 50% at 22% 6%, color-mix(in srgb, var(--aurora-1) var(--aurora-css-1, 7%), transparent), transparent 72%),
+    radial-gradient(52% 54% at 82% 0%, color-mix(in srgb, var(--aurora-2) var(--aurora-css-2, 5%), transparent), transparent 74%),
+    radial-gradient(50% 52% at 34% 96%, color-mix(in srgb, var(--aurora-3) var(--aurora-css-3, 5%), transparent), transparent 74%),
+    var(--aurora-bg);
+}
+.phx-aurora-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-out);
+}
+.phx-aurora[data-ready="true"] .phx-aurora-canvas {
+  opacity: 1;
+}
+/* v6: the dithered light is shown pixel for pixel (renderer.ts sizes the canvas to an integer multiple). */
+.phx-aurora-canvas[data-dither="true"] {
+  right: auto;
+  bottom: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.phx-aurora-grain {
+  position: absolute;
+  inset: 0;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  mix-blend-mode: overlay;
+}
+:root[data-theme="light"] .phx-aurora {
+  /* Paper: white pools must be strong to show on #f4f4f2 at all. */
+  --aurora-css-1: 80%;
+  --aurora-css-2: 30%;
+  --aurora-css-3: 60%;
+}
+:root[data-theme="light"] .phx-aurora-grain {
+  mix-blend-mode: multiply;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phx-aurora-canvas {
+    transition: none;
+  }
+}
+@media print {
+  .phx-aurora {
+    display: none;
+  }
+}

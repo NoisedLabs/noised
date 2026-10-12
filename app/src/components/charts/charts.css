@@ -1,0 +1,414 @@
+/*
+ * In-house SVG charts and diagrams (components/charts). Static CSS only (style-src 'self'); every colour is a theme
+ * token, so the same figure reads on graphite (white / silver ink) and on paper (graphite ink). Marks: 2px lines,
+ * 1px solid hairline grid, >= 9px dots with a 2px surface ring, bars <= 14px with a rounded data end.
+ */
+
+.c-chart,
+.d-wrap {
+  --c-surface: var(--wp-surface, var(--panel));
+  --c-font-num: var(--font-mono);
+  --c-font-text: var(--wp-font-body, var(--font-body));
+  --c-font-ui: var(--font-ui, var(--c-font-text));
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- inks --- */
+.c-ink-1 { --ink: var(--text); }
+.c-ink-2 { --ink: color-mix(in srgb, var(--text) 66%, var(--c-surface)); }
+.c-ink-3 { --ink: color-mix(in srgb, var(--text) 44%, var(--c-surface)); }
+.c-ink-4 { --ink: color-mix(in srgb, var(--text) 26%, var(--c-surface)); }
+.c-ink-ok { --ink: var(--ok, var(--text)); }
+.c-ink-warn { --ink: var(--warn, var(--text)); }
+.c-ink-danger { --ink: var(--danger, var(--text)); }
+
+/* -------------------------------------------------------------- legend --- */
+.c-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  font: 500 12.5px/1.4 var(--c-font-text);
+  color: var(--text-muted);
+}
+.c-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.c-key {
+  flex: none;
+  overflow: visible;
+}
+.c-stroke {
+  stroke: var(--ink);
+  stroke-width: 2;
+  fill: none;
+}
+.c-fill {
+  fill: var(--ink);
+}
+.c-fill-hatch {
+  fill: color-mix(in srgb, var(--ink) 18%, transparent);
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.c-hatch-lines {
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+
+/* -------------------------------------------------------------- canvas --- */
+.c-canvas {
+  position: relative;
+  outline: none;
+}
+.c-canvas:focus-visible {
+  outline: 2px solid var(--signal, var(--text));
+  outline-offset: 4px;
+}
+.c-svg {
+  display: block;
+  max-width: none !important;
+  overflow: visible;
+  font-family: var(--c-font-text);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.c-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.c-axis {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.c-tick {
+  fill: var(--text-dim);
+  font: 400 11px var(--c-font-num);
+  font-variant-numeric: tabular-nums;
+}
+.c-axis-label {
+  fill: var(--text-muted);
+  font: 400 var(--ui-px, 18.6667px) var(--c-font-ui);
+  letter-spacing: var(--label-tracking, 1px);
+  text-transform: uppercase;
+}
+.c-span {
+  fill: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.c-span-label {
+  fill: var(--text-muted);
+  font: 500 11px var(--c-font-text);
+}
+.c-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.c-area {
+  fill: var(--ink);
+  opacity: 0.1;
+}
+.c-band-fill {
+  fill: var(--ink);
+  opacity: 0.16;
+}
+.c-rule {
+  stroke: var(--ink);
+  stroke-width: 1.25;
+}
+.c-rule-label,
+.c-mark-label,
+.c-end-label {
+  fill: var(--text-muted);
+  font: 500 11px var(--c-font-text);
+}
+.c-end-label {
+  fill: var(--text);
+}
+.c-dot {
+  fill: var(--ink);
+  stroke: var(--c-surface);
+  stroke-width: 2;
+}
+.c-hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+.c-cross-line {
+  stroke: var(--text-dim);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+/* ---------------------------------------------------------------- bars --- */
+.c-bar {
+  fill: var(--ink);
+  transition: opacity 0.15s ease;
+}
+.c-bar-hatch {
+  fill: color-mix(in srgb, var(--ink) 16%, transparent);
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.c-bar[data-hover="true"],
+.c-bar-hatch[data-hover="true"] {
+  opacity: 0.78;
+}
+.c-bar-point {
+  stroke: var(--c-surface);
+  stroke-width: 2;
+}
+.c-bar-g {
+  outline: none;
+}
+.c-bar-g:focus-visible .c-bar,
+.c-bar-g:focus-visible .c-bar-hatch {
+  stroke: var(--signal, var(--text));
+  stroke-width: 2;
+}
+.c-bar-g .c-hit {
+  cursor: default;
+}
+.c-bar-value {
+  fill: var(--text-muted);
+  font: 400 11px var(--c-font-num);
+  font-variant-numeric: tabular-nums;
+}
+.c-row-label {
+  fill: var(--text);
+  font: 500 12.5px var(--c-font-text);
+}
+.c-row-sub {
+  fill: var(--text-dim);
+  font: 400 11px var(--c-font-text);
+}
+.c-hatch-bg {
+  fill: transparent;
+}
+.c-hatch-line {
+  stroke: var(--text-muted);
+  stroke-width: 1.4;
+}
+
+/* ------------------------------------------------------------- tooltip --- */
+.c-tip {
+  position: absolute;
+  z-index: 3;
+  min-width: 150px;
+  max-width: min(280px, 80%);
+  padding: 8px 10px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  box-shadow: 0 14px 30px -14px rgb(0 0 0 / 0.55);
+  color: var(--text);
+  font: 400 12px/1.45 var(--c-font-text);
+  pointer-events: none;
+  transform: translate(14px, -100%);
+}
+.c-tip[data-side="left"] {
+  transform: translate(calc(-100% - 14px), -100%);
+}
+.c-tip-title {
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--c-font-ui);
+  letter-spacing: var(--label-tracking, 1px);
+  text-transform: uppercase;
+}
+.c-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.c-tip-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.c-tip-value {
+  font-family: var(--c-font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- reveal --- */
+.c-plot[data-draw="pending"] {
+  clip-path: inset(0 100% 0 0);
+}
+.c-plot[data-draw="drawn"] {
+  animation: c-wipe 1.15s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+@keyframes c-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* ------------------------------------------------------------ diagrams --- */
+.d-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  outline: none;
+}
+.d-scroll:focus-visible {
+  outline: 2px solid var(--signal, var(--text));
+  outline-offset: 3px;
+}
+.d-wrap[data-scroll="true"] .d-scroll {
+  padding-bottom: 6px;
+  -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, #000 88%, transparent);
+}
+.d-svg {
+  display: block;
+  max-width: none !important;
+  overflow: visible;
+  font-family: var(--c-font-text);
+}
+.d-box {
+  fill: color-mix(in srgb, var(--text) 4%, var(--c-surface));
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.d-node[data-kind="strong"] .d-box {
+  fill: color-mix(in srgb, var(--text) 9%, var(--c-surface));
+  stroke: color-mix(in srgb, var(--text) 70%, transparent);
+  stroke-width: 1.5;
+}
+.d-node[data-kind="ext"] .d-box {
+  fill: transparent;
+  stroke: color-mix(in srgb, var(--text) 38%, transparent);
+  stroke-dasharray: 5 4;
+}
+.d-node[data-kind="pda"] .d-box {
+  fill: color-mix(in srgb, var(--text) 2.5%, var(--c-surface));
+  stroke: color-mix(in srgb, var(--text) 30%, transparent);
+}
+.d-node[data-kind="ghost"] .d-box {
+  fill: transparent;
+  stroke: transparent;
+}
+.d-node[data-kind="note"] .d-box {
+  fill: color-mix(in srgb, var(--text) 6%, transparent);
+  stroke: none;
+}
+.d-title {
+  fill: var(--text);
+  font: 600 13px var(--c-font-text);
+}
+.d-line {
+  fill: var(--text-muted);
+  font: 400 11.5px var(--c-font-text);
+}
+.d-path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.d-arrowhead {
+  fill: var(--text-muted);
+}
+.d-arrowhead-soft {
+  fill: var(--text-dim);
+}
+.d-edge-label {
+  fill: var(--text-muted);
+  font: 500 11px var(--c-font-text);
+  paint-order: stroke;
+  stroke: var(--c-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.d-text {
+  fill: var(--text-muted);
+  font: 400 11.5px var(--c-font-text);
+}
+.d-text-title {
+  fill: var(--text);
+  font: 600 13px var(--c-font-text);
+}
+.d-text-small {
+  font-size: 10.5px;
+}
+.d-text-mono {
+  font: 400 11px var(--c-font-num);
+}
+.d-text-faint {
+  fill: var(--text-dim);
+}
+.d-group-box {
+  fill: color-mix(in srgb, var(--text) 1.5%, transparent);
+  stroke: color-mix(in srgb, var(--text) 22%, transparent);
+  stroke-dasharray: 3 4;
+}
+.d-group-label {
+  fill: var(--text-dim);
+  font: 400 var(--ui-px, 18.6667px) var(--c-font-ui);
+  letter-spacing: var(--label-tracking, 1px);
+  text-transform: uppercase;
+}
+.d-svg[data-draw="pending"] .d-node,
+.d-svg[data-draw="pending"] .d-edge {
+  opacity: 0;
+}
+.d-svg[data-draw="drawn"] .d-node,
+.d-svg[data-draw="drawn"] .d-edge {
+  animation: d-in 0.5s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: calc(var(--d-step, 0) * 70ms);
+}
+@keyframes d-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .c-plot,
+  .d-svg .d-node,
+  .d-svg .d-edge {
+    animation: none !important;
+    clip-path: none !important;
+    opacity: 1 !important;
+  }
+}
+@media print {
+  .c-plot,
+  .d-svg .d-node,
+  .d-svg .d-edge {
+    animation: none !important;
+    clip-path: none !important;
+    opacity: 1 !important;
+  }
+  .c-tip,
+  .c-cross {
+    display: none !important;
+  }
+  .d-wrap[data-scroll="true"] .d-scroll {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .d-scroll {
+    overflow: visible !important;
+  }
+  .c-svg,
+  .d-svg {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}

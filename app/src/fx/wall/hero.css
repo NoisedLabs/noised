@@ -1,0 +1,612 @@
+/*
+ * Home hero (v5.1, "graphite glass"): a two-line headline in front of the
+ * monochrome shield wall, one sentence, two buttons, a verify field and three
+ * live numbers on glass tiles. Two-tone: ink and page colour only, no hue
+ * (the second headline line is a subtle silver). Static CSS only (style-src
+ * 'self'): animated values are keyframes here or custom properties set through
+ * CSSOM. Tokens come from the active theme and font set (styles.css) with
+ * Graphite values as fallbacks. Unlayered on purpose: it overrides the shared
+ * component layer inside the hero.
+ *
+ * Glass has two modes (section[data-glass]):
+ *   "gl"  the wall's WebGL pass draws each pane (frosted wall, refracting
+ *         rim, tint, light) under the element; CSS adds only the rim line,
+ *         a faint sheen and the shadow;
+ *   "css" no WebGL glass (no WebGL, light theme, reduced pipeline): the
+ *         element blurs its own backdrop.
+ */
+
+.hx {
+  --hx-bg: var(--bg, #070707);
+  --hx-panel: var(--panel, #0d0d0d);
+  --hx-line: var(--line, rgb(255 255 255 / 0.1));
+  --hx-line-strong: var(--line-strong, rgb(255 255 255 / 0.16));
+  --hx-text: var(--text, #f5f5f5);
+  --hx-muted: var(--text-muted, #a3a3a3);
+  --hx-dim: var(--text-dim, #737373);
+  /* v5.1 two-tone: the hero's accent is the ink itself (white on Graphite, near-black on Paper); no hue. */
+  --hx-primary: var(--hx-text);
+  --hx-primary-line: color-mix(in srgb, var(--hx-text) 22%, transparent);
+  --hx-on-primary: var(--hx-bg);
+  --hx-amber: var(--amber, #ffd166);
+  --hx-danger: var(--danger, #ff5c7a);
+  --hx-head: var(--font-head, "Manrope Variable", ui-sans-serif, system-ui, sans-serif);
+  --hx-accent: var(--font-accent, var(--hx-head));
+  --hx-body: var(--font-body, "Manrope Variable", ui-sans-serif, system-ui, sans-serif);
+  --hx-num: var(--font-num, var(--hx-head));
+  --hx-ease: var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+  --hx-gutter: var(--gutter, 24px);
+  --hx-max: var(--page-max, 1280px);
+  --hx-top: var(--nav-offset, 112px);
+  /* QA v6: squared like every other v6 surface (V6_READY: no radius > 4px); the wall's glass pass reads it. */
+  --hx-radius: var(--r-glass, 4px);
+  /* Pixel-exact headline steps (V6_READY: 4x >= 1100px, 3x below, 2x below 640px, 1.5x below 380px). Kept local:
+     the shell's --text-hero steps sit on :root inside media queries and lose to :root[data-theme]. */
+  --hx-title-size: var(--px-4, 105.2632px);
+
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-height: max(680px, 100svh);
+  padding-top: calc(var(--hx-top) + clamp(24px, 7vh, 96px));
+  color: var(--hx-text);
+  overflow-x: clip;
+}
+
+/* ------------------------------------------------------------------ stage --- */
+
+.hx-stage {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* The wall fades in under the navbar and out at the bottom in its own shaders (a CSS mask on a canvas that
+   redraws every frame costs a compositing pass per frame). */
+
+/* Legibility: the copy column sits on a soft pool of the page background (the wall is also calmer there). */
+.hx-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(44% 62% at 18% 46%, color-mix(in srgb, var(--hx-bg) 70%, transparent) 0%, transparent 76%),
+    linear-gradient(90deg, color-mix(in srgb, var(--hx-bg) 50%, transparent) 0%, transparent 44%);
+}
+
+/* ------------------------------------------------------------------- copy --- */
+
+.hx-inner {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, var(--hx-max));
+  margin-inline: auto;
+  padding-inline: var(--hx-gutter);
+  pointer-events: none;
+}
+.hx-inner > * {
+  pointer-events: auto;
+}
+
+.hx-copy {
+  width: min(100%, 720px);
+  margin-bottom: clamp(32px, 6vh, 72px);
+}
+
+.hx-title {
+  margin: 0 0 clamp(20px, 2.8vh, 30px);
+  font-family: var(--hx-head);
+  font-weight: var(--head-weight, 760);
+  font-size: var(--hx-title-size);
+  line-height: var(--head-lh, 0.95);
+  letter-spacing: var(--head-tracking, -0.045em);
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  text-wrap: balance;
+}
+.hx-line {
+  display: block;
+  width: fit-content;
+  white-space: nowrap;
+}
+/* The second line (v5.1): a subtle silver, light at the top of the letters and pewter at the baseline. Vertical,
+   so every word carries the same slice and the words can animate on their own layers without breaking the text
+   clip. No glow: the letters stay crisp. */
+.hx-line-grad .nz-text-in {
+  padding: 0.1em 0.04em 0.14em;
+  margin: -0.1em -0.04em -0.14em;
+  background: linear-gradient(180deg, var(--hx-silver-1, #f5f5f5) 18%, var(--hx-silver-2, #9a9a9a) 86%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hx-sub {
+  max-width: min(560px, 50vw);
+  font-family: var(--hx-body);
+  font-weight: var(--body-weight, 450);
+  font-size: clamp(17px, 1.35vw, 20px);
+  line-height: 1.55;
+  letter-spacing: var(--body-tracking, -0.005em);
+  color: var(--hx-muted);
+  text-wrap: pretty;
+}
+
+.hx-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: clamp(26px, 3.6vh, 38px);
+}
+.hx-cta.btn {
+  min-height: 54px;
+  padding-inline: 26px;
+  gap: 12px;
+  font-family: var(--font-ui, var(--hx-body));
+  font-weight: 400;
+  font-size: var(--ui-px, 18.6667px);
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------ glass --- */
+
+.hx .hx-glass {
+  position: relative;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07) 0%, rgb(255 255 255 / 0.04) 100%),
+    color-mix(in srgb, var(--hx-bg) 46%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(120%);
+  backdrop-filter: blur(28px) saturate(120%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 22px 44px -24px rgb(0 0 0 / 0.75);
+  transition:
+    transform 0.35s var(--hx-ease),
+    box-shadow 0.35s var(--hx-ease),
+    background-color 0.35s var(--hx-ease);
+}
+/* The rim: a hairline lit from above (bright at the top edge, fading down the sides). */
+.hx .hx-glass::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.2) 0%, rgb(255 255 255 / 0.1) 38%, rgb(255 255 255 / 0.06) 70%, rgb(255 255 255 / 0.1) 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+/* WebGL glass: the pane itself is drawn by the wall under the element. */
+.hx[data-glass="gl"] .hx-glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.03) 0%, rgb(255 255 255 / 0) 60%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.hx .hx-cta-glass:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 26px 50px -22px rgb(0 0 0 / 0.8);
+}
+.hx .hx-cta-glass:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+.hx .hx-cta-glass {
+  border-radius: var(--r-glass-sm, 3px);
+  color: var(--hx-text);
+}
+.hx .hx-cta-glass:focus-visible {
+  outline: 2px solid var(--hx-primary);
+  outline-offset: 3px;
+}
+
+/* ---------------------------------------------------------- verify field --- */
+
+.hx-verify {
+  position: relative;
+  width: min(100%, 540px);
+  margin-top: 14px;
+}
+.hx-find {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 7px 0 18px;
+  border-radius: var(--r-glass-sm, 3px);
+}
+.hx-find > * {
+  position: relative;
+  z-index: 1;
+}
+.hx .hx-find:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 22px 44px -24px rgb(0 0 0 / 0.75);
+}
+.hx .hx-find:focus-within {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--hx-text) 78%, transparent),
+    0 0 0 6px color-mix(in srgb, var(--hx-text) 12%, transparent),
+    0 22px 44px -24px rgb(0 0 0 / 0.75);
+}
+.hx .hx-find[data-invalid] {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--hx-danger) 85%, transparent),
+    0 22px 44px -24px rgb(0 0 0 / 0.75);
+}
+.hx-find-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--hx-muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  transition: stroke 0.25s;
+}
+.hx-find:focus-within .hx-find-icon {
+  stroke: var(--hx-primary);
+}
+.hx-find-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--hx-text);
+  font: var(--body-weight, 450) 15px/1 var(--hx-body);
+  letter-spacing: -0.005em;
+}
+.hx-find-input::placeholder {
+  color: var(--hx-muted);
+  opacity: 1;
+}
+/* The whole field shows the focus ring (:focus-within above). */
+.hx-find-input:focus-visible {
+  outline: none;
+}
+.hx-find-go {
+  flex: none;
+  height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--hx-primary-line);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--hx-text) 7%, transparent);
+  color: var(--hx-text);
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui, var(--hx-body));
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s,
+    transform 0.2s var(--hx-ease);
+}
+.hx-find-go:hover:not(:disabled) {
+  background: var(--hx-primary);
+  color: var(--hx-on-primary);
+}
+.hx-find-go:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.hx-find-go:focus-visible {
+  outline: 2px solid var(--hx-primary);
+  outline-offset: 2px;
+}
+.hx-find-go:disabled {
+  border-color: var(--hx-line-strong);
+  background: transparent;
+  color: var(--hx-muted);
+  cursor: default;
+}
+.hx-find-error {
+  margin-top: 10px;
+  padding-inline: 18px;
+  font: 400 14px/1.5 var(--hx-body);
+  color: var(--hx-danger);
+}
+
+/* ------------------------------------------------------------ stats row --- */
+
+.hx-foot {
+  position: relative;
+  margin-top: auto;
+}
+.hx-stats {
+  position: relative;
+  padding-bottom: clamp(16px, 3vh, 36px);
+}
+.hx-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+/* A tile: the pixel sprite (16 x 16 at 4x) on the left, the label, number and caption beside it. */
+.hx-stat {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 18px;
+  align-items: center;
+  min-width: 0;
+  padding: 16px 22px 16px 18px;
+  border-radius: var(--hx-radius);
+}
+.hx-stat > :not(.hx-stat-art) {
+  grid-column: 2;
+}
+.hx-stat > * {
+  position: relative;
+  z-index: 1;
+}
+/* Small pixel labels: Jersey 10 at its native size (V6_READY), uppercase, whole-pixel tracking. */
+.hx-stat-label {
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui, var(--hx-body));
+  letter-spacing: var(--label-tracking, 1px);
+  text-transform: uppercase;
+  color: var(--hx-muted);
+}
+.hx-stat-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 0 4px;
+  font-family: var(--hx-num);
+  font-weight: 400;
+  font-size: var(--px-1h, 39.4737px);
+  line-height: 1;
+  letter-spacing: var(--num-tracking, -0.03em);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+  color: var(--hx-text);
+}
+.hx-stat-of {
+  margin-inline: 0.06em;
+  color: var(--hx-muted);
+  font-weight: 500;
+}
+.hx-stat-wait {
+  color: var(--hx-dim);
+  animation: hx-pulse 1.2s ease-in-out infinite;
+}
+.hx-stat-unit {
+  font: 400 var(--ui-px, 18.6667px) / 1 var(--font-ui, var(--hx-body));
+  letter-spacing: var(--label-tracking, 1px);
+  color: var(--hx-muted);
+}
+.hx-stat-caption {
+  font: var(--body-weight, 450) 14px/1.4 var(--hx-body);
+  color: var(--hx-muted);
+}
+.hx-stats-error {
+  margin-top: 10px;
+  font: 400 14px/1.4 var(--hx-body);
+  color: var(--hx-amber);
+}
+
+/* -------------------------------------------------------------- entrance --- */
+/* The headline resolves out of noise (fx/noise ResolveText); the sentence, the buttons, the field and the tiles then
+   resolve in, one after another (fx/noise useNoiseReveal, Hero.tsx). Both only set a mask and opacity (CSSOM). */
+
+/* -------------------------------------------------------------- keyframes --- */
+
+@keyframes hx-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ------------------------------------------------------------- light theme --- */
+
+:root[data-theme="light"] .hx-scrim {
+  background:
+    radial-gradient(44% 62% at 18% 46%, color-mix(in srgb, var(--hx-bg) 88%, transparent) 0%, transparent 76%),
+    linear-gradient(90deg, color-mix(in srgb, var(--hx-bg) 70%, transparent) 0%, transparent 46%),
+    linear-gradient(0deg, color-mix(in srgb, var(--hx-bg) 82%, transparent) 0%, transparent 26%);
+}
+/* Paper: the second line in graphite (near-black at the top, pewter at the baseline); white glass. */
+:root[data-theme="light"] .hx {
+  --hx-silver-1: #0a0a0a;
+  --hx-silver-2: #5c5c5c;
+}
+:root[data-theme="light"] .hx .hx-glass {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.74) 0%, rgb(255 255 255 / 0.6) 100%),
+    color-mix(in srgb, var(--hx-bg) 30%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 20px 40px -26px rgb(0 0 0 / 0.22);
+}
+:root[data-theme="light"] .hx .hx-glass::before {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.95) 0%, rgb(10 10 10 / 0.08) 50%, rgb(10 10 10 / 0.12) 100%);
+}
+
+/* ------------------------------------------------------------- responsive --- */
+
+@media (max-width: 1099px) {
+  .hx {
+    --hx-title-size: var(--px-3, 78.9474px);
+  }
+}
+@media (max-width: 1100px) {
+  .hx-stat {
+    padding-inline: 18px;
+  }
+}
+
+/* Portrait tablets: the wall is a band across the top (engine.ts frames it there); the copy starts under it. */
+@media (min-width: 641px) and (max-aspect-ratio: 21/20) {
+  .hx {
+    padding-top: calc(var(--hx-top) + min(48vw, 560px));
+  }
+  .hx-scrim {
+    background:
+      linear-gradient(180deg, transparent 0, transparent calc(var(--hx-top) + min(36vw, 420px)), color-mix(in srgb, var(--hx-bg) 74%, transparent) calc(var(--hx-top) + min(50vw, 580px)), color-mix(in srgb, var(--hx-bg) 58%, transparent) 100%);
+  }
+  .hx-sub {
+    max-width: 600px;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Phones: the wall is a band across the top; the copy starts over its lower edge. */
+  .hx {
+    min-height: max(640px, 100svh);
+    padding-top: calc(var(--hx-top) + 46vw);
+  }
+  .hx-scrim {
+    background: linear-gradient(180deg, transparent 0, transparent calc(var(--hx-top) + 30vw), color-mix(in srgb, var(--hx-bg) 72%, transparent) calc(var(--hx-top) + 56vw), color-mix(in srgb, var(--hx-bg) 56%, transparent) 100%);
+  }
+  :root[data-theme="light"] .hx-scrim {
+    background: linear-gradient(180deg, transparent 0, transparent calc(var(--hx-top) + 30vw), color-mix(in srgb, var(--hx-bg) 84%, transparent) calc(var(--hx-top) + 56vw), color-mix(in srgb, var(--hx-bg) 70%, transparent) 100%);
+  }
+  .hx {
+    --hx-title-size: var(--px-2, 52.6316px);
+  }
+  .hx-sub {
+    max-width: none;
+    font-size: 17px;
+  }
+  .hx-ctas {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .hx-cta.btn {
+    width: 100%;
+  }
+  .hx-verify {
+    width: 100%;
+  }
+  .hx-find {
+    padding-left: 16px;
+  }
+  /* 16px keeps iOS from zooming on focus. */
+  .hx-find-input {
+    font-size: 16px;
+  }
+  .hx-copy {
+    margin-bottom: 32px;
+  }
+  .hx-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .hx-stat:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+  .hx-stat {
+    padding: 16px 16px;
+    border-radius: var(--hx-radius);
+  }
+  .hx-stat-value {
+    font-size: var(--px-1h, 39.4737px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hx *,
+  .hx *::before,
+  .hx *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+html[data-motion="still"] .hx :is(.hx-stat-wait) {
+  animation: none;
+}
+
+/* Short laptop screens (768/720 tall): tighten the hero so the stats row stays on the first screen. */
+@media (max-height: 820px) and (min-width: 641px) {
+  .hx {
+    padding-top: calc(var(--hx-top) + clamp(16px, 4vh, 40px));
+  }
+  /* Pixel-exact sizes only (fractional sizes smear the pixel face). */
+  .hx {
+    --hx-title-size: var(--px-3, 78.9474px);
+  }
+  .hx-ctas {
+    margin-top: 20px;
+  }
+  .hx-cta.btn,
+  .hx-find {
+    min-height: 50px;
+    height: 50px;
+  }
+  .hx-find-go {
+    height: 38px;
+  }
+  .hx-copy {
+    margin-bottom: 24px;
+  }
+  .hx-stat {
+    padding-block: 12px;
+  }
+  .hx-stat-value {
+    margin: 4px 0 2px;
+    font-size: var(--px-1h, 39.4737px);
+  }
+}
+
+/* Phones up to 479px: the 1.5x headline ("token launches." must fit 390px; after the 640px step, so it wins). */
+@media (max-width: 479px) {
+  .hx {
+    --hx-title-size: var(--px-1h, 39.4737px);
+  }
+}
+
+/* The tiles' dot icons (components/landing/noise/stats.ts): top-right corner, quiet. */
+.hx-stat {
+  position: relative;
+}
+.hx-stat-art {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+}
+/* Phones: the sprite goes back to the tile's top-right corner (small) and the number steps down a size, so the
+   two-column tiles never clip "305.4 SOL". */
+@media (max-width: 640px) {
+  .hx-stat {
+    display: block;
+  }
+  .hx-stat-art {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+  }
+}
+@media (max-width: 479px) {
+  .hx-stat-value {
+    font-size: var(--px-1, 26.3158px);
+  }
+  .hx-stat-label {
+    padding-right: 34px;
+  }
+}

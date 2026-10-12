@@ -1,0 +1,754 @@
+{
+  "address": "BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9",
+  "metadata": {
+    "name": "noised_shield",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Opt-in privacy: wrap a token 1:1 into a Token-2022 zToken with confidential balances"
+  },
+  "instructions": [
+    {
+      "name": "create_shield",
+      "docs": [
+        "Create the shield, zToken mint and escrow for `base_mint`.",
+        "Permissionless; fails if a shield for this base mint already exists."
+      ],
+      "discriminator": [
+        47,
+        38,
+        125,
+        62,
+        228,
+        1,
+        164,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "shield",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  104,
+                  105,
+                  101,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "shield_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  104,
+                  105,
+                  101,
+                  108,
+                  100,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "z_mint",
+          "docs": [
+            "and verified afterwards (`zmint::verify`)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  122,
+                  45,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "shield_authority"
+              },
+              {
+                "kind": "account",
+                "path": "base_token_program"
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "base_token_program"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "unwrap",
+      "docs": [
+        "Burn `amount` zTokens from the user's (public) zToken balance and",
+        "release `amount` base tokens from the escrow. A base-mint transfer fee",
+        "is charged to the unwrapper. Transfer-hook accounts of the base mint",
+        "go in remaining accounts."
+      ],
+      "discriminator": [
+        126,
+        175,
+        198,
+        14,
+        212,
+        69,
+        50,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "docs": [
+            "Owner (or delegate) of `user_z`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "shield",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  104,
+                  105,
+                  101,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "shield_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  104,
+                  105,
+                  101,
+                  108,
+                  100,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint",
+          "relations": [
+            "shield"
+          ]
+        },
+        {
+          "name": "z_mint",
+          "writable": true,
+          "relations": [
+            "shield"
+          ]
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "relations": [
+            "shield"
+          ]
+        },
+        {
+          "name": "user_base",
+          "docs": [
+            "Base tokens go here (any base token account)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_z",
+          "docs": [
+            "zTokens are burned from here."
+          ],
+          "writable": true
+        },
+        {
+          "name": "base_token_program",
+          "relations": [
+            "shield"
+          ]
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "wrap",
+      "docs": [
+        "Lock `amount` base tokens in the escrow and mint zTokens equal to what",
+        "the escrow actually received (less than `amount` under a transfer",
+        "fee). Transfer-hook accounts of the base mint go in remaining accounts."
+      ],
+      "discriminator": [
+        178,
+        40,
+        10,
+        189,
+        228,
+        129,
+        186,
+        140
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "docs": [
+            "Owner (or delegate) of `user_base`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "shield",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  104,
+                  105,
+                  101,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "shield_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  104,
+                  105,
+                  101,
+                  108,
+                  100,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint",
+          "relations": [
+            "shield"
+          ]
+        },
+        {
+          "name": "z_mint",
+          "writable": true,
+          "relations": [
+            "shield"
+          ]
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "relations": [
+            "shield"
+          ]
+        },
+        {
+          "name": "user_base",
+          "docs": [
+            "Base tokens come from here."
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_z",
+          "docs": [
+            "zTokens go here (any zToken account)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "base_token_program",
+          "relations": [
+            "shield"
+          ]
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Shield",
+      "discriminator": [
+        122,
+        210,
+        171,
+        132,
+        124,
+        235,
+        186,
+        248
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ShieldCreated",
+      "discriminator": [
+        233,
+        222,
+        75,
+        70,
+        102,
+        75,
+        65,
+        67
+      ]
+    },
+    {
+      "name": "Unwrapped",
+      "discriminator": [
+        25,
+        86,
+        93,
+        80,
+        145,
+        113,
+        86,
+        93
+      ]
+    },
+    {
+      "name": "Wrapped",
+      "discriminator": [
+        11,
+        127,
+        145,
+        31,
+        206,
+        134,
+        73,
+        130
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UnsupportedExtension",
+      "msg": "Base mint has a Token-2022 extension the shield does not accept"
+    },
+    {
+      "code": 6001,
+      "name": "MalformedBaseMint",
+      "msg": "Base mint's Token-2022 data could not be parsed"
+    },
+    {
+      "code": 6002,
+      "name": "ZeroAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6003,
+      "name": "NothingReceived",
+      "msg": "The escrow received no tokens (the transfer fee took everything)"
+    },
+    {
+      "code": 6004,
+      "name": "Undercollateralized",
+      "msg": "zToken supply exceeds the escrow balance"
+    },
+    {
+      "code": 6005,
+      "name": "AccountingMismatch",
+      "msg": "Minted or burned zTokens do not match the escrow balance change"
+    },
+    {
+      "code": 6006,
+      "name": "ZMintInUse",
+      "msg": "zToken mint address is already in use"
+    },
+    {
+      "code": 6007,
+      "name": "ZMintMisconfigured",
+      "msg": "zToken mint failed its post-creation checks"
+    },
+    {
+      "code": 6008,
+      "name": "SameAccount",
+      "msg": "Source and destination token accounts must differ"
+    },
+    {
+      "code": 6009,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "Shield",
+      "docs": [
+        "One shield per base mint. Written once by `create_shield`; no instruction",
+        "modifies or closes it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "authority_bump",
+            "type": "u8"
+          },
+          {
+            "name": "z_mint_bump",
+            "type": "u8"
+          },
+          {
+            "name": "decimals",
+            "docs": [
+              "Decimals of both the base mint and the zToken."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "base_token_program",
+            "docs": [
+              "SPL Token or Token-2022: the program that owns `base_mint`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "z_mint",
+            "docs": [
+              "Token-2022 zToken mint (PDA `[\"z-mint\", base_mint]`)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow",
+            "docs": [
+              "ATA(shield authority, base_mint, base_token_program)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ShieldCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "shield",
+            "type": "pubkey"
+          },
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "base_token_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "z_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "decimals",
+            "type": "u8"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Unwrapped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "shield",
+            "type": "pubkey"
+          },
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "zTokens burned and base tokens released (before any base transfer fee)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "z_supply",
+            "type": "u64"
+          },
+          {
+            "name": "escrow_balance",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Wrapped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "shield",
+            "type": "pubkey"
+          },
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Base tokens sent by the user."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "minted",
+            "docs": [
+              "zTokens minted: what the escrow received."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "z_supply",
+            "type": "u64"
+          },
+          {
+            "name": "escrow_balance",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

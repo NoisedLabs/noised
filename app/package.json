@@ -1,0 +1,55 @@
+{
+  "name": "@noisedlabs/app",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Noised web app, the quantum security layer for Solana (Launch, Vault, Shield, Verify): static, IPFS-deployable, strict CSP, no third-party scripts.",
+  "homepage": "https://noised.fun",
+  "bugs": {
+    "url": "https://github.com/NoisedLabs/noised/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NoisedLabs/noised.git",
+    "directory": "app"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/gen-docs-reference.mjs && tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b",
+    "test": "node scripts/gen-docs-reference.mjs && vitest run",
+    "docs:reference": "node scripts/gen-docs-reference.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "@noisedlabs/sdk": "file:../sdk",
+    "@solana/wallet-adapter-base": "0.9.27",
+    "@solana/wallet-adapter-react": "0.15.39",
+    "@solana/web3.js": "1.98.4",
+    "bs58": "6.0.0",
+    "buffer": "6.0.3",
+    "lucide-react": "1.49.0",
+    "motion": "13.5.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router": "7.18.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "22.20.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.3"
+  }
+}
