@@ -56,19 +56,18 @@ sha256sum launchpad.so
 
 Repeat with each program ID. The deploys used `--max-len` equal to the `.so` size, so the dump is exactly the deployed file.
 
-**The program builds attached to this release.** If this release has `.so` files, `SHA256SUMS` and `EXECUTABLE_HASHES`, they were built by the [release workflow](https://github.com/NoisedLabs/noised/blob/main/.github/workflows/release.yml) with `solana-verify` 0.5.2 (Docker, deterministic, SBPF v3) from the tagged commit, each with a signed build-provenance attestation:
+**The program files attached to this release are the exact devnet binaries.** `devnet-noised_<program>.so` are byte-for-byte the files deployed on devnet (built before the rename, so their source paths and the vault's payout memo still say `phalanx`; instructions, accounts, seeds, errors, events and signature domain tags are identical to the renamed source). `SHA256SUMS` lists their hashes, and they equal the on-chain dumps above:
 
 ```bash
 sha256sum -c SHA256SUMS
-gh attestation verify noised_launchpad.so --repo NoisedLabs/noised
-solana-verify get-program-hash -u <cluster> <program id>   # equals the program's line in EXECUTABLE_HASHES only if that exact build is deployed
+solana program dump <program id> dump.so -u devnet && sha256sum dump.so   # same hash as devnet-noised_<program>.so
 ```
 
-**These release builds are not the devnet binaries.** The devnet programs were built before the rename, and a build of the renamed source is not byte-identical: the source paths compiled into the programs changed (`programs/noised-*` instead of `programs/phalanx-*`), and so did the vault's payout memo (`noised-vault payout`; devnet's vault writes `phalanx-vault payout`). Instructions, discriminators, accounts, PDA seeds, errors, events and signature domain tags are unchanged, so SDK 0.9.0, the app and the MCP server work with the deployed programs. Mainnet will be deployed from verifiable builds of a tagged commit, and the deployed hashes will be published next to them.
+A deterministic, attested build of the renamed source (made by the [release workflow](https://github.com/NoisedLabs/noised/blob/main/.github/workflows/release.yml) with `solana-verify`) comes with the mainnet release; it will not be byte-identical to these devnet files, for the reasons above.
 
 **To reproduce a build yourself:** Agave CLI 4.3.0 (platform-tools v1.57), Rust 1.98.0, then `cargo-build-sbf --manifest-path programs/<program>/Cargo.toml --arch v3`, or `solana-verify build --library-name <program> -- --arch v3` for a deterministic Docker build. Details: [OPERATIONS.md, Verifiable builds](https://github.com/NoisedLabs/noised/blob/main/docs/OPERATIONS.md#verifiable-builds-linux-ci).
 
-**The npm packages** are published from the release workflow with npm provenance. In your project, `npm audit signatures` checks that the packages you installed were built from this repository.
+**The npm packages** [`@noisedlabs/sdk`](https://www.npmjs.com/package/@noisedlabs/sdk) 0.9.0 and [`@noisedlabs/mcp`](https://www.npmjs.com/package/@noisedlabs/mcp) 0.2.0 were published by hand for this first release (npm may still be releasing them from its staged-publishing review). Later releases are published from the release workflow with npm provenance, so `npm audit signatures` can check that the packages you installed were built from this repository.
 
 ## Testing and reviews behind this release
 
