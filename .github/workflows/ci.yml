@@ -103,7 +103,9 @@ jobs:
 
       - name: Build programs (SBPF v3)
         env:
-          CARGO_TARGET_DIR: target-sbf
+          # Absolute: cargo-build-sbf runs cargo from the program's directory, so a relative target dir
+          # would land under programs/<program>/ while the tool looks for the .so under the repository root.
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target-sbf
         run: |
           for p in noised-hook noised-vault noised-launchpad noised-shield noised-autopilot; do
             cargo-build-sbf --manifest-path "programs/$p/Cargo.toml" --arch v3 --tools-version "$PLATFORM_TOOLS_VERSION"
