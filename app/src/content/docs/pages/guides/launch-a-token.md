@@ -185,7 +185,7 @@ await sendAndConfirm(conn, await wallet.signTransaction(tx));
 
 - **Commit window** (your `open_delay_secs`): anyone, you included, commits SOL to the batch. You get no allocation and no head start; commit like everyone else if you want tokens.
 - **Execution window** (10 minutes): make sure `execute_batch` runs. The app sends it; [run a keeper](/docs/guides/keeper) for certainty. If it never runs, everyone is refunded in full and trading opens without a batch.
-- **Guard** (your `guard_secs`): the rules you chose apply; sells always pass.
+- **Guard** (your `guard_secs`): the rules you chose apply; sells always pass. Your own launch rules never apply to holders moving tokens through the Noised quantum vault or the Shield (the built-in guard limits still do), so a rule on wallet-to-wallet transfers or on who may hold can be routed around: wrap into the Shield, pass the zTokens on, unwrap.
 - **Fees:** anyone can crank `claim_fees` and `distribute` at any time; your share goes to the recipients you fixed.
 :::
 

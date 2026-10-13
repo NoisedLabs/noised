@@ -42,12 +42,14 @@
 //!    token is burned in the same instruction; the active graph's
 //!    recipients' canonical wSOL accounts (a recipient without one is
 //!    skipped, its share stays: nobody pays for its account); the caller's
-//!    tip account, at most `TIP_LAMPORTS` per run (a partial buyback: its
-//!    share of it), 10% of what the run moved (burns valued at nothing
-//!    before graduation, after it at the lower of the reference and the
-//!    lowest observed price) and `TIP_EPOCH_CAP` per day, never more than
-//!    the action left (`cpi.rs`, `run.rs`; host `invariant_tests`, LiteSVM
-//!    `invariants.rs`).
+//!    tip account, at most `TIP_LAMPORTS` per `run` instruction (a partial
+//!    buyback: its share of it; the leg that completes a split run is not
+//!    partial, so a node run split into partial buybacks earns up to about
+//!    two tips, which `audit4.rs` asserts), 10% of what the run moved
+//!    (burns valued at nothing before graduation, after it at the lower of
+//!    the reference and the lowest observed price) and `TIP_EPOCH_CAP` per
+//!    day, never more than the action left (`cpi.rs`, `run.rs`; host
+//!    `invariant_tests`, LiteSVM `invariants.rs`).
 //! 2. The treasury never sells the token: the only swap's input is the
 //!    treasury's wSOL account, its output the treasury's token account.
 //! 3. No treasury account is closed, delegated or re-owned, and the only
