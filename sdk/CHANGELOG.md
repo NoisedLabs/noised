@@ -12,6 +12,13 @@ The autopilot program now judges a node's price condition across the reference a
 - New: `conditionPrices(reference, observed)` (the range price conditions must hold across), `graphConditionOver` / `graphRunnableOver` and the `PriceRange` type (the crate's `Graph::condition_over` / `runnable_over`), `evalConditionBounded` (three-valued evaluation), `observedPrices` (the program's `reference::observed`). `graphCondition` / `graphRunnable` (one price) are unchanged.
 - `nodeCondition`, `nodeStatus`, `findDueNodes` and `simulateGraph` decide price conditions this way, so a step is due only if the program would accept it; `explainGraph` says "the price has stayed at least / at most ..." and states the rule among the guarantees.
 
+### Changed: the price guarantee says who can delay a price-gated step (follow-up review L-1)
+
+Text only; no behaviour changes. The rule above means anyone willing to pay trading fees can keep a price condition false, never true, by putting one trade across the limit, `update_price` and the trade back into every 15-minute bucket, and so delay any step that waits on the price (a burn or a payout as much as a buyback) for as long as they pay (THREAT_MODEL R37).
+
+- `explainGraph`'s guarantee line for graphs that read the price now says the price must have stayed at or above (or at or below) the limit across the last 15 to 30 minutes, and that someone willing to pay trading fees can delay a step that waits on the price, never trigger it.
+- The `when.priceLte` / `when.priceGte` docs say the same, and advise keeping a limit well away from the market price and not gating a payout that must happen on time on the price alone.
+
 ## [0.9.0] - 2026-10-13: first public release (renamed to Noised)
 
 The first version published to npm, as `@noisedlabs/sdk`. It contains the rename below, the audit-round-4 client fixes listed under "0.9.0 (development)" and everything from the unreleased 0.1-0.8 development versions.

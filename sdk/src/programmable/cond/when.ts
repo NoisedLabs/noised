@@ -96,11 +96,17 @@ export const when = {
   graduated: (): Condition => C({ op: "graduated" }),
   /**
    * The price has stayed at most `p` SOL per token (number/string) or sqrt Q64 (bigint): the reference price and
-   * every price observed in the last 15 to 30 minutes, the run's own included (review F1).
+   * every price observed in the last 15 to 30 minutes, the run's own included (review F1). Someone willing to pay
+   * trading fees can keep it false (one pump above `p` and back every 15 minutes), never make it true: keep `p` well
+   * away from the market price, and do not gate a payout that must happen on time on the price alone.
    */
   priceLte: (p: number | string | bigint): Condition =>
     C({ op: "priceLte", price: typeof p === "bigint" ? { sqrtPriceQ64: p } : { sol: String(p) } }),
-  /** The price has stayed at least `p`: the reference price and every price observed in the last 15 to 30 minutes. */
+  /**
+   * The price has stayed at least `p`: the reference price and every price observed in the last 15 to 30 minutes.
+   * Like `priceLte`, it can be held false by someone willing to pay trading fees (one dump below `p` and back every
+   * 15 minutes), never made true.
+   */
   priceGte: (p: number | string | bigint): Condition =>
     C({ op: "priceGte", price: typeof p === "bigint" ? { sqrtPriceQ64: p } : { sol: String(p) } }),
   /** It is before `t` (Date, unix seconds, or "2026-12-01"). */

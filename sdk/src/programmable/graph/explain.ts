@@ -62,7 +62,8 @@ function leafText(g: Graph, c: Cond, neg: boolean, dec: number): string | null {
     case "priceLte":
     case "priceGte": {
       // The program checks the reference price (it follows the pool slowly) and every price seen in the
-      // last 15 to 30 minutes, and all of them must pass, under NOT too (review F1): "has stayed".
+      // last 15 to 30 minutes, and all of them must pass, under NOT too (review F1): "has stayed". So one
+      // trade across the limit and back can keep it false, never true (follow-up review L-1).
       const p = "sol" in c.price ? c.price.sol : sqrtPriceQ64ToPriceText(c.price.sqrtPriceQ64, dec);
       const atMost = (c.op === "priceLte") !== neg;
       return `the price has stayed ${atMost ? (neg ? "above" : "at most") : neg ? "below" : "at least"} ${p} SOL per token`;
@@ -175,7 +176,7 @@ export function explainGraph(input: Graph | Uint8Array, opts: ExplainGraphOption
   if (opts.guarantees ?? true) {
     if (readsPrice(g)) {
       lines.push(
-        "A price check passes only if the reference price and every price seen in the last 15 to 30 minutes pass it, so a brief spike or dip can hold a step back but never set it off. The reference price starts at the launch's migration price and follows the pool's price slowly: it rises at most 5% an hour and falls at once.",
+        "A price check passes only if the reference price and every price seen in the last 15 to 30 minutes pass it: the price must have stayed at or above (or at or below) the limit across that time. So a brief spike or dip can hold a step back but never set it off: someone willing to pay trading fees can delay a step that waits on the price, never trigger it. The reference price starts at the launch's migration price and follows the pool's price slowly: it rises at most 5% an hour and falls at once.",
       );
     }
     const pays = g.recipients.length > 0 ? ", pay the recipients listed above" : "";
