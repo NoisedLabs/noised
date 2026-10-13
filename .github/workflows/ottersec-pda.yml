@@ -1,0 +1,157 @@
+name: ottersec-pda
+
+# OtterSec verified builds of the five mainnet programs, run by hand. It holds
+# no key and uses no secret:
+#
+# - step `export`: for each program, `solana-verify export-pda-tx` prints the
+#   unsigned transaction that writes the build parameters (this repository, the
+#   commit, `--library-name <lib> --arch v3`, the same arguments release.yml
+#   builds with) to the OtterSec verify PDA of the uploader. The transactions
+#   are uploaded as the `ottersec-pda-tx` artifact. The upgrade authority
+#   decodes and checks each one offline, sets a fresh blockhash, signs and
+#   sends it; the key never comes near CI.
+# - step `submit`: once the PDAs are on chain, `solana-verify remote
+#   submit-job` queues OtterSec's remote build of each program and waits for
+#   the result (verified or not, with both hashes).
+#
+# Every action is pinned to a commit SHA and solana-verify to an exact version.
+# Keep RUST_TOOLCHAIN and SOLANA_VERIFY_VERSION equal to release.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "export (unsigned PDA transactions) or submit (OtterSec remote jobs)"
+        required: true
+        type: choice
+        options: [export, submit]
+      commit:
+        description: "Full commit hash the programs were built and deployed from"
+        required: true
+        type: string
+      uploader:
+        description: "Upgrade authority that signs the PDA transactions (base58)"
+        required: true
+        type: string
+      program:
+        description: "Only this library (e.g. noised_hook); empty for all five"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ottersec-pda-${{ github.ref }}-${{ inputs.step }}
+  cancel-in-progress: false
+
+env:
+  RUST_TOOLCHAIN: "1.98.0"
+  SOLANA_VERIFY_VERSION: "0.5.2"
+  RPC_URL: https://api.mainnet-beta.solana.com
+  REPO_URL: https://github.com/${{ github.repository }}
+  COMMIT: ${{ inputs.commit }}
+  UPLOADER: ${{ inputs.uploader }}
+  ONLY: ${{ inputs.program }}
+  CARGO_TERM_COLOR: always
+
+jobs:
+  export:
+    name: export unsigned PDA transactions
+    if: inputs.step == 'export'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Inputs
+        run: |
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::commit must be a full 40-hex hash"; exit 1; }
+          [[ "$UPLOADER" =~ ^[1-9A-HJ-NP-Za-km-z]{32,44}$ ]] || { echo "::error::uploader is not a base58 address"; exit 1; }
+          [[ -z "$ONLY" || "$ONLY" =~ ^noised_(launchpad|autopilot|shield|vault|hook)$ ]] || { echo "::error::unknown program $ONLY"; exit 1; }
+          echo "repo $REPO_URL commit $COMMIT uploader $UPLOADER only '${ONLY}'"
+      - name: Install Rust and solana-verify
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+          cargo install solana-verify --version "$SOLANA_VERIFY_VERSION" --locked
+          solana-verify --version
+      - name: export-pda-tx for each program
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/ottersec-pda-tx"
+          mkdir -p "$out"
+          cd "$RUNNER_TEMP"
+          printf '{"repo_url":"%s","commit":"%s","uploader":"%s","solana_verify":"%s","programs":{' \
+            "$REPO_URL" "$COMMIT" "$UPLOADER" "$SOLANA_VERIFY_VERSION" > "$out/manifest.json"
+          sep=""
+          for pair in \
+            noised_launchpad:CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc \
+            noised_autopilot:D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx \
+            noised_shield:BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9 \
+            noised_vault:7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb \
+            noised_hook:cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia; do
+            lib="${pair%%:*}"; id="${pair##*:}"
+            if [ -n "$ONLY" ] && [ "$ONLY" != "$lib" ]; then continue; fi
+            echo "::group::$lib $id"
+            solana-verify -u "$RPC_URL" export-pda-tx "$REPO_URL" \
+              --program-id "$id" --uploader "$UPLOADER" --commit-hash "$COMMIT" \
+              --library-name "$lib" --arch v3 --encoding base64 | tee "$out/$lib.log"
+            echo "::endgroup::"
+            tx=$(tail -n 1 "$out/$lib.log")
+            [[ "$tx" =~ ^[A-Za-z0-9+/]+=*$ ]] || { echo "::error::$lib: last line is not a base64 transaction"; exit 1; }
+            printf '%s\n' "$tx" > "$out/$lib.tx.b64"
+            printf '%s"%s":{"program_id":"%s","tx_base64":"%s"}' "$sep" "$lib" "$id" "$tx" >> "$out/manifest.json"
+            sep=","
+          done
+          echo '}}' >> "$out/manifest.json"
+          ls -l "$out"
+          cat "$out/manifest.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ottersec-pda-tx
+          path: ottersec-pda-tx/
+          if-no-files-found: error
+          retention-days: 7
+
+  submit:
+    name: submit ${{ matrix.lib }}
+    if: inputs.step == 'submit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { lib: noised_launchpad, id: CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc }
+          - { lib: noised_autopilot, id: D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx }
+          - { lib: noised_shield, id: BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9 }
+          - { lib: noised_vault, id: 7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb }
+          - { lib: noised_hook, id: cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia }
+    env:
+      LIB: ${{ matrix.lib }}
+      PROGRAM_ID: ${{ matrix.id }}
+    steps:
+      - name: Inputs
+        id: sel
+        run: |
+          [[ "$UPLOADER" =~ ^[1-9A-HJ-NP-Za-km-z]{32,44}$ ]] || { echo "::error::uploader is not a base58 address"; exit 1; }
+          if [ -n "$ONLY" ] && [ "$ONLY" != "$LIB" ]; then echo "run=false" >> "$GITHUB_OUTPUT"; else echo "run=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Install Rust and solana-verify
+        if: steps.sel.outputs.run == 'true'
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+          cargo install solana-verify --version "$SOLANA_VERIFY_VERSION" --locked
+          solana-verify --version
+      - name: The uploader's PDA on chain
+        if: steps.sel.outputs.run == 'true'
+        run: solana-verify -u "$RPC_URL" get-program-pda --program-id "$PROGRAM_ID" --signer "$UPLOADER"
+      - name: Remote job (waits for OtterSec's build)
+        if: steps.sel.outputs.run == 'true'
+        run: solana-verify -u "$RPC_URL" remote submit-job --program-id "$PROGRAM_ID" --uploader "$UPLOADER"
+      - name: Verification status
+        if: always() && steps.sel.outputs.run == 'true'
+        run: |
+          solana-verify remote get-status --program-id "$PROGRAM_ID" || true
+          curl -sS "https://verify.osec.io/status/$PROGRAM_ID" || true
+          echo
