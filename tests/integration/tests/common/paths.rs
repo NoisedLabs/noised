@@ -43,15 +43,17 @@ const OUR_PROGRAMS: &[OurProgram] = &[
     },
     OurProgram {
         so_name: "noised_hook",
-        sources: &["programs/noised-hook"],
+        sources: &["programs/noised-hook", "crates/noised-onchain"],
     },
-    // The launchpad compiles the hook crate in (`noised-hook` with `cpi`)
-    // and verifies attestations with `noised-lmots` (PQ v2).
+    // The launchpad compiles the hook crate in (`noised-hook` with `cpi`,
+    // which depends on `noised-onchain`) and verifies attestations with
+    // `noised-lmots` (PQ v2).
     OurProgram {
         so_name: "noised_launchpad",
         sources: &[
             "programs/noised-launchpad",
             "programs/noised-hook",
+            "crates/noised-onchain",
             "crates/noised-lmots",
         ],
     },

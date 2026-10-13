@@ -2205,11 +2205,13 @@ fn creator_rules_cost_only_the_transfers_they_decide() {
             format!("{without} without rules, {with} with rules"),
         );
     }
-    // Decoding the 66 more bytes of the ruled policy costs a little; reading
-    // the instructions sysvar and the supply would cost far more.
+    // Decoding the 66 more bytes of the ruled policy costs a little (nothing
+    // since the hook reads the policy in place); reading the instructions
+    // sysvar and the supply would cost more (about 120 CU since the hook is
+    // written without Anchor, about 1,700 before), hence the margins.
     for i in [0, 3, 4] {
         assert!(
-            cu[i][1] <= cu[i][0] + 150,
+            cu[i][1] <= cu[i][0] + 50,
             "{}: {} with rules, {} without",
             cases[i],
             cu[i][1],
@@ -2221,7 +2223,7 @@ fn creator_rules_cost_only_the_transfers_they_decide() {
     // about what a claim does.
     for i in [1, 2] {
         assert!(
-            cu[i][0] <= cu[3][0] + 150,
+            cu[i][0] <= cu[3][0] + 60,
             "{} without rules: {} (a claim: {})",
             cases[i],
             cu[i][0],

@@ -1800,12 +1800,18 @@ name = "noised-hook"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
- "anchor-spl",
+ "noised-onchain",
  "noised-rules",
- "solana-instructions-sysvar 3.0.1",
- "spl-discriminator",
- "spl-tlv-account-resolution",
- "spl-transfer-hook-interface",
+ "pinocchio",
+]
+
+[[package]]
+name = "noised-onchain"
+version = "0.1.0"
+dependencies = [
+ "pinocchio",
+ "solana-address 2.7.0",
+ "solana-sha256-hasher",
 ]
 
 [[package]]
@@ -1990,6 +1996,19 @@ name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
+
+[[package]]
+name = "pinocchio"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6cababcb62a2e739c7078ae16eda02789a6e3edd21bbdded864e85c38a7914d"
+dependencies = [
+ "solana-account-view",
+ "solana-address 2.7.0",
+ "solana-define-syscall 5.2.0",
+ "solana-instruction-view",
+ "solana-program-error",
+]
 
 [[package]]
 name = "pkcs8"
@@ -2419,6 +2438,16 @@ dependencies = [
  "solana-address 2.7.0",
  "solana-program-error",
  "solana-program-memory",
+]
+
+[[package]]
+name = "solana-account-view"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1acd7ff34cf7f09e238921b5aa64d9e517b2e92642c153a5dc15d99c8e25af3d"
+dependencies = [
+ "solana-address 2.7.0",
+ "solana-program-error",
 ]
 
 [[package]]
@@ -2948,6 +2977,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8e7db78c122d02189619490b1fef04a2a042c389662920617c0e6381fdf8fdd"
 dependencies = [
  "num-traits",
+ "solana-program-error",
+]
+
+[[package]]
+name = "solana-instruction-view"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ab7a27d0c4214b9f7389c3dd00b68c93093a67f1dcc5b7893aebe299bbcbb47"
+dependencies = [
+ "solana-account-view",
+ "solana-address 2.7.0",
+ "solana-define-syscall 5.2.0",
  "solana-program-error",
 ]
 

@@ -865,8 +865,13 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "noised-onchain",
  "noised-rules",
+ "pinocchio",
+ "serde_json",
+ "solana-instruction 3.5.1",
  "solana-instructions-sysvar",
+ "solana-program-error",
  "spl-discriminator",
  "spl-tlv-account-resolution",
  "spl-transfer-hook-interface",

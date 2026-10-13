@@ -300,6 +300,20 @@ Launch Guard's own work is small and bounded:
 
 It makes no CPI and no heap allocation in the rules.
 
+Since 2026-10-13 the hook is written without Anchor (`pinocchio` and `crates/noised-onchain`, the same ABI and the same checks in the same order; SBPF v3 binary 46,600 bytes instead of 214,976). Its own `execute` costs, in CU, measured by the same tests on that build and on the review-4 Anchor build:
+
+| Transfer | Without rules | With the largest rule set |
+|---|---|---|
+| public buy | 984 (Anchor: 3,295) | 4,723 (Anchor: 9,126) |
+| wallet-to-wallet transfer | 995 (3,318) | 4,738 (8,194) |
+| sell | 502 (2,425) | 502 (2,425) |
+| batch claim (exempt source) | 982 (3,302) | 982 (3,416) |
+| public buy after the guard | 615 (2,572) | |
+| mint without a policy | 367 (2,260) | |
+| batch buy inside `execute_batch` | 1,070 (5,838) | |
+
+`end_snipe_shield` (the CPI from `execute_batch`) costs 2,549 (Anchor: 13,727). The rows are `compute_at_the_largest_rule_set`, `f2_hook_compute_on_buys_and_sells` (against mainnet DBC) and `compute_cost_of_a_hooked_transfer` (`tests/integration`); the hook's own cost does not depend on the mint, a whole transaction's does (Token-2022's PDA searches). The tables below are the Anchor builds, kept for comparison.
+
 On the review-4 build (2026-10-11), the hook's own `execute` costs, in CU:
 
 | Transfer | Without rules | With rules |
