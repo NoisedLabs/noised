@@ -705,3 +705,57 @@ fn token_accounts_check_as_anchor_does() {
     assert_eq!(logs[7], line(ErrorCode::ConstraintTokenOwner, Some("ata")));
     assert_eq!(logs[8..12], keys(&wallet, &key(1)));
 }
+
+/// `invoke` checks the borrow state of the instruction's accounts first, as
+/// solana-cpi 3.1's `invoke_signed` does (review L-1): a writable account
+/// must not be borrowed at all, a read-only one not mutably; otherwise
+/// `AccountBorrowFailed` and no CPI. Accounts the instruction does not name
+/// are not checked.
+#[test]
+fn invoke_refuses_borrowed_instruction_accounts() {
+    use noised_onchain::{cpi, pinocchio::instruction::InstructionAccount};
+    let _ = take_cpis();
+    let from = Acc::new(key(1)).signer().writable().build();
+    let to = Acc::new(key(2)).owner(key(9)).writable().data(&[7; 16]).build();
+    let other = Acc::new(key(3)).owner(key(9)).data(&[1; 4]).build();
+    let (from_v, to_v, other_v) = (from.view(), to.view(), other.view());
+
+    // A live `Ref` of a writable account (a balance read "before" the CPI).
+    let held = to_v.try_borrow().unwrap();
+    assert_eq!(
+        cpi::transfer(&from_v, &to_v, 1, &[]),
+        Err(ProgramError::AccountBorrowFailed)
+    );
+    assert!(take_cpis().is_empty(), "no CPI was made");
+    drop(held);
+    // Through a second view of the same account (a duplicate): one state.
+    let mut dup = to.view();
+    let held = dup.try_borrow_mut().unwrap();
+    assert_eq!(
+        cpi::transfer(&from_v, &to_v, 1, &[]),
+        Err(ProgramError::AccountBorrowFailed)
+    );
+    drop(held);
+    assert_eq!(cpi::transfer(&from_v, &to_v, 1, &[]), Ok(()));
+    assert_eq!(take_cpis().len(), 1);
+
+    // A read-only account may be shared-borrowed, not mutably borrowed.
+    let metas = [
+        InstructionAccount::writable(to_v.address()),
+        InstructionAccount::readonly(other_v.address()),
+    ];
+    let infos = [&to_v, &other_v];
+    let shared = other_v.try_borrow().unwrap();
+    assert_eq!(cpi::invoke(&key(9), &metas, &[], &infos, &[]), Ok(()));
+    drop(shared);
+    let mut writer = other.view();
+    let held = writer.try_borrow_mut().unwrap();
+    assert_eq!(
+        cpi::invoke(&key(9), &metas, &[], &infos, &[]),
+        Err(ProgramError::AccountBorrowFailed)
+    );
+    // Not an instruction account: not checked.
+    assert_eq!(cpi::invoke(&key(9), &metas[..1], &[], &infos, &[]), Ok(()));
+    drop(held);
+    assert_eq!(take_cpis().len(), 2);
+}

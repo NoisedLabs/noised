@@ -4,7 +4,9 @@
 //! `create_account_or_fund_allocate_assign`, which every `init` runs.
 //!
 //! [`invoke`] makes any other CPI. The caller must not hold a borrow of any
-//! account's data across a CPI (see [`crate::sys::invoke`]).
+//! account's data across a CPI: [`crate::sys::invoke`] fails with
+//! `AccountBorrowFailed` when one of the instruction's accounts is still
+//! borrowed, as solana-cpi does.
 
 use pinocchio::{
     cpi::Signer, instruction::InstructionAccount, AccountView, Address, ProgramResult,

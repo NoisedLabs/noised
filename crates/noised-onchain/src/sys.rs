@@ -97,13 +97,19 @@ pub fn get_sysvar(id: &Address, offset: u64, buffer: &mut [u8]) -> Result<(), Pr
 }
 
 /// A cross-program invocation the way `solana_program::program::invoke_signed`
-/// makes it: `metas` are the instruction's accounts, `infos` any accounts
-/// the caller holds; the runtime finds each instruction account among
-/// `infos` by address (and fails with `MissingAccount` if one is not there).
-/// A failing callee aborts the whole transaction, so this returns `Ok`.
+/// (solana-cpi 3.1) makes it: `metas` are the instruction's accounts, `infos`
+/// any accounts the caller holds; the runtime finds each instruction account
+/// among `infos` by address (and fails with `MissingAccount` if one is not
+/// there). A failing callee aborts the whole transaction.
 ///
-/// The caller must hold no borrow of any account's data (`Ref`, `RefMut`,
-/// or a slice from them) across the call: the callee may write it.
+/// Before invoking, the borrow state of every instruction account is
+/// checked as solana-cpi checks it: the first account of `infos` at a
+/// writable meta's address must not be borrowed at all, one at a read-only
+/// meta's address not mutably (`AccountBorrowFailed` otherwise, and no
+/// CPI). So a `Ref` / `RefMut` of an account's data that is still alive
+/// fails the call instead of letting the callee write data the caller is
+/// reading. (A plain slice taken from a dropped `Ref` is not tracked:
+/// read what you need into locals before invoking.)
 #[inline(always)]
 pub fn invoke(
     program_id: &Address,
@@ -112,12 +118,11 @@ pub fn invoke(
     infos: &[&AccountView],
     signers: &[Signer],
 ) -> ProgramResult {
-    invoke_signed(program_id, metas, data, infos, signers);
-    Ok(())
+    invoke_signed(program_id, metas, data, infos, signers)
 }
 
-/// [`invoke`], out of line, with nothing to return: the callers' `?` on
-/// its result compiles to nothing.
+/// [`invoke`], out of line: one copy of the borrow checks and of the CPI
+/// for every call site.
 #[inline(never)]
 fn invoke_signed(
     program_id: &Address,
@@ -125,7 +130,8 @@ fn invoke_signed(
     data: &[u8],
     infos: &[&AccountView],
     signers: &[Signer],
-) {
+) -> ProgramResult {
+    check_borrows(metas, infos)?;
     let accounts: Vec<CpiAccount> = infos.iter().map(|info| CpiAccount::from(*info)).collect();
     let instruction = InstructionView {
         program_id,
@@ -135,10 +141,35 @@ fn invoke_signed(
     #[cfg(not(target_os = "solana"))]
     host::record_cpi(program_id, metas, data, signers.len());
     // SAFETY: every `CpiAccount` points at a runtime account of this
-    // instruction, and no reference into account data or lamports is alive
-    // while the callee runs (the contract of this function, kept by every
-    // caller in this crate: each drops its borrows before invoking).
+    // instruction. No `Ref` or `RefMut` of the data of an instruction
+    // account the callee may write (a writable meta) is alive, and no
+    // `RefMut` of any other one (`check_borrows`, just above); every helper
+    // of this crate drops its borrows before invoking.
     unsafe { invoke_signed_unchecked(&instruction, &accounts, signers) };
+    Ok(())
+}
+
+/// solana-cpi 3.1 `invoke_signed`'s check (pinocchio's checked `invoke`
+/// does the writable half): for each instruction account, the first
+/// account of `infos` at its address (none: the runtime reports it) can be
+/// borrowed mutably if the meta is writable (`check_borrow_mut`), shared
+/// otherwise (`check_borrow`); `AccountBorrowFailed` if not. Duplicate
+/// views of an account share its borrow state, so the first one is enough.
+#[inline]
+fn check_borrows(metas: &[InstructionAccount], infos: &[&AccountView]) -> ProgramResult {
+    for meta in metas {
+        if let Some(info) = infos
+            .iter()
+            .find(|info| crate::same(info.address(), meta.address))
+        {
+            if meta.is_writable {
+                info.check_borrow_mut()?;
+            } else {
+                info.check_borrow()?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The data of `account` without a borrow check (Anchor's `try_borrow_data`

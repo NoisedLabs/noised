@@ -324,7 +324,10 @@ top-up or refund, then resize). None of the five programs uses `zero`,
 ## 6. Handlers, CPIs and exit
 
 * **CPIs**: `cpi::invoke(program_id, metas, data, infos, signers)` (as
-  `invoke_signed`; returns `Ok`, a failing callee aborts the transaction).
+  solana-cpi's `invoke_signed`: `AccountBorrowFailed` before the call when
+  an instruction account's data is still borrowed — any borrow for a
+  writable meta, a mutable one for a read-only meta; a failing callee
+  aborts the transaction).
   System: `cpi::{create_account, transfer, allocate, assign}`. Token:
   `token::{transfer_checked, mint_to_checked, burn_checked,
   initialize_mint2, initialize_mint_extension, memo,
@@ -343,10 +346,12 @@ top-up or refund, then resize). None of the five programs uses `zero`,
 * **Borrows across CPIs**: never hold a `Ref` / `RefMut` (or a slice from
   one) of any account's data across `invoke`: read what you need into
   locals first (all helpers here drop their borrows before returning).
-  `AccountView` is `Copy`; `write_back` borrows mutably only at exit, after
-  every CPI. The transfer-hook resolution reads data without a borrow check
-  (`sys::data_unchecked`), which is only sound between the account checks
-  and the CPI.
+  `invoke` refuses a live `Ref` / `RefMut` of an instruction account
+  (`AccountBorrowFailed`, as solana-cpi), but cannot see a plain slice kept
+  from a dropped one. `AccountView` is `Copy`; `write_back` borrows mutably
+  only at exit, after every CPI. The transfer-hook resolution reads data
+  without a borrow check (`sys::data_unchecked`), which is only sound
+  between the account checks and the CPI.
 * **Events**: `event::emit(&payload)`; `emit_cpi!` → `event::emit_cpi::<P>(
   event_authority, bump, &payload)` and the program must dispatch the
   event tag to `event::event_dispatch::<P>(accounts, &EVENT_AUTHORITY)`
@@ -414,10 +419,10 @@ Measured on the vault (SBPF v3, `cargo-build-sbf --arch v3`): Anchor build
 * **Inlining across crates** decides most of the size. Non-generic helpers
   in this crate carry `#[inline]` (so they inline as if they were in the
   program, as in the pilot); big shared ones are `#[inline(never)]`
-  (`sys` CPI call, `find_program_address`, unpacking, `fail`). A helper
-  that returns `ProgramResult` but is always `Ok` must be inlinable, or
-  every caller keeps its error checks (the `invoke` / `invoke_signed`
-  split). Compile-time flags are const generics (`IF_NEEDED`).
+  (`sys` CPI call with its borrow checks, `find_program_address`,
+  unpacking, `fail`). A helper that returns `ProgramResult` but is always
+  `Ok` must be inlinable, or every caller keeps its error checks.
+  Compile-time flags are const generics (`IF_NEEDED`).
 * **Measure**: build, then compare function sizes (`llvm-readelf -s -W
   --demangle`, sort by size) against the previous build; a jump usually
   means one helper got inlined at many sites or stopped being inlined.
