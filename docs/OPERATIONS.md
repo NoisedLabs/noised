@@ -283,9 +283,9 @@ Until step 9, the upgrade key is the most valuable target in the system:
 
 ## Verifiable builds (Linux CI)
 
-`solana-verify` needs Docker, which the Windows machine lacks, so this runs in CI (the manual `verifiable-build` job). The commands below were not run while writing this document. Their flags come from solana-verify's source (repository version 0.6.0, commit 26ba821). Check `--help` for the version you pin.
+`solana-verify` needs Docker, which the Windows machine lacks, so this runs in CI: the `programs` job of the release workflow and the manual `verifiable-build` job of `ci.yml`. The build commands below ran in the release dry run [38334299942](https://github.com/NoisedLabs/noised/actions/runs/38334299942) (2026-10-13, solana-verify 0.5.2): all five programs built, all SBPF v3 (`e_flags` 3). Each `.so` was byte-identical to the host build of the same commit by CI's `programs` job (Agave 4.3.0 release, platform-tools v1.57, outside Docker), which is the build the LiteSVM suites tested. The verification commands need the deployed programs and have not been run. Their flags come from solana-verify 0.5.2's source. Check `--help` for the version you pin.
 
-**solana-verify builds SBPF v0 unless told otherwise**: its own `--arch` defaults to v0. Pass `--arch v3` to `build` and to `verify-from-repo`. On a version without `--arch`, pass `--cargo-build-sbf-args="--arch v3"` instead. Either way, confirm that the hash matches the `--arch v3` build that was deployed.
+**solana-verify builds SBPF v0 unless told otherwise**: its own `--arch` defaults to v0. Pass `--arch v3` to `build` and to `verify-from-repo`. On a version without `--arch`, pass `--cargo-build-sbf-args="--arch v3"` instead. Either way, confirm that the hash matches the `--arch v3` build that was deployed. `--arch` is solana-verify's own flag, so it goes before any `--`: what follows `--` is passed to `cargo build`, which rejects `--arch` (the dry run of 2026-10-13 00:57 failed on `-- --arch v3`). cargo-build-sbf has no manifest setting for the architecture (only `tools-version`), so the flag is the only way. `verify-from-repo` stores it in the verification record, and OtterSec's worker replays it.
 
 ```bash
 cargo install solana-verify --locked --version 0.5.2   # pin the version
@@ -298,7 +298,20 @@ solana-verify verify-from-repo -um --program-id cHHLLsEH4eHmqZBT4X5XqzutmkFw3daW
 solana-verify remote submit-job --program-id cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia --uploader <UPGRADE_AUTHORITY>
 ```
 
-`solana-verify` picks its build image from the Solana version in the workspace manifest (`[workspace.metadata.cli]`), which the root `Cargo.toml` sets to 4.3.0. The CI job should fail if any hash differs from the deployed program. Both the manual `verifiable-build` job of `ci.yml` and the release workflow build all five libraries, and the release workflow refuses a `.so` whose `e_flags` is not 3.
+The parameters every rebuild must use, the CI builds included:
+
+| Parameter | Value |
+|---|---|
+| Repository and commit | `https://github.com/NoisedLabs/noised`, the release tag's commit (`--commit-hash`) |
+| Mount path | the repository root: no `--mount-path` (it must hold `Cargo.lock`; `programs/<name>` does not) |
+| Library names | `noised_hook`, `noised_vault`, `noised_launchpad`, `noised_shield`, `noised_autopilot` (the `[lib]` names, not the package names) |
+| Architecture | `--arch v3` |
+| Image | chosen from `[workspace.metadata.cli] solana = "4.3.0"` in the root `Cargo.toml`: `solanafoundation/solana-verifiable-build:4.3.0`, digest `sha256:12fd4c0a0790f0fc41ef74b0cdb6bccc167ba6137eb1adb749bac649481c86bd` (Rust 1.97.1 image, cargo-build-sbf 4.3.0, platform-tools v1.57 preinstalled, which matches `[workspace.metadata.solana] tools-version`). No `--base-image` |
+| Cargo arguments | none (solana-verify adds `--locked` itself) |
+
+The legacy `--remote` flag of `verify-from-repo` stops with an error in 0.5.2. Upload the record with `verify-from-repo` signed by the upgrade authority, or with `export-pda-tx` (same parameters plus `--uploader <MULTISIG_VAULT>`) for a multisig, then queue OtterSec's worker with `remote submit-job`.
+
+The release workflow refuses a `.so` whose `e_flags` is not 3. The CI job should fail if any hash differs from the deployed program. Both the manual `verifiable-build` job of `ci.yml` and the release workflow build all five libraries.
 
 ## Releases
 
