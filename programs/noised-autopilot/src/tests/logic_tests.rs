@@ -757,6 +757,23 @@ fn plan_price_conditions_hold_only_across_every_observation() {
     fx.reference = p;
     assert_err(fx.plan(0), AutopilotError::ConditionFalse);
 
+    // And "above P" (NOT at most P) needs the lowest price above P: a dump
+    // refuses it.
+    let mut n = gnode(WHEN, 0, BURN, 10, 0);
+    n.cond_len = 2;
+    let mut fx = Fx::new(
+        vec![n],
+        vec![leaf(op::graph::PRICE_LTE, 0, p as u64), leaf(op::NOT, 0, 0)],
+    );
+    fx.reference = p + 1;
+    fx.observed = Some(Seen { min: p, max: p * 2 });
+    assert_err(fx.plan(0), AutopilotError::ConditionFalse);
+    fx.observed = Some(Seen {
+        min: p + 1,
+        max: p * 2,
+    });
+    fx.plan(0).unwrap();
+
     // OR: either side holding across the whole range is enough; a range
     // that holds neither side throughout is refused.
     let mut n = gnode(WHEN, 0, BURN, 10, 0);
