@@ -1,7 +1,11 @@
 <p align="center">
+  <img alt="Noised: building the security layer for Solana" src="app/public/brand/noised-banner-1500x500.png" width="100%">
+</p>
+
+<p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="app/public/brand/noised-logo-dark-500.png">
-    <img alt="Noised logo: a dotted shield" src="app/public/brand/noised-logo-light-500.png" width="180">
+    <source media="(prefers-color-scheme: dark)" srcset="app/public/brand/noised-mark-white-256.png">
+    <img alt="Noised logo: a hexagon of dots" src="app/public/brand/noised-mark-256.png" width="120">
   </picture>
 </p>
 
@@ -14,9 +18,6 @@
 **The quantum security layer for Solana.** Website: [noised.fun](https://noised.fun).
 
 Noised puts post-quantum signatures where they decide the most on Solana: whether a token is allowed to launch, and who can move what you keep in a Noised vault. A token launched with Noised can only go live after its creator's post-quantum key (a hash-based LMS signature, RFC 8554) has signed its exact settings, its on-chain name, symbol and icon, its optional launch rules and the time window in which it may open, and the Noised program checks that signature on-chain itself. The launch is also safe by construction: nobody, not even the creator, can mint more tokens, freeze holders, rename the token, pull the liquidity or block a sale, and nobody can buy before the fair opening batch. Everything runs on Solana's standard token program (Token-2022) and on [Meteora](https://meteora.ag)'s pools, and anyone can re-check every claim against the live chain with the open-source SDK, without trusting our website. It does not make Solana itself, or ordinary wallets, quantum-safe ([stated precisely](#post-quantum-and-privacy-stated-precisely)).
-
-> [!WARNING]
-> **Status: devnet only, pre-audit.** Four of the five Noised programs are deployed on **Solana devnet** (the Shield is not deployed yet). They are **upgradeable** (the devnet deployer holds the upgrade authority), and they have **not been audited by a professional security firm**: every review so far was internal and carried out by AI agents ([docs/AUDIT.md](docs/AUDIT.md)). **Nothing is deployed on mainnet.** Do not use Noised with funds you cannot afford to lose. The plan is independent audits, then mainnet, then setting the upgrade authority to None ("finalization"), after which nobody can change the code ([Roadmap](#roadmap)). You can check a program's state yourself: `solana program show <program id> -u devnet` prints its `Authority`.
 
 ## Contents
 
