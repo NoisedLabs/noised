@@ -232,8 +232,8 @@
   gap: 12px;
   min-width: 0;
 }
-/* The token's own 32 x 32 icon at exactly 2x on a dark pixel tile (dark in both themes, like an app icon); a token
-   without one shows its 15 x 15 pixel coin at 4x on its own. */
+/* The token's own icon at 64 px on a dark tile (dark in both themes, like an app icon): a 64 x 64 logo at 1x, smooth,
+   or 32 x 32 pixel art at exactly 2x; a token without one shows its 15 x 15 pixel coin at 4x on its own. */
 .hm-lc-avatar {
   display: grid;
   flex: none;

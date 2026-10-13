@@ -3,8 +3,9 @@
  * no DOM needed): the tracker's six steps and what it asks of the person
  * (approve in the wallet, a new opening time after the window passed, one
  * more signature after one that did not count, the leftover SOL), the
- * configured launch's opening status, the token's own details (a data: icon
- * drawn pixel-crisp, links as inert text with the domain spelled out), the
+ * configured launch's opening status, the token's own details (a data: icon:
+ * a logo drawn smoothly, 32 x 32 pixel art pixel-crisp; links as inert text
+ * with the domain spelled out), the
  * verification panel's three origin lines and the fee recipients' refusals.
  */
 import { Keypair, PublicKey } from "@solana/web3.js";
@@ -173,7 +174,7 @@ describe("a configured launch's opening", () => {
 });
 
 describe("the token's own details", () => {
-  it("draws its icon from the record's data URI, pixel-crisp, and never a remote image", async () => {
+  it("draws its icon from the record's data URI (a logo smooth, pixel art crisp), and never a remote image", async () => {
     const png = await encodeIndexedPng(new Uint8Array(32 * 32 * 4).fill(255), 32, 32, 16);
     const launch = Keypair.generate().publicKey;
     const input = { name: "Icon", symbol: "ICN", doc: buildMetadataDoc({ name: "Icon", symbol: "ICN", iconPng: png, description: "Hello", links: { website: "https://example.org/a", x: "https://x.com/icn" } }) };
@@ -181,7 +182,14 @@ describe("the token's own details", () => {
     const meta = tokenMetaView(record);
     expect(meta.icon?.dataUri.startsWith("data:image/png;base64,")).toBe(true);
     const img = html(createElement(TokenIcon, { address: launch, image: meta.icon?.dataUri ?? null, size: 64 }));
-    expect(img).toMatch(/<img class="tk-face tk-img" src="data:image\/png;base64,[A-Za-z0-9+/=]+" width="64" height="64"/);
+    // 32 x 32 pixel art keeps its square pixels...
+    expect(img).toMatch(/<img class="tk-face tk-img" data-pixel="" src="data:image\/png;base64,[A-Za-z0-9+/=]+" width="64" height="64"/);
+    // ...an uploaded logo (64 x 64) scales smoothly.
+    const logo = await encodeIndexedPng(new Uint8Array(64 * 64 * 4).fill(200), 64, 64, 256);
+    const logoInput = { name: "Logo", symbol: "LGO", doc: buildMetadataDoc({ name: "Logo", symbol: "LGO", iconPng: logo }) };
+    const logoMeta = tokenMetaView(decodeTokenMeta(tokenMetaAddress(launch, metadataHashV2(logoInput)), tokenMetaAccountData(launch, logoInput)));
+    expect(logoMeta.icon?.width).toBe(64);
+    expect(html(createElement(TokenIcon, { address: launch, image: logoMeta.icon?.dataUri ?? null, size: 64 }))).toMatch(/<img class="tk-face tk-img" src="data:image\/png;base64,[A-Za-z0-9+/=]+" width="64" height="64"/);
     // Anything but a data: PNG is drawn as the pixel coin instead.
     expect(html(createElement(TokenIcon, { address: launch, image: "https://example.org/x.png", size: 64 }))).not.toMatch(/<img/);
     // Links are text with their domain spelled out: nothing is clickable or loaded.

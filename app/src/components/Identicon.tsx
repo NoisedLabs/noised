@@ -2,6 +2,7 @@ import type { PublicKey } from "@solana/web3.js";
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 
 import { TRANSPARENT, type PixelIcon } from "../fx/pixel/quantize";
+import { isPixelArt, pngDataUriWidth } from "./iconLook";
 
 import "./landing/tokens.css";
 import "./landing/board.css";
@@ -124,10 +125,11 @@ function iconPaths(icon: PixelIcon): { k: string; d: string }[] | null {
 }
 
 /**
- * A launch's pixel icon: its own icon when it has one (`image`: the PNG of its on-chain metadata record, as the data
- * URI the SDK's parser returns, drawn pixel-crisp; or a `PixelIcon`, e.g. the demo's), else a pixel coin carrying its
- * identicon. Crisp at any whole size (shape-rendering: crispEdges; image-rendering: pixelated). With `voxel`, the coin
- * gets edge layers so a CSS 3D spin (sections.css, on card hover) shows a solid voxel coin. Decorative (aria-hidden).
+ * A launch's icon: its own icon when it has one (`image`: the PNG of its on-chain metadata record, as the data URI the
+ * SDK's parser returns; or a `PixelIcon`, e.g. the demo's), else a pixel coin carrying its identicon. An uploaded logo
+ * (bigger than 32 x 32) scales smoothly; pixel art (up to 32 x 32), the demo's icons and the coin stay crisp at any
+ * whole size (./iconLook.ts; shape-rendering: crispEdges; image-rendering: pixelated). With `voxel`, the coin gets edge
+ * layers so a CSS 3D spin (sections.css, on card hover) shows a solid voxel coin. Decorative (aria-hidden).
  */
 export function TokenIcon({
   address,
@@ -146,12 +148,13 @@ export function TokenIcon({
   className?: string;
 }): ReactNode {
   const own = image !== null && image.startsWith("data:image/png;base64,") ? image : null;
+  const pixel = useMemo(() => (own === null ? false : isPixelArt(pngDataUriWidth(own))), [own]);
   const custom = useMemo(() => (own === null && icon ? iconPaths(icon) : null), [own, icon]);
   const coin = useMemo(() => (own !== null || custom ? null : coinPaths(address)), [own, custom, address]);
   const view = custom && icon ? `0 0 ${icon.size} ${icon.size}` : "0 0 15 15";
   const face =
     own !== null ? (
-      <img className="tk-face tk-img" src={own} width={size} height={size} alt="" aria-hidden="true" decoding="async" draggable={false} />
+      <img className="tk-face tk-img" data-pixel={pixel ? "" : undefined} src={own} width={size} height={size} alt="" aria-hidden="true" decoding="async" draggable={false} />
     ) : (
       <svg viewBox={view} width={size} height={size} shapeRendering="crispEdges" className="tk-face" aria-hidden="true" focusable="false">
         {(custom ?? coin ?? []).map((p) => (

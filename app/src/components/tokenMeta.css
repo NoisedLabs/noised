@@ -1,11 +1,15 @@
 /*
- * A token's own details from its on-chain record (tokenMeta.tsx): the icon drawn pixel-crisp at a whole multiple of
- * its 32 x 32 pixels, and the description and links as plain text. Static stylesheet (style-src 'self').
+ * A token's own details from its on-chain record (tokenMeta.tsx): the icon, and the description and links as plain
+ * text. An uploaded logo (bigger than 32 x 32) scales smoothly; pixel art (up to 32 x 32, data-pixel; iconLook.ts)
+ * keeps its square pixels. Static stylesheet (style-src 'self').
  */
 .tk-img {
   display: block;
-  image-rendering: pixelated;
+  image-rendering: auto;
   user-select: none;
+}
+.tk-img[data-pixel] {
+  image-rendering: pixelated;
 }
 .tm-about {
   display: grid;

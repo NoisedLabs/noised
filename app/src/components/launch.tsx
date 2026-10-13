@@ -170,7 +170,7 @@ function CountdownText({ end }: { end: bigint }): ReactNode {
 }
 
 /**
- * One launch on the home page, as a glass card: the token's own pixel icon (a 32 x 32 icon at 2x on a dark pixel
+ * One launch on the home page, as a glass card: the token's own icon (a smooth logo, or pixel art at 2x, on a dark
  * tile; a pixel coin carrying its identicon when it has none) that spins on hover, plain status, and one honest
  * number with a pixel bar. While the opening batch is open the card shows what is in the batch and when it closes
  * (the same numbers as the token page); after that, SOL raised and progress toward its goal. The name link covers

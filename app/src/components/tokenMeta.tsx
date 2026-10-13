@@ -6,8 +6,9 @@
  * (`verifyAttestation`). Never by searching a launch's records (anyone may
  * publish junk ones). The document is parsed defensively and nothing in it
  * is ever fetched: the icon is a PNG inside it, shown as an <img> of its
- * data URI (CSP img-src data:), pixel-crisp; links are inert text with their
- * domain spelled out.
+ * data URI (CSP img-src data:), smooth for a logo and pixel-crisp for pixel
+ * art up to 32 x 32 (./iconLook.ts); links are inert text with their domain
+ * spelled out.
  */
 import { useConnection } from "@solana/wallet-adapter-react";
 import type { Connection, PublicKey } from "@solana/web3.js";
@@ -15,6 +16,7 @@ import type { ReactNode } from "react";
 
 import { useAsync } from "../app/hooks";
 import { fetchTokenMetaForMint, parseMetadataDoc, verifyAttestation, type AttestationVerification, type MetadataIcon, type MetadataLink, type TokenMetaAccount } from "../lib/noised";
+import { isPixelArt } from "./iconLook";
 import "./tokenMeta.css";
 
 /** What the app shows of a record: never more than what parsed cleanly. */
@@ -100,9 +102,9 @@ export function useTokenMeta(target: { mint: PublicKey } | { launch: PublicKey }
   return r.data ?? null;
 }
 
-/** The token's own icon, pixel-crisp (a data: URI from its record; never fetched). */
+/** The token's own icon (a data: URI from its record; never fetched): smooth for a logo, crisp for pixel art. */
 export function TokenImage({ icon, size, className = "" }: { icon: MetadataIcon; size: number; className?: string }): ReactNode {
-  return <img className={`tk-img ${className}`} src={icon.dataUri} width={size} height={size} alt="" decoding="async" draggable={false} />;
+  return <img className={`tk-img ${className}`} data-pixel={isPixelArt(icon.width) ? "" : undefined} src={icon.dataUri} width={size} height={size} alt="" decoding="async" draggable={false} />;
 }
 
 const LINK_KIND: Record<MetadataLink["kind"], string> = { website: "Website", x: "X", telegram: "Telegram" };
