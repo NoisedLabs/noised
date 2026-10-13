@@ -13,8 +13,8 @@ import { checkCss, checkHtml, checkJs, checkNoMock, stripThirdPartyFonts } from 
  * Configuration (environment variables or app/.env*):
  *   VITE_RPC_URL           RPC endpoint: one URL, or comma-separated "label=https://url"
  *                          (default: the public RPC of the cluster, i.e. devnet; a mainnet
- *                          build warns when it uses the public mainnet RPC: production needs
- *                          a dedicated endpoint)
+ *                          build warns when it uses the public mainnet RPC, which refuses
+ *                          requests from web pages: mainnet needs a dedicated endpoint)
  *   VITE_NOISED_CLUSTER    mainnet | devnet | localnet (default devnet); selects the PQ
  *                          vault key derivation and explorer links; checked against the
  *                          endpoint's genesis hash at runtime

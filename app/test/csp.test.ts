@@ -35,10 +35,11 @@ describe("RPC endpoint configuration", () => {
     expect(() => checkEndpointCluster(parseRpcEndpoints("https://rpc.example.com", "mainnet"), "mainnet")).not.toThrow();
   });
 
-  it("warns when a mainnet build uses Solana's public mainnet RPC (production needs a dedicated one)", () => {
+  it("warns when a mainnet build uses Solana's public mainnet RPC (it refuses web pages: a dedicated one is needed)", () => {
     // The default endpoint of a mainnet build is the public one: it builds, with a warning.
     const def = parseRpcEndpoints(undefined, "mainnet");
     expect(def).toEqual([{ label: "api.mainnet-beta.solana.com", url: "https://api.mainnet-beta.solana.com/" }]);
+    expect(publicMainnetRpcWarning(def, "mainnet")).toMatch(/refuses requests from web pages/);
     expect(publicMainnetRpcWarning(def, "mainnet")).toMatch(/public RPC .*api\.mainnet-beta\.solana\.com.*VITE_RPC_URL/);
     // Listed next to a dedicated one, still a warning (it may be picked in the footer).
     expect(publicMainnetRpcWarning(parseRpcEndpoints("main=https://rpc.example.com,public=https://api.mainnet-beta.solana.com", "mainnet"), "mainnet")).not.toBeNull();
