@@ -92,3 +92,6 @@ $RECYCLE.BIN/
 
 # Local working files (branding drafts, renders) — not part of the release
 /output/
+
+# Claude Code worktrees and local agent state
+/.claude/
