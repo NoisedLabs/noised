@@ -248,7 +248,7 @@ describe("plain-English explanations (review U14: addresses, labels only next to
     ]);
   });
 
-  it("graphs: one sentence per node, then the guarantees (full addresses, tips included, price conditions on the reference)", () => {
+  it("graphs: one sentence per node, then the guarantees (full addresses, tips included, price conditions on every recent price)", () => {
     const g = graphTemplate("ai-buyback", PARAMS["ai-buyback"]);
     const lines = explainGraph(g);
     expect(lines[0]).toBe(
@@ -265,8 +265,9 @@ describe("plain-English explanations (review U14: addresses, labels only next to
     // price conditions read the reference price, and the guarantees say what it is
     const priced = graph().node("cheap", whenever(), when.priceLte(0.0000005), burn(1)).build();
     const pl = explainGraph(priced);
-    expect(pl[0]).toContain("the reference price is at most 0.0000005 SOL per token");
-    expect(pl.some((l) => l.startsWith("The reference price starts at the launch's migration price"))).toBe(true);
+    expect(pl[0]).toContain("the price has stayed at most 0.0000005 SOL per token");
+    expect(pl.some((l) => l.startsWith("A price check passes only if the reference price and every price seen in the last 15 to 30 minutes pass it"))).toBe(true);
+    expect(pl.some((l) => l.includes("The reference price starts at the launch's migration price"))).toBe(true);
     expect(explainGraph(g).some((l) => l.startsWith("The reference price"))).toBe(false);
   });
 });

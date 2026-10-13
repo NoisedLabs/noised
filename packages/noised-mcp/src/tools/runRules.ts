@@ -61,7 +61,7 @@ export function planStep(due: DueNodes, index: number, amount: bigint | null, op
   const raw = verifyGraphBytes(active.bytes);
   const a = due.view.autopilot;
   // `run` observes the pool first (once graduated) and moves the reference: decide on that, as the program does.
-  const { price, window } = afterObservation(state, env.now, env.spotSqrtPriceQ64, env.graduated);
+  const { price, window, observed } = afterObservation(state, env.now, env.spotSqrtPriceQ64, env.graduated);
   return planRun({
     graph: raw,
     node: index,
@@ -76,6 +76,7 @@ export function planStep(due: DueNodes, index: number, amount: bigint | null, op
     spot: env.graduated ? env.spotSqrtPriceQ64 : null,
     reference: price.reference,
     seen: window,
+    observed,
     poolQuote: env.poolSol ?? 0n,
     partialSpent: a.partialSpent[index] ?? 0n,
   });

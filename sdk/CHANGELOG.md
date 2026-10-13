@@ -2,6 +2,16 @@
 
 All notable changes to `@noisedlabs/sdk` (published as `@phalanx/sdk` before the project was renamed) are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). While the version is `0.x`, a minor release may break the API; breaking changes are marked **BREAKING**.
 
+## [Unreleased]
+
+### Changed (BREAKING): autopilot price conditions over the observed prices (review F1)
+
+The autopilot program now judges a node's price condition across the reference and every price observed in the window (the current and the previous 15-minute bucket, however recent, the run's own observation included): `PRICE_GTE` on the lowest of them, `PRICE_LTE` on the highest, and under `NOT` the other end. Before, it read the reference alone, which one pumped (or dumped) observation in the run's own transaction could keep stale (review F1 of the framework-free rewrite, fixed before deployment). The SDK mirrors it exactly, pinned by regenerated program vectors (`test/vectors/programmable/autopilot.json`: every earlier input unchanged, 97 earlier `plan_run` cases now `ConditionFalse`, 320 new cases of compound price conditions):
+
+- **BREAKING:** `RunInput` (`planRun`) has a required `observed: Seen | null`: every price the window holds however recent (`observedPrices(observations, now)`; `afterObservation` now also returns it as `observed`). `seen` stays the minute-old window that bounds buybacks.
+- New: `conditionPrices(reference, observed)` (the range price conditions must hold across), `graphConditionOver` / `graphRunnableOver` and the `PriceRange` type (the crate's `Graph::condition_over` / `runnable_over`), `evalConditionBounded` (three-valued evaluation), `observedPrices` (the program's `reference::observed`). `graphCondition` / `graphRunnable` (one price) are unchanged.
+- `nodeCondition`, `nodeStatus`, `findDueNodes` and `simulateGraph` decide price conditions this way, so a step is due only if the program would accept it; `explainGraph` says "the price has stayed at least / at most ..." and states the rule among the guarantees.
+
 ## [0.9.0] - 2026-10-13: first public release (renamed to Noised)
 
 The first version published to npm, as `@noisedlabs/sdk`. It contains the rename below, the audit-round-4 client fixes listed under "0.9.0 (development)" and everything from the unreleased 0.1-0.8 development versions.

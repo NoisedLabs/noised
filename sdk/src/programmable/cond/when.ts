@@ -94,10 +94,13 @@ export const when = {
     C({ op: "treasuryTokensGte", amount: typeof tokens === "bigint" ? { raw: tokens } : { tokens: String(tokens) } }),
   /** The token has graduated (migrated to its locked DAMM v2 pool). */
   graduated: (): Condition => C({ op: "graduated" }),
-  /** The reference price is at most `p` SOL per token (number/string) or sqrt Q64 (bigint). */
+  /**
+   * The price has stayed at most `p` SOL per token (number/string) or sqrt Q64 (bigint): the reference price and
+   * every price observed in the last 15 to 30 minutes, the run's own included (review F1).
+   */
   priceLte: (p: number | string | bigint): Condition =>
     C({ op: "priceLte", price: typeof p === "bigint" ? { sqrtPriceQ64: p } : { sol: String(p) } }),
-  /** The reference price is at least `p`. */
+  /** The price has stayed at least `p`: the reference price and every price observed in the last 15 to 30 minutes. */
   priceGte: (p: number | string | bigint): Condition =>
     C({ op: "priceGte", price: typeof p === "bigint" ? { sqrtPriceQ64: p } : { sol: String(p) } }),
   /** It is before `t` (Date, unix seconds, or "2026-12-01"). */

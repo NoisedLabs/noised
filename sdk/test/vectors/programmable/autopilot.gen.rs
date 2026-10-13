@@ -2,7 +2,12 @@
 // Regenerated for SDK 0.9.0 against the programs as merged after audit round 4
 // (freeze payload v2, revocation payload v3 with active_auth, partial buybacks
 // and RemainderTooSmall, max_tip, burn_price, reference::lowest, the
-// 1,244-byte Autopilot account).
+// 1,244-byte Autopilot account), then on 2026-10-13 for review F1 of the
+// framework-free rewrite: price conditions hold across the reference and
+// every observed price (`RunInput::observed`, `logic::condition_prices`,
+// `reference::observed`, compound price conditions with NOT / AND / OR). The
+// cases F1 adds draw from their own generators, so every earlier case keeps
+// its inputs.
 // To regenerate: copy this file to programs/noised-autopilot/src/tests/
 // sdk_vectors.rs in a scratch copy of the workspace, add `mod sdk_vectors;`
 // to src/tests/mod.rs, then run
@@ -183,14 +188,16 @@ fn reference_vectors(rng: &mut Lcg, out: &mut Vec<String>) {
                 reference::observe(&mut p.observations, now, spot);
             }
             let seen = reference::seen(&p.observations, now);
+            let observed = reference::observed(&p.observations, now);
             let moved = reference::follow(&mut p, seen, now);
             let cap = reference::buyback_cap(p.reference, seen);
             ops.push(format!(
-                "{{\"now\":{},\"spot\":{},\"obs\":{},\"seen\":{},\"moved\":{},\"cap\":{},\"st\":{}}}",
+                "{{\"now\":{},\"spot\":{},\"obs\":{},\"seen\":{},\"observed\":{},\"moved\":{},\"cap\":{},\"st\":{}}}",
                 q(now),
                 q(spot),
                 observe,
                 seen_json(seen),
+                seen_json(observed),
                 moved,
                 opt_q(cap),
                 price_state_json(&p)
@@ -467,6 +474,25 @@ fn logic_vectors(rng: &mut Lcg, out: &mut Vec<String>) {
             opt_q(reference::lowest(&obs, now))
         ));
     }
+    // condition_prices (review F1): the range price conditions must hold across.
+    let mut f1 = Lcg(0xF1_0001);
+    for _ in 0..300 {
+        let reference = f1.bits128(97);
+        let observed = if f1.below(4) == 0 {
+            None
+        } else {
+            let (a, b) = (f1.bits128(97), f1.bits128(97));
+            Some(Seen { min: a.min(b), max: a.max(b) })
+        };
+        let r = logic::condition_prices(reference, observed);
+        out.push(format!(
+            "{{\"fn\":\"condition_prices\",\"reference\":{},\"observed\":{},\"low\":{},\"high\":{}}}",
+            q(reference),
+            seen_json(observed),
+            q(r.low),
+            q(r.high)
+        ));
+    }
     // Plan::value (burn_price, kept), Plan::partial and Plan::max_tip (audit 4, A4-2 / A4-4 / M4).
     for _ in 0..300 {
         let amount = match rng.below(4) {
@@ -625,8 +651,36 @@ fn random_graph(rng: &mut Lcg, reference: u128) -> Vec<u8> {
     }
 }
 
+/// What the window holds however recent (`RunInput::observed`, review F1)
+/// for a case whose minute-old window is `seen`: none without one, else the
+/// same or wider (more observations, some under a minute old), drawn from
+/// `f1` so the other inputs keep their generator.
+fn observed_around(f1: &mut Lcg, seen: Option<Seen>, reference: u128) -> Option<Seen> {
+    let Some(s) = seen else {
+        return match f1.below(3) {
+            0 => {
+                let a = sqrt_near(f1, reference);
+                Some(Seen { min: a, max: a })
+            }
+            _ => None,
+        };
+    };
+    match f1.below(4) {
+        0 => Some(Seen {
+            min: s.min.min(sqrt_near(f1, reference)),
+            max: s.max,
+        }),
+        1 => Some(Seen {
+            min: s.min,
+            max: s.max.max(sqrt_near(f1, reference)),
+        }),
+        _ => Some(s),
+    }
+}
+
 fn plan_vectors(rng: &mut Lcg, graphs: &mut Vec<String>, out: &mut Vec<String>) {
     const NOW: i64 = 1_800_000_000;
+    let mut f1 = Lcg(0xF1_0002);
     for _ in 0..300 {
         let reference = match rng.below(3) {
             0 => 1u128 << 64,
@@ -733,6 +787,9 @@ fn plan_vectors(rng: &mut Lcg, graphs: &mut Vec<String>, out: &mut Vec<String>) 
                 2 => u64::MAX,
                 _ => 0,
             };
+            // A favourable case's window is what the run saw; the others
+            // may hold more, under a minute old.
+            let observed = if fav { seen } else { observed_around(&mut f1, seen, reference) };
             let input = RunInput {
                 graph: &g,
                 node,
@@ -747,6 +804,7 @@ fn plan_vectors(rng: &mut Lcg, graphs: &mut Vec<String>, out: &mut Vec<String>) 
                 spot,
                 reference,
                 seen,
+                observed,
                 pool_quote,
                 partial_spent,
             };
@@ -793,11 +851,102 @@ fn plan_vectors(rng: &mut Lcg, graphs: &mut Vec<String>, out: &mut Vec<String>) 
                     spot: Some(spot),
                     reference,
                     seen: Some(Seen { min: low, max: spot }),
+                    observed: Some(Seen { min: low, max: spot }),
                     pool_quote: Some(pool_quote),
                     partial_spent,
                 };
                 out.push(plan_json(gi, n, &input));
             }
+        }
+    }
+    price_condition_vectors(&mut f1, graphs, out);
+}
+
+/// Review F1: one WHEN burn node whose condition combines price leaves with
+/// NOT, AND and OR (and a treasury leaf), run with ranges of observed prices
+/// around its thresholds: every leaf is judged on the end of the range that
+/// makes it hardest to hold.
+fn price_condition_vectors(f1: &mut Lcg, graphs: &mut Vec<String>, out: &mut Vec<String>) {
+    const NOW: i64 = 1_800_000_000;
+    let gte = |a: u64| leaf(op::graph::PRICE_GTE, 0, a);
+    let lte = |a: u64| leaf(op::graph::PRICE_LTE, 0, a);
+    let not = || leaf(op::NOT, 0, 0);
+    let and = || leaf(op::AND, 0, 0);
+    let or = || leaf(op::OR, 0, 0);
+    for _ in 0..40 {
+        let reference = (1u128 << 64) >> (1 + f1.below(8));
+        let near = |f1: &mut Lcg| -> u64 {
+            (reference as u64)
+                .saturating_add(f1.below(1_000))
+                .saturating_sub(f1.below(1_000))
+        };
+        let (a, b) = (near(f1), near(f1));
+        let cond = match f1.below(9) {
+            0 => vec![gte(a)],
+            1 => vec![lte(a)],
+            2 => vec![gte(a), not()],
+            3 => vec![lte(a), not()],
+            4 => vec![gte(a.min(b)), lte(a.max(b)), and()],
+            5 => vec![lte(a.min(b)), gte(a.max(b)), or()],
+            6 => vec![gte(a), not(), lte(b), or()],
+            7 => vec![gte(a), lte(b), and(), not()],
+            _ => vec![
+                gte(a),
+                leaf(op::graph::TREASURY_TOKEN_GTE, 0, 1_000),
+                or(),
+            ],
+        };
+        let len = cond.len() as u8;
+        let program = GraphProgram {
+            flags: 0,
+            operator: [0; 32],
+            recipients: vec![],
+            nodes: vec![GNode {
+                trigger: trigger::WHEN,
+                trigger_arg: 0,
+                cond_off: 0,
+                cond_len: len,
+                action: action::BURN,
+                operator_gated: 0,
+                epoch_secs: 86_400,
+                budget_per_epoch: 1_000_000,
+                p1: 1_000,
+                p2: 0,
+                max_runs_per_epoch: 10,
+                reserved: [0; 5],
+            }],
+            cond,
+        };
+        let bytes = program.encode().unwrap();
+        let g = Graph::verify(&bytes).unwrap();
+        let gi = graphs.len();
+        graphs.push(format!("\"{}\"", hex(&bytes)));
+        let states = [NodeState::default(); MAX_NODES];
+        for _ in 0..8 {
+            let (x, y) = (near(f1) as u128, near(f1) as u128);
+            let observed = match f1.below(5) {
+                0 => None,
+                _ => Some(Seen { min: x.min(y), max: x.max(y) }),
+            };
+            let input = RunInput {
+                graph: &g,
+                node: 0,
+                now: NOW,
+                states: &states,
+                operator: Pubkey::default(),
+                operator_signer: None,
+                amount: None,
+                treasury_sol: 0,
+                treasury_token: [0, 999, 1_000][f1.below(3) as usize],
+                graduated: true,
+                spot: observed.map(|o| o.max),
+                reference: near(f1) as u128,
+                seen: observed,
+                observed,
+                pool_quote: None,
+                partial_spent: 0,
+            };
+            out.push(plan_json(gi, 1, &input));
         }
     }
 }
@@ -836,7 +985,7 @@ fn plan_json(gi: usize, n: usize, input: &RunInput) -> String {
         )
     };
     format!(
-        "{{\"g\":{},\"node\":{},\"now\":{},\"states\":[{}],\"operator\":\"{}\",\"signer\":{},\"amount\":{},\"sol\":{},\"tokens\":{},\"graduated\":{},\"spot\":{},\"reference\":{},\"seen\":{},\"pool_quote\":{},\"partial_spent\":{},\"plan\":{},\"err\":{}}}",
+        "{{\"g\":{},\"node\":{},\"now\":{},\"states\":[{}],\"operator\":\"{}\",\"signer\":{},\"amount\":{},\"sol\":{},\"tokens\":{},\"graduated\":{},\"spot\":{},\"reference\":{},\"seen\":{},\"observed\":{},\"pool_quote\":{},\"partial_spent\":{},\"plan\":{},\"err\":{}}}",
         gi,
         input.node,
         q(input.now),
@@ -850,6 +999,7 @@ fn plan_json(gi: usize, n: usize, input: &RunInput) -> String {
         opt_q(input.spot),
         q(reference),
         seen_json(input.seen),
+        seen_json(input.observed),
         opt_q(input.pool_quote),
         q(input.partial_spent),
         plan,
@@ -888,7 +1038,7 @@ fn write_sdk_vectors() {
         crate::instructions::run::BUYBACK_ACCOUNTS
     );
     let json = format!(
-        "{{\"generator\":\"programs/noised-autopilot src after audit round 4 (price.rs, reference.rs, logic.rs, launchpad.rs payloads) on seeded inputs\",\"constants\":{},\"price\":[\n{}\n],\"reference\":[\n{}\n],\"logic\":[\n{}\n],\"graphs\":[\n{}\n],\"plan_run\":[\n{}\n]}}\n",
+        "{{\"generator\":\"programs/noised-autopilot src after audit round 4 and review F1 of the framework-free rewrite (price.rs, reference.rs, logic.rs, launchpad.rs payloads) on seeded inputs\",\"constants\":{},\"price\":[\n{}\n],\"reference\":[\n{}\n],\"logic\":[\n{}\n],\"graphs\":[\n{}\n],\"plan_run\":[\n{}\n]}}\n",
         consts,
         prices.join(",\n"),
         refs.join(",\n"),

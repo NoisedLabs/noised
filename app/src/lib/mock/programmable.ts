@@ -1123,8 +1123,8 @@ async function buildRevokeOperatorTx(_conn: Connection, payer: PublicKey, launch
 /**
  * run.rs `handle_run`: a due scheduled change first (PendingUpdateDue), the active graph, then this run's observation
  * of the pool (once graduated) and the program's own `plan_run` (the SDK's exact port, replayed against vectors the
- * program wrote): the step exists; an operator step is signed by the operator; it is due and its condition holds on the
- * reference; a buyback only after graduation, with a usable observation window, within the premium; the amount; the
+ * program wrote): the step exists; an operator step is signed by the operator; it is due and its condition holds across the
+ * reference and every observed price; a buyback only after graduation, with a usable observation window, within the premium; the amount; the
  * minimum out. Returns the plan with the price state it runs at.
  */
 function planRun(
@@ -1161,6 +1161,8 @@ function planRun(
     spot,
     reference: after.price.reference,
     seen: after.window,
+    // Review F1: price conditions hold across the reference and every price observed in the window.
+    observed: after.observed,
     poolQuote: graduated && l ? l.quoteReserve : null,
     // Audit 4, A4-2: what partial buybacks moved of this node's open run.
     partialSpent: ap.partialSpent?.[node] ?? 0n,

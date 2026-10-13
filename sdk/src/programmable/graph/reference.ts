@@ -11,10 +11,15 @@
  * - A buyback is priced from the lower of the reference and the lowest price
  *   observed in the window (`buybackCap`): after the market falls, one
  *   observation by anyone bounds every buyback from a minute later.
- * - The reference (what price conditions read) moves only to the edge of the
- *   window: up toward its lowest price when every observation is above it, at
- *   most 5% of price per hour from an allowance only rises spend; down to its
- *   highest price when every observation is below it, at once (`follow`).
+ * - The reference moves only to the edge of the window: up toward its lowest
+ *   price when every observation is above it, at most 5% of price per hour
+ *   from an allowance only rises spend; down to its highest price when every
+ *   observation is below it, at once (`follow`).
+ * - Price conditions must hold across the reference and every price
+ *   observed in the window (`observed`, `conditionPrices`): PRICE_GTE on the
+ *   lowest of them, PRICE_LTE on the highest. One pumped or dumped
+ *   observation, even in the run's own transaction, can make a condition
+ *   false, never true (review F1).
  *
  * A keeper therefore calls `update_price`, waits a minute, then runs a buyback.
  */
@@ -98,19 +103,31 @@ export function seen(obs: readonly ObsBucket[], now: number): Seen | null {
 }
 
 /**
+ * `reference::observed`: the lowest and the highest price observed in the
+ * current and the previous bucket at `now`, however recent (this run's own
+ * observation included); null without one. What a run's price conditions
+ * must hold across (`conditionPrices`, review F1) and what a burn is valued
+ * at (`lowest`): more observations only make either more cautious, so none
+ * needs to be a minute old.
+ */
+export function observed(obs: readonly ObsBucket[], now: number): Seen | null {
+  const oldest = bucketOf(now) - 1;
+  let out: Seen | null = null;
+  for (const b of obs) {
+    if (isEmpty(b) || b.index < oldest) continue;
+    out = out === null ? { min: b.min, max: b.max } : { min: out.min < b.min ? out.min : b.min, max: out.max > b.max ? out.max : b.max };
+  }
+  return out;
+}
+
+/**
  * `reference::lowest`: the lowest price observed in the current and the
  * previous bucket at `now`, however recent (a burn's value for its tip,
  * audit 4, A4-4: a lower price only ever lowers a tip, so no observation
  * needs to be a minute old); null without one.
  */
 export function lowest(obs: readonly ObsBucket[], now: number): bigint | null {
-  const oldest = bucketOf(now) - 1;
-  let out: bigint | null = null;
-  for (const b of obs) {
-    if (isEmpty(b) || b.index < oldest) continue;
-    if (out === null || b.min < out) out = b.min;
-  }
-  return out;
+  return observed(obs, now)?.min ?? null;
 }
 
 /** The sqrt price a buyback is bounded by: min(reference, lowest observed); null without a usable window. */

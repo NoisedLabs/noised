@@ -33,6 +33,7 @@ import {
   keeperFloor,
   lowestObserved,
   observationWindow,
+  observedPrices,
   followReference,
   planMaxTip,
   planPartial,
@@ -121,6 +122,7 @@ class Chain {
       spot: market.graduated ? market.spot : null,
       reference: p.reference,
       seen,
+      observed: observedPrices(p.observations, now),
       poolQuote: market.pool ?? 0n,
       partialSpent: this.partialSpent[node]!,
     });

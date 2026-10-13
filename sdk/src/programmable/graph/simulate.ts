@@ -9,7 +9,10 @@
  * vectors), on the state the program keeps: the reference price starts at
  * the launch's migration price and moves only with observations (it rises
  * at most 5% an hour, from an allowance only rises spend, and falls at
- * once); a buyback needs observations spanning a minute, the pool price
+ * once); a price condition holds only if it holds across the reference and
+ * every price observed in the last 15 to 30 minutes ("at least" on the
+ * lowest, "at most" on the highest; review F1); a buyback needs
+ * observations spanning a minute, the pool price
  * within its premium over min(reference, lowest observed price), and a swap
  * that returns at least the minimum priced from that bound; tips are at most
  * a tenth of what a run moved. So the simulator never shows a run the
@@ -324,7 +327,7 @@ export function simulateGraph(input: Graph | Uint8Array, opts: SimulateGraphOpti
             amountArg = amount;
           }
           // The run, as the program does it: observe, move the reference, plan, act, record, tip.
-          const { price: ps, window } = afterObservation(state, now, spot, graduated);
+          const { price: ps, window, observed } = afterObservation(state, now, spot, graduated);
           const raws: RawNodeState[] = state.nodes.map((r) => ({
             lastRun: BigInt(r.lastRun), lastSeq: BigInt(r.lastSeq), epochStart: BigInt(r.epochStart), runsInEpoch: r.runsInEpoch, spentInEpoch: r.spentInEpoch,
           }));
@@ -342,6 +345,7 @@ export function simulateGraph(input: Graph | Uint8Array, opts: SimulateGraphOpti
             spot: graduated ? spot : null,
             reference: ps.reference,
             seen: window,
+            observed,
             poolQuote: pool ?? 0n,
             partialSpent: state.partialSpent?.[i] ?? 0n,
           });

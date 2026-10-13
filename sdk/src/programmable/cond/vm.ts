@@ -211,3 +211,53 @@ export function evalCondition(nodes: readonly CondNode[], leaf: (n: CondNode) =>
   }
   return stack.length === 1 ? stack[0]! : null;
 }
+
+/**
+ * Evaluates a condition some of whose leaves are uncertain, in one pass (the
+ * crate's vm::eval_bounded). `leaf` gives each leaf as `[must, may]`: whether
+ * it holds for every value its inputs may take, and whether it holds for
+ * some (null = unknown op). AND and OR combine the two halves separately; NOT
+ * swaps them (not may, not must). The result is the root's `must`: true only
+ * if the condition holds whatever the uncertain inputs are. With certain
+ * leaves (`[v, v]`) it is exactly `evalCondition`. Returns null for a
+ * malformed condition.
+ */
+export function evalConditionBounded(
+  nodes: readonly CondNode[],
+  leaf: (n: CondNode) => readonly [boolean, boolean] | null,
+): boolean | null {
+  const stack: [boolean, boolean][] = [];
+  for (const n of nodes) {
+    let v: [boolean, boolean];
+    switch (n.op) {
+      case OP.TRUE:
+        v = [true, true];
+        break;
+      case OP.FALSE:
+        v = [false, false];
+        break;
+      case OP.AND:
+      case OP.OR: {
+        if (stack.length < 2) return null;
+        const x = stack.pop()!;
+        const y = stack.pop()!;
+        v = n.op === OP.AND ? [x[0] && y[0], x[1] && y[1]] : [x[0] || y[0], x[1] || y[1]];
+        break;
+      }
+      case OP.NOT: {
+        if (stack.length < 1) return null;
+        const x = stack.pop()!;
+        v = [!x[1], !x[0]];
+        break;
+      }
+      default: {
+        const l = leaf(n);
+        if (l === null) return null;
+        v = [l[0], l[1]];
+      }
+    }
+    if (stack.length >= VM.MAX_STACK) return null;
+    stack.push(v);
+  }
+  return stack.length === 1 ? stack[0]![0] : null;
+}

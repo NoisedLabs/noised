@@ -8221,6 +8221,18 @@ export const SDK_REFERENCE: SdkReference = {
    "members": []
   },
   {
+   "name": "evalConditionBounded",
+   "kind": "function",
+   "module": "programmable/cond/vm",
+   "group": "rules",
+   "signature": "function evalConditionBounded(\n  nodes: readonly CondNode[],\n  leaf: (n: CondNode) => readonly [boolean, boolean] | null,\n): boolean | null",
+   "doc": "Evaluates a condition some of whose leaves are uncertain, in one pass (the\ncrate's vm::eval_bounded). `leaf` gives each leaf as `[must, may]`: whether\nit holds for every value its inputs may take, and whether it holds for\nsome (null = unknown op). AND and OR combine the two halves separately; NOT\nswaps them (not may, not must). The result is the root's `must`: true only\nif the condition holds whatever the uncertain inputs are. With certain\nleaves (`[v, v]`) it is exactly `evalCondition`. Returns null for a\nmalformed condition.",
+   "notes": "",
+   "deprecated": false,
+   "typeOnly": false,
+   "members": []
+  },
+  {
    "name": "evaluateRuleSet",
    "kind": "function",
    "module": "programmable/rules/evaluate",
@@ -9161,8 +9173,8 @@ export const SDK_REFERENCE: SdkReference = {
    "kind": "function",
    "module": "programmable/graph/runtime",
    "group": "graphs",
-   "signature": "function afterObservation(\n  state: AutopilotState,\n  now: number,\n  spot: bigint,\n  graduated: boolean,\n): { price: PriceState; window: Seen | null }",
-   "doc": "What `run` does first, on a copy: once graduated, observe the pool at\n`now`; then move the reference toward what the window agrees on.",
+   "signature": "function afterObservation(\n  state: AutopilotState,\n  now: number,\n  spot: bigint,\n  graduated: boolean,\n): { price: PriceState; window: Seen | null; observed: Seen | null }",
+   "doc": "What `run` does first, on a copy: once graduated, observe the pool at\n`now`; then move the reference toward what the window agrees on.\n`window`: what the window saw if it spans a minute (`seen`, the buyback\nbound); `observed`: every price it holds however recent (`observed`, what\nprice conditions must hold across).",
    "notes": "",
    "deprecated": false,
    "typeOnly": false,
@@ -9565,6 +9577,18 @@ export const SDK_REFERENCE: SdkReference = {
    "members": []
   },
   {
+   "name": "graphConditionOver",
+   "kind": "function",
+   "module": "programmable/graph/runtime",
+   "group": "graphs",
+   "signature": "function graphConditionOver(\n  g: RawGraph,\n  index: number,\n  c: RawGraphCtx,\n  prices: PriceRange,\n): boolean | null",
+   "doc": "The crate's Graph::condition_over, what the program decides with (review\nF1): node `index`'s condition holds for every sqrt price in `prices`\n(`c.sqrtPrice` is not read). PRICE_GTE x needs `low >= x`, PRICE_LTE x\nneeds `high <= x`; under NOT the other end decides (`evalConditionBounded`),\nso a wider range can only turn a condition false. True without one; null\nif malformed.",
+   "notes": "",
+   "deprecated": false,
+   "typeOnly": false,
+   "members": []
+  },
+  {
    "name": "graphDue",
    "kind": "function",
    "module": "programmable/graph/runtime",
@@ -9595,6 +9619,18 @@ export const SDK_REFERENCE: SdkReference = {
    "group": "graphs",
    "signature": "function graphRunnable(\n  g: RawGraph,\n  index: number,\n  states: readonly RawNodeState[],\n  c: RawGraphCtx,\n): NotDueCode | null",
    "doc": "The crate's Graph::runnable: due, then the condition. null = runnable.",
+   "notes": "",
+   "deprecated": false,
+   "typeOnly": false,
+   "members": []
+  },
+  {
+   "name": "graphRunnableOver",
+   "kind": "function",
+   "module": "programmable/graph/runtime",
+   "group": "graphs",
+   "signature": "function graphRunnableOver(\n  g: RawGraph,\n  index: number,\n  states: readonly RawNodeState[],\n  c: RawGraphCtx,\n  prices: PriceRange,\n): NotDueCode | null",
+   "doc": "The crate's Graph::runnable_over: due, then the condition over `prices`. null = runnable.",
    "notes": "",
    "deprecated": false,
    "typeOnly": false,
@@ -9774,7 +9810,7 @@ export const SDK_REFERENCE: SdkReference = {
    "module": "programmable/graph/runtime",
    "group": "graphs",
    "signature": "function nodeCondition(\n  cg: CompiledGraph,\n  state: AutopilotState,\n  env: AutopilotEnv,\n  index: number,\n): boolean | null",
-   "doc": "The crate's Graph::condition with a ctx built from the state: the reference after this run's observation (spot before one exists).",
+   "doc": "Node `index`'s condition as a run now decides it (the crate's\nGraph::condition_over): after this run's observation, price conditions\nmust hold across the reference and every price observed in the window\n(`conditionPrices`).",
    "notes": "",
    "deprecated": false,
    "typeOnly": false,
@@ -9835,6 +9871,18 @@ export const SDK_REFERENCE: SdkReference = {
    "group": "graphs",
    "signature": "function observationWindow(obs: readonly ObsBucket[], now: number): Seen | null",
    "doc": "What the current and previous bucket saw at `now`, if their observations span at least a minute.",
+   "notes": "",
+   "deprecated": false,
+   "typeOnly": false,
+   "members": []
+  },
+  {
+   "name": "observedPrices",
+   "kind": "function",
+   "module": "programmable/graph/reference",
+   "group": "graphs",
+   "signature": "function observedPrices(obs: readonly ObsBucket[], now: number): Seen | null",
+   "doc": "`reference::observed`: the lowest and the highest price observed in the\ncurrent and the previous bucket at `now`, however recent (this run's own\nobservation included); null without one. What a run's price conditions\nmust hold across (`conditionPrices`, review F1) and what a burn is valued\nat (`lowest`): more observations only make either more cautious, so none\nneeds to be a minute old.",
    "notes": "",
    "deprecated": false,
    "typeOnly": false,
@@ -10537,6 +10585,18 @@ export const SDK_REFERENCE: SdkReference = {
    "members": []
   },
   {
+   "name": "PriceRange",
+   "kind": "interface",
+   "module": "programmable/graph/runtime",
+   "group": "graphs",
+   "signature": "interface PriceRange {\n  low: bigint;\n  high: bigint;\n}",
+   "doc": "The crate's PriceRange: price conditions must hold at every sqrt price from `low` to `high`.",
+   "notes": "",
+   "deprecated": false,
+   "typeOnly": true,
+   "members": []
+  },
+  {
    "name": "PriceState",
    "kind": "interface",
    "module": "programmable/graph/reference",
@@ -10933,6 +10993,18 @@ export const SDK_REFERENCE: SdkReference = {
    "members": []
   },
   {
+   "name": "conditionPrices",
+   "kind": "function",
+   "module": "programmable/autopilot/logic",
+   "group": "autopilot-logic",
+   "signature": "function conditionPrices(reference: bigint, observed: Seen | null): PriceRange",
+   "doc": "`logic::condition_prices`: the sqrt prices a run's price conditions must\nhold at (review F1): from the lower of the reference and the lowest price\nobserved in the window to the higher of the reference and the highest\n(`observed`: `reference::observed`, however recent, this run's own\nobservation included). PRICE_GTE is judged on the low end, PRICE_LTE on\nthe high end (`graphConditionOver`), so an observation, a pump or a dump\nin the run's own transaction included, can make a price condition false,\nnever true. Without observations: the reference alone.",
+   "notes": "",
+   "deprecated": false,
+   "typeOnly": false,
+   "members": []
+  },
+  {
    "name": "freezePayload",
    "kind": "function",
    "module": "programmable/autopilot/logic",
@@ -11010,7 +11082,7 @@ export const SDK_REFERENCE: SdkReference = {
    "module": "programmable/autopilot/logic",
    "group": "autopilot-logic",
    "signature": "function planRun(input: RunInput): Outcome<RunPlan>",
-   "doc": "`logic::plan_run`, check for check and in the program's order: the node\nexists; an operator-gated node is signed by the operator; the node is due\nand its condition holds on the reference price; a buyback only after\ngraduation, with a usable observation window, while the pool price is\nwithin the premium over the lower of the reference and the lowest observed\nprice (which also prices its minimum out); the amount (`runAmount`) within\nthe node's cap, `min(p1, budget left)`, less what partial buybacks moved of\nits open run (`partialSpent`); a distribution pays something. A keeper's\nbuyback with an amount below that cap is `partial`.",
+   "doc": "`logic::plan_run`, check for check and in the program's order: the node\nexists; an operator-gated node is signed by the operator; the node is due\nand its condition holds across the reference and every price observed in\nthe window (`conditionPrices`, review F1); a buyback only after\ngraduation, with a usable observation window, while the pool price is\nwithin the premium over the lower of the reference and the lowest observed\nprice (which also prices its minimum out); the amount (`runAmount`) within\nthe node's cap, `min(p1, budget left)`, less what partial buybacks moved of\nits open run (`partialSpent`); a distribution pays something. A keeper's\nbuyback with an amount below that cap is `partial`.",
    "notes": "",
    "deprecated": false,
    "typeOnly": false,
@@ -11177,7 +11249,7 @@ export const SDK_REFERENCE: SdkReference = {
    "kind": "interface",
    "module": "programmable/autopilot/logic",
    "group": "autopilot-logic",
-   "signature": "interface RunInput {\n  /** The active graph, verified (`verifyGraphBytes`). */\n  graph: RawGraph;\n  node: number;\n  now: bigint;\n  /** Node states, indexed like the graph's nodes (missing entries are fresh). */\n  states: readonly RawNodeState[];\n  /** The stored operator (32 bytes; all zero: none, or revoked). */\n  operator: Uint8Array;\n  /** The `operator` account of the instruction, if it signed. */\n  operatorSigner: Uint8Array | null;\n  /** The caller's chosen amount, if any. */\n  amount: bigint | null;\n  treasurySol: bigint;\n  treasuryToken: bigint;\n  /** The launch graduated: its DAMM v2 pool is bound. */\n  graduated: boolean;\n  /** The pool's sqrt price before the action (null before graduation). */\n  spot: bigint | null;\n  /** The reference sqrt price, after this run's observation. */\n  reference: bigint;\n  /** What the observation window saw, this run's observation included. */\n  seen: Seen | null;\n  /** The pool's wSOL, for a buyback. */\n  poolQuote: bigint | null;\n  /**\n   * What keepers' partial buybacks of the node moved since it last completed\n   * a run (`Autopilot.partial_spent[node]`; audit 4, A4-2): the run's cap is\n   * `min(p1 - partialSpent, budget left)`. Default 0.\n   */\n  partialSpent?: bigint | undefined;\n}",
+   "signature": "interface RunInput {\n  /** The active graph, verified (`verifyGraphBytes`). */\n  graph: RawGraph;\n  node: number;\n  now: bigint;\n  /** Node states, indexed like the graph's nodes (missing entries are fresh). */\n  states: readonly RawNodeState[];\n  /** The stored operator (32 bytes; all zero: none, or revoked). */\n  operator: Uint8Array;\n  /** The `operator` account of the instruction, if it signed. */\n  operatorSigner: Uint8Array | null;\n  /** The caller's chosen amount, if any. */\n  amount: bigint | null;\n  treasurySol: bigint;\n  treasuryToken: bigint;\n  /** The launch graduated: its DAMM v2 pool is bound. */\n  graduated: boolean;\n  /** The pool's sqrt price before the action (null before graduation). */\n  spot: bigint | null;\n  /** The reference sqrt price, after this run's observation. */\n  reference: bigint;\n  /** What the observation window saw if it spans a minute (`seen`), this run's observation included: the buyback bound. */\n  seen: Seen | null;\n  /**\n   * Every price the window holds however recent (`reference::observed`, the\n   * SDK's `observedPrices`), this run's observation included: price\n   * conditions must hold across it and the reference (`conditionPrices`;\n   * review F1). null: no observation.\n   */\n  observed: Seen | null;\n  /** The pool's wSOL, for a buyback. */\n  poolQuote: bigint | null;\n  /**\n   * What keepers' partial buybacks of the node moved since it last completed\n   * a run (`Autopilot.partial_spent[node]`; audit 4, A4-2): the run's cap is\n   * `min(p1 - partialSpent, budget left)`. Default 0.\n   */\n  partialSpent?: bigint | undefined;\n}",
    "doc": "Everything `run` decides from (`logic::RunInput`).",
    "notes": "",
    "deprecated": false,

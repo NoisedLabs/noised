@@ -2,9 +2,10 @@
  * Autopilot graphs in plain English, one line per node (plus the
  * guarantees). The lines say what the autopilot program enforces and no
  * more (review U14): recipients and the operator are named by their full
- * address (the creator's label in quotes next to it); price conditions read
- * the slow reference price, never the live one; tips are listed among what
- * can leave the treasury.
+ * address (the creator's label in quotes next to it); a price condition must
+ * hold for the slow reference price and every price seen in the last 15 to
+ * 30 minutes, never the live one alone (review F1); tips are listed among
+ * what can leave the treasury.
  */
 import { AUTOPILOT, DEFAULT_TOKEN_DECIMALS } from "../constants.js";
 import { shortAddress } from "../bytes.js";
@@ -60,10 +61,11 @@ function leafText(g: Graph, c: Cond, neg: boolean, dec: number): string | null {
       return neg ? "the token hasn't graduated yet" : "the token has graduated";
     case "priceLte":
     case "priceGte": {
-      // The program compares its reference price (it follows the pool slowly), never the live price.
+      // The program checks the reference price (it follows the pool slowly) and every price seen in the
+      // last 15 to 30 minutes, and all of them must pass, under NOT too (review F1): "has stayed".
       const p = "sol" in c.price ? c.price.sol : sqrtPriceQ64ToPriceText(c.price.sqrtPriceQ64, dec);
       const atMost = (c.op === "priceLte") !== neg;
-      return `the reference price is ${atMost ? (neg ? "above" : "at most") : neg ? "below" : "at least"} ${p} SOL per token`;
+      return `the price has stayed ${atMost ? (neg ? "above" : "at most") : neg ? "below" : "at least"} ${p} SOL per token`;
     }
     case "nowGe":
       return neg ? `it's before ${formatDate(c.unix)}` : `it's ${formatDate(c.unix)} or later`;
@@ -172,7 +174,9 @@ export function explainGraph(input: Graph | Uint8Array, opts: ExplainGraphOption
   const lines = g.nodes.map((_, i) => explainNode(g, i, { addresses: how }));
   if (opts.guarantees ?? true) {
     if (readsPrice(g)) {
-      lines.push("The reference price starts at the launch's migration price and follows the pool's price slowly: it rises at most 5% an hour and falls at once. It is not the live price.");
+      lines.push(
+        "A price check passes only if the reference price and every price seen in the last 15 to 30 minutes pass it, so a brief spike or dip can hold a step back but never set it off. The reference price starts at the launch's migration price and follows the pool's price slowly: it rises at most 5% an hour and falls at once.",
+      );
     }
     const pays = g.recipients.length > 0 ? ", pay the recipients listed above" : "";
     lines.push(

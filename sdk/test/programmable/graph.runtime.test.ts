@@ -13,6 +13,7 @@ import {
   graph,
   graphShares,
   newAutopilotState,
+  nodeCondition,
   nodeDue,
   nodeStatus,
   observePrice,
@@ -241,11 +242,20 @@ describe("nodeStatus: program-side checks the keeper sees", () => {
     expect(nodeStatus(cond, s, env({ graduated: true, spotSqrtPriceQ64: r * 2n }), 0)).toMatchObject({ due: false, reason: "condition" });
   });
 
-  it("price conditions read the reference price, not spot", () => {
+  it("price conditions hold across the reference and every observed price, the run's own included (review F1)", () => {
     const s = newAutopilotState(g, REF);
-    expect(nodeStatus(g, s, env({ spotSqrtPriceQ64: 1n << 41n }), 1).due).toBe(false);
+    expect(nodeStatus(g, s, env({ spotSqrtPriceQ64: 1n << 41n }), 1).due).toBe(false); // the reference is above 2^40
     s.refSqrtPriceQ64 = 1n << 39n;
-    expect(nodeStatus(g, s, env({ spotSqrtPriceQ64: 1n << 41n }), 1).due).toBe(true);
+    // The run observes the pool first: a price above the threshold refuses "at most", whatever the reference says.
+    expect(nodeStatus(g, s, env({ spotSqrtPriceQ64: 1n << 41n }), 1)).toMatchObject({ due: false, reason: "condition", error: "ConditionFalse" });
+    expect(nodeStatus(g, s, env({ spotSqrtPriceQ64: 1n << 39n }), 1).due).toBe(true);
+    // An observation above it earlier in the window refuses it too: a dump in the run's own transaction can't hold it true.
+    observePrice(s, T0 - 300, 1n << 41n);
+    expect(s.refSqrtPriceQ64).toBe(1n << 39n);
+    expect(nodeStatus(g, s, env({ spotSqrtPriceQ64: 1n << 39n }), 1).due).toBe(false);
+    expect(nodeCondition(compiledGraph(g), s, env({ spotSqrtPriceQ64: 1n << 39n }), 1)).toBe(false);
+    // Once that observation left the window (15 to 30 minutes), it runs again.
+    expect(nodeStatus(g, s, env({ now: T0 + 1_800, spotSqrtPriceQ64: 1n << 39n }), 1).due).toBe(true);
   });
 
   it("a fall anyone observed bounds the buyback, whatever the reference says", () => {
@@ -266,7 +276,9 @@ describe("nodeStatus: program-side checks the keeper sees", () => {
     expect(findDueNodes(g, s, env({ spotSqrtPriceQ64: 1n << 48n }))).toEqual([0]); // the reference fell to 2^48 > the price node's 2^40
     s.refSqrtPriceQ64 = 1n << 39n;
     s.observations = [];
-    expect(findDueNodes(g, s, env({ spotSqrtPriceQ64: 1n << 48n }))).toEqual([1]); // no window yet: no buyback
+    // No window yet: no buyback; the price node runs at a spot below its threshold (the run observes it: review F1).
+    expect(findDueNodes(g, s, env({ spotSqrtPriceQ64: 1n << 39n }))).toEqual([1]);
+    expect(findDueNodes(g, s, env({ spotSqrtPriceQ64: 1n << 48n }))).toEqual([]);
     observePrice(s, T0, 1n << 39n);
     expect(findDueNodes(g, s, env({ now: T0 + 60, spotSqrtPriceQ64: 1n << 39n }))).toEqual([1]); // 2^39 prices no tokens for 2 SOL
     recordRun(g, s, 1, T0 + 60, 1_000_000n);

@@ -18,7 +18,7 @@ import { ACTION, AUTOPILOT, BPS_DENOMINATOR, U64_MAX } from "../constants.js";
 import { bytesEqual, isZero, type KeyInput, toAddress, addressBytes, utf8 } from "../bytes.js";
 import { ProgError } from "../errors.js";
 import type { RawGraph } from "../graph/codec.js";
-import { currentEpochRaw, graphRunCap, graphRunnable, graphRunsInEpoch, graphShares, type NotDueCode, type RawNodeState } from "../graph/runtime.js";
+import { currentEpochRaw, graphRunCap, graphRunnableOver, graphRunsInEpoch, graphShares, type NotDueCode, type PriceRange, type RawNodeState } from "../graph/runtime.js";
 import { buybackCap, keeperFloor, minOut, type Seen, tokenValue, withinPremium } from "../graph/reference.js";
 
 /** programs/noised-autopilot src/error.rs `AutopilotError`, in order: the code is 6000 + index. */
@@ -395,6 +395,24 @@ export function burnPrice(graduated: boolean, referenceSqrtQ64: bigint, lowestSq
   return lowestSqrtQ64 === null || referenceSqrtQ64 < lowestSqrtQ64 ? referenceSqrtQ64 : lowestSqrtQ64;
 }
 
+/**
+ * `logic::condition_prices`: the sqrt prices a run's price conditions must
+ * hold at (review F1): from the lower of the reference and the lowest price
+ * observed in the window to the higher of the reference and the highest
+ * (`observed`: `reference::observed`, however recent, this run's own
+ * observation included). PRICE_GTE is judged on the low end, PRICE_LTE on
+ * the high end (`graphConditionOver`), so an observation, a pump or a dump
+ * in the run's own transaction included, can make a price condition false,
+ * never true. Without observations: the reference alone.
+ */
+export function conditionPrices(reference: bigint, observed: Seen | null): PriceRange {
+  if (observed === null) return { low: reference, high: reference };
+  return {
+    low: observed.min < reference ? observed.min : reference,
+    high: observed.max > reference ? observed.max : reference,
+  };
+}
+
 /** Everything `run` decides from (`logic::RunInput`). */
 export interface RunInput {
   /** The active graph, verified (`verifyGraphBytes`). */
@@ -417,8 +435,15 @@ export interface RunInput {
   spot: bigint | null;
   /** The reference sqrt price, after this run's observation. */
   reference: bigint;
-  /** What the observation window saw, this run's observation included. */
+  /** What the observation window saw if it spans a minute (`seen`), this run's observation included: the buyback bound. */
   seen: Seen | null;
+  /**
+   * Every price the window holds however recent (`reference::observed`, the
+   * SDK's `observedPrices`), this run's observation included: price
+   * conditions must hold across it and the reference (`conditionPrices`;
+   * review F1). null: no observation.
+   */
+  observed: Seen | null;
   /** The pool's wSOL, for a buyback. */
   poolQuote: bigint | null;
   /**
@@ -439,7 +464,8 @@ export function paddedStates(states: readonly RawNodeState[]): RawNodeState[] {
 /**
  * `logic::plan_run`, check for check and in the program's order: the node
  * exists; an operator-gated node is signed by the operator; the node is due
- * and its condition holds on the reference price; a buyback only after
+ * and its condition holds across the reference and every price observed in
+ * the window (`conditionPrices`, review F1); a buyback only after
  * graduation, with a usable observation window, while the pool price is
  * within the premium over the lower of the reference and the lowest observed
  * price (which also prices its minimum out); the amount (`runAmount`) within
@@ -457,14 +483,20 @@ export function planRun(input: RunInput): Outcome<RunPlan> {
     if (input.operatorSigner === null || !bytesEqual(input.operatorSigner, input.operator)) return fail("WrongOperator");
   }
   const states = paddedStates(input.states);
-  const nd = graphRunnable(g, input.node, states, {
-    now: input.now,
-    treasurySol: input.treasurySol,
-    treasuryToken: input.treasuryToken,
-    graduated: input.graduated,
-    sqrtPrice: input.reference,
-    runsInEpoch: graphRunsInEpoch(g, states, input.now),
-  });
+  const nd = graphRunnableOver(
+    g,
+    input.node,
+    states,
+    {
+      now: input.now,
+      treasurySol: input.treasurySol,
+      treasuryToken: input.treasuryToken,
+      graduated: input.graduated,
+      sqrtPrice: input.reference,
+      runsInEpoch: graphRunsInEpoch(g, states, input.now),
+    },
+    conditionPrices(input.reference, input.observed),
+  );
   if (nd !== null) return fail(notDueError(nd));
   const partialSpent = input.partialSpent ?? 0n;
   if (typeof partialSpent !== "bigint" || partialSpent < 0n) throw new ProgError("BadModel", "partialSpent must be a non-negative bigint");

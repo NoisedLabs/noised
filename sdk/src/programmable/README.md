@@ -119,7 +119,7 @@ ACTION    := "buyback" SOL "premium" PERCENT                     buy back and bu
            | "burn" TOKENS | "distribute" SOL
 LEAF      := "true" | "false" | "graduated"
            | "treasury_sol" ">=" SOL | "treasury_tokens" ">=" TOKENS
-           | "price" ("<=" | ">=") (NUMBER "SOL" | INT "q64")    SOL per token (reference price)
+           | "price" ("<=" | ">=") (NUMBER "SOL" | INT "q64")    SOL per token (the reference and every recently observed price)
            | "now" (">=" | "<") (YYYY-MM-DD | YYYY-MM-DDTHH:MM:SSZ | unix)
            | "runs" "(" NAME ")" "<" INT                         runs of a node in its current epoch
 SOL       := NUMBER "SOL" | INT "lamports" ;  TOKENS := NUMBER "tokens" | INT "units"

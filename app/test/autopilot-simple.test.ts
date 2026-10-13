@@ -95,7 +95,7 @@ describe("simple jobs", () => {
     expect(labelled).toContain(R1);
     // A price condition reads the slow reference price, and says so (review U14).
     const priced = { ...g, nodes: g.nodes.map((n, i) => (i === 0 ? { ...n, when: { op: "priceLte" as const, price: { sol: "0.0001" } } } : n)) };
-    expect(explainGraphLines(priced).join(" ")).toMatch(/the reference price is at most/);
+    expect(explainGraphLines(priced).join(" ")).toMatch(/the price has stayed at most/);
   });
 
   it("premiums below what the pool's fee needs are never offered (review U5)", () => {

@@ -2,6 +2,10 @@
 
 All notable changes to `@noisedlabs/mcp`. Versions follow [Semantic Versioning](https://semver.org/); while the version is `0.x`, a minor release may change tools, inputs or outputs.
 
+## Unreleased
+
+- Autopilot price conditions follow the program as fixed by review F1 of the framework-free rewrite: a step's price condition must hold for the reference price and every price observed in the last 15 to 30 minutes (the SDK's `planRun` with `observed`), so `get_due_nodes`, `build_run_tx` and `simulate_autopilot` never show a run the program would refuse.
+
 ## 0.2.0 - 2026-10-13 (first public release)
 
 First public release candidate.

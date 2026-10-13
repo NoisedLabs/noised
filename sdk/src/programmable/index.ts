@@ -78,7 +78,7 @@ export type { Decimal, Duration, Percent, SolAmount, TokenAmount } from "./units
 export { graphHash, graphHashHex, rulesHash, rulesHashHex, ZERO_HASH } from "./hash.js";
 
 // ------------------------------------------------------------ conditions ---
-export { evalCondition, exceeds, isGraphLeafOp, isRuleLeafOp, isValidBpsArg, threshold, verifyCondition } from "./cond/vm.js";
+export { evalCondition, evalConditionBounded, exceeds, isGraphLeafOp, isRuleLeafOp, isValidBpsArg, threshold, verifyCondition } from "./cond/vm.js";
 export type { CondContext, CondNode } from "./cond/vm.js";
 export {
   checkCondSize,
@@ -143,9 +143,11 @@ export {
   epochView,
   findDueNodes,
   graphCondition,
+  graphConditionOver,
   graphDue,
   graphRunCap,
   graphRunnable,
+  graphRunnableOver,
   graphRunsInEpoch,
   graphShares,
   newAutopilotState,
@@ -174,6 +176,7 @@ export type {
   NodeRuntime,
   NodeStatus,
   NotDueCode,
+  PriceRange,
   RawGraphCtx,
   RawNodeState,
   TipOptions,
@@ -188,6 +191,7 @@ export {
   minOut as buybackMinOut,
   newPriceState,
   observe as recordObservation,
+  observed as observedPrices,
   priceQ64,
   seen as observationWindow,
   tokenValue,
@@ -209,6 +213,7 @@ export {
   checkApply,
   checkFreezeWindow,
   checkFresh,
+  conditionPrices,
   FREEZE_DEFAULT_VALID_SECS,
   freezePayload,
   markIndex,

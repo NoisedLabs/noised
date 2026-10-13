@@ -13,8 +13,10 @@
  * - Then: runs this epoch < max, spent this epoch < budget, the condition.
  * - Epochs stay aligned to the first one (epochStart + k * epochSecs).
  * - Like the program, a run first observes the pool (once graduated) and
- *   moves the reference (reference.ts); price conditions read the reference,
- *   which starts at the launch's migration price.
+ *   moves the reference (reference.ts), which starts at the launch's
+ *   migration price. Price conditions must hold across the reference and
+ *   every price observed in the window, this run's included (review F1:
+ *   PRICE_GTE on the lowest, PRICE_LTE on the highest; `graphConditionOver`).
  * - Buybacks: graduation, observations spanning a minute, spot within the
  *   premium over min(reference, lowest observed price), and a minimum out
  *   priced from that bound. With the pool's fee (`AutopilotEnv.poolFeeBps`)
@@ -25,13 +27,13 @@
  */
 import { ACTION, AUTOPILOT, BPS_DENOMINATOR, OP, TRIGGER, U64_MAX } from "../constants.js";
 import { type Address, addressBytes, toAddress } from "../bytes.js";
-import { type CondNode, evalCondition } from "../cond/vm.js";
+import { type CondNode, evalCondition, evalConditionBounded } from "../cond/vm.js";
 import { ProgError } from "../errors.js";
-import { type AutopilotErrorName, planRun } from "../autopilot/logic.js";
+import { type AutopilotErrorName, conditionPrices, planRun } from "../autopilot/logic.js";
 import { type RawGraph, verifyGraphBytes } from "./codec.js";
 import { buybackFills, estimateBuybackOut, largestFillable, premiumCoversFee } from "./market.js";
 import { compileGraph, type Graph } from "./model.js";
-import { buybackCap, follow, keeperFloor, minOut, observe, type ObsBucket, type PriceState, type Seen, seen, tokenValue } from "./reference.js";
+import { buybackCap, follow, keeperFloor, minOut, observe, observed, type ObsBucket, type PriceState, type Seen, seen, tokenValue } from "./reference.js";
 
 export interface NodeRuntime {
   /** Unix time of the last successful run (0 = never). */
@@ -259,13 +261,21 @@ export function storePriceState(state: AutopilotState, p: PriceState): void {
 /**
  * What `run` does first, on a copy: once graduated, observe the pool at
  * `now`; then move the reference toward what the window agrees on.
+ * `window`: what the window saw if it spans a minute (`seen`, the buyback
+ * bound); `observed`: every price it holds however recent (`observed`, what
+ * price conditions must hold across).
  */
-export function afterObservation(state: AutopilotState, now: number, spot: bigint, graduated: boolean): { price: PriceState; window: Seen | null } {
+export function afterObservation(
+  state: AutopilotState,
+  now: number,
+  spot: bigint,
+  graduated: boolean,
+): { price: PriceState; window: Seen | null; observed: Seen | null } {
   const p = priceStateOf(state);
   if (graduated) observe(p.observations, now, spot);
   const window = seen(p.observations, now);
   follow(p, window, now);
-  return { price: p, window };
+  return { price: p, window, observed: observed(p.observations, now) };
 }
 
 /**
@@ -385,6 +395,61 @@ export function graphRunnable(g: RawGraph, index: number, states: readonly RawNo
   return h === null ? "Malformed" : h ? null : "ConditionFalse";
 }
 
+/** The crate's PriceRange: price conditions must hold at every sqrt price from `low` to `high`. */
+export interface PriceRange {
+  low: bigint;
+  high: bigint;
+}
+
+/**
+ * The crate's Graph::condition_over, what the program decides with (review
+ * F1): node `index`'s condition holds for every sqrt price in `prices`
+ * (`c.sqrtPrice` is not read). PRICE_GTE x needs `low >= x`, PRICE_LTE x
+ * needs `high <= x`; under NOT the other end decides (`evalConditionBounded`),
+ * so a wider range can only turn a condition false. True without one; null
+ * if malformed.
+ */
+export function graphConditionOver(g: RawGraph, index: number, c: RawGraphCtx, prices: PriceRange): boolean | null {
+  const n = g.nodes[index];
+  if (!n) return null;
+  if (n.condLen === 0) return true;
+  if (n.condOff + n.condLen > g.cond.length) return null;
+  const timeLt = (arg: bigint): boolean => c.now < 0n || c.now < arg;
+  const sure = (v: boolean): [boolean, boolean] => [v, v];
+  return evalConditionBounded(g.cond.slice(n.condOff, n.condOff + n.condLen), (x) => {
+    switch (x.op) {
+      case OP.TREASURY_SOL_GTE:
+        return sure(c.treasurySol >= x.arg);
+      case OP.TREASURY_TOKEN_GTE:
+        return sure(c.treasuryToken >= x.arg);
+      case OP.GRADUATED:
+        return sure(c.graduated);
+      case OP.PRICE_LTE:
+        return [prices.high <= x.arg, prices.low <= x.arg];
+      case OP.PRICE_GTE:
+        return [prices.low >= x.arg, prices.high >= x.arg];
+      case OP.NOW_GE:
+        return sure(!timeLt(x.arg));
+      case OP.NOW_LT:
+        return sure(timeLt(x.arg));
+      case OP.RUNS_IN_EPOCH_LT: {
+        const r = c.runsInEpoch[x.a];
+        return r === undefined ? null : sure(BigInt(r) < x.arg);
+      }
+      default:
+        return null;
+    }
+  });
+}
+
+/** The crate's Graph::runnable_over: due, then the condition over `prices`. null = runnable. */
+export function graphRunnableOver(g: RawGraph, index: number, states: readonly RawNodeState[], c: RawGraphCtx, prices: PriceRange): NotDueCode | null {
+  const d = graphDue(g, index, states, c.now, c.graduated);
+  if (d !== null) return d;
+  const h = graphConditionOver(g, index, c, prices);
+  return h === null ? "Malformed" : h ? null : "ConditionFalse";
+}
+
 /** The crate's Graph::run_cap: min(budget - spent this epoch, p1), saturating. */
 export function graphRunCap(g: RawGraph, index: number, s: RawNodeState, now: bigint): bigint {
   const n = g.nodes[index];
@@ -454,18 +519,29 @@ export function nodeDue(cg: CompiledGraph, state: AutopilotState, index: number,
   return graphDue(cg.raw, index, state.nodes.map(rawState), BigInt(now), graduated);
 }
 
-/** The crate's Graph::condition with a ctx built from the state: the reference after this run's observation (spot before one exists). */
+/**
+ * Node `index`'s condition as a run now decides it (the crate's
+ * Graph::condition_over): after this run's observation, price conditions
+ * must hold across the reference and every price observed in the window
+ * (`conditionPrices`).
+ */
 export function nodeCondition(cg: CompiledGraph, state: AutopilotState, env: AutopilotEnv, index: number): boolean | null {
   const states = state.nodes.map(rawState);
   const now = BigInt(env.now);
-  return graphCondition(cg.raw, index, {
-    now,
-    treasurySol: env.treasurySol,
-    treasuryToken: env.treasuryTokens,
-    graduated: env.graduated,
-    sqrtPrice: afterObservation(state, env.now, env.spotSqrtPriceQ64, env.graduated).price.reference,
-    runsInEpoch: graphRunsInEpoch(cg.raw, states, now),
-  });
+  const after = afterObservation(state, env.now, env.spotSqrtPriceQ64, env.graduated);
+  return graphConditionOver(
+    cg.raw,
+    index,
+    {
+      now,
+      treasurySol: env.treasurySol,
+      treasuryToken: env.treasuryTokens,
+      graduated: env.graduated,
+      sqrtPrice: after.price.reference,
+      runsInEpoch: graphRunsInEpoch(cg.raw, states, now),
+    },
+    conditionPrices(after.price.reference, after.observed),
+  );
 }
 
 /** The crate's Graph::run_cap: min(budget left this epoch, p1). */
@@ -511,6 +587,8 @@ const PLAN_TEXT: Partial<Record<AutopilotErrorName, [BlockReason, string]>> = {
 interface Snapshot {
   reference: bigint;
   window: Seen | null;
+  /** Every price the window holds, however recent: what price conditions must hold across. */
+  observed: Seen | null;
   runsInEpoch: number[];
 }
 
@@ -528,13 +606,16 @@ function statusOf(cg: CompiledGraph, state: AutopilotState, raws: readonly RawNo
     due: false, reason, notDue, error, why, maxAmount: 0n, minAmount: 0n, amount: 0n, cap: 0n, partial: false, minOut: null, expectedOut: null, operatorOnly,
   });
   const now = BigInt(env.now);
-  // The trigger and the epoch limits, then the condition (on the reference after this run's observation).
+  // The trigger and the epoch limits, then the condition (across the reference and the window's prices, after this run's observation).
   let nd = graphDue(cg.raw, index, raws, now, env.graduated);
   if (nd === null) {
     const s = snap();
-    const c = graphCondition(cg.raw, index, {
-      now, treasurySol: env.treasurySol, treasuryToken: env.treasuryTokens, graduated: env.graduated, sqrtPrice: s.reference, runsInEpoch: s.runsInEpoch,
-    });
+    const c = graphConditionOver(
+      cg.raw,
+      index,
+      { now, treasurySol: env.treasurySol, treasuryToken: env.treasuryTokens, graduated: env.graduated, sqrtPrice: s.reference, runsInEpoch: s.runsInEpoch },
+      conditionPrices(s.reference, s.observed),
+    );
     nd = c === null ? "Malformed" : c ? null : "ConditionFalse";
   }
   if (nd !== null) {
@@ -569,6 +650,7 @@ function statusOf(cg: CompiledGraph, state: AutopilotState, raws: readonly RawNo
       spot,
       reference: s.reference,
       seen: s.window,
+      observed: s.observed,
       poolQuote: env.poolSol ?? 0n,
       partialSpent,
     });
@@ -653,8 +735,8 @@ function snapOf(cg: CompiledGraph, state: AutopilotState, raws: readonly RawNode
   let c: Snapshot | null = null;
   return () => {
     if (c === null) {
-      const { price, window } = afterObservation(state, env.now, env.spotSqrtPriceQ64, env.graduated);
-      c = { reference: price.reference, window, runsInEpoch: graphRunsInEpoch(cg.raw, raws, BigInt(env.now)) };
+      const { price, window, observed } = afterObservation(state, env.now, env.spotSqrtPriceQ64, env.graduated);
+      c = { reference: price.reference, window, observed, runsInEpoch: graphRunsInEpoch(cg.raw, raws, BigInt(env.now)) };
     }
     return c;
   };
