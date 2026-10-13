@@ -5,14 +5,20 @@ name: ottersec-pda
 #
 # - step `export`: for each program, `solana-verify export-pda-tx` prints the
 #   unsigned transaction that writes the build parameters (this repository, the
-#   commit, `--library-name <lib> --arch v3`, the same arguments release.yml
-#   builds with) to the OtterSec verify PDA of the uploader. The transactions
+#   commit, `--library-name <lib> [--base-image <image>] --arch v3`, the same
+#   build release.yml makes) to the OtterSec verify PDA of the uploader
+#   (Initialize, or Update when the PDA exists). OtterSec's remote worker may
+#   not know the image solana-verify picks for [workspace.metadata.cli]
+#   solana = "4.3.0"; `base_image` then names that same image by digest
+#   (solana-verify 0.5.2 runs the identical build either way). The transactions
 #   are uploaded as the `ottersec-pda-tx` artifact. The upgrade authority
 #   decodes and checks each one offline, sets a fresh blockhash, signs and
 #   sends it; the key never comes near CI.
 # - step `submit`: once the PDAs are on chain, `solana-verify remote
 #   submit-job` queues OtterSec's remote build of each program and waits for
-#   the result (verified or not, with both hashes).
+#   the result (verified or not, with both hashes). OtterSec rate-limits
+#   submissions, so the programs go one at a time and a rate-limited submit
+#   is retried.
 #
 # Every action is pinned to a commit SHA and solana-verify to an exact version.
 # Keep RUST_TOOLCHAIN and SOLANA_VERIFY_VERSION equal to release.yml.
@@ -49,6 +55,11 @@ on:
         required: false
         type: string
         default: "100000"
+      base_image:
+        description: "export: --base-image, a solanafoundation/solana-verifiable-build@sha256:<digest> (the image release.yml built with); empty to let solana-verify pick"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -66,6 +77,7 @@ env:
   UPLOADER: ${{ inputs.uploader }}
   ONLY: ${{ inputs.program }}
   CU_PRICE: ${{ inputs.compute_unit_price }}
+  BASE_IMAGE: ${{ inputs.base_image }}
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -81,7 +93,9 @@ jobs:
           [[ "$UPLOADER" =~ ^[1-9A-HJ-NP-Za-km-z]{32,44}$ ]] || { echo "::error::uploader is not a base58 address"; exit 1; }
           [[ -z "$ONLY" || "$ONLY" =~ ^noised_(launchpad|autopilot|shield|vault|hook)$ ]] || { echo "::error::unknown program $ONLY"; exit 1; }
           [[ "$CU_PRICE" =~ ^[0-9]{1,8}$ ]] || { echo "::error::compute_unit_price must be an integer below 10^8"; exit 1; }
-          echo "repo $REPO_URL commit $COMMIT uploader $UPLOADER only '${ONLY}' compute unit price $CU_PRICE"
+          [[ -z "$BASE_IMAGE" || "$BASE_IMAGE" =~ ^solanafoundation/solana-verifiable-build@sha256:[0-9a-f]{64}$ ]] \
+            || { echo "::error::base_image must be solanafoundation/solana-verifiable-build@sha256:<digest>"; exit 1; }
+          echo "repo $REPO_URL commit $COMMIT uploader $UPLOADER only '${ONLY}' compute unit price $CU_PRICE base image '${BASE_IMAGE}'"
       - name: Install Rust and solana-verify
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
@@ -94,8 +108,10 @@ jobs:
           out="$GITHUB_WORKSPACE/ottersec-pda-tx"
           mkdir -p "$out"
           cd "$RUNNER_TEMP"
-          printf '{"repo_url":"%s","commit":"%s","uploader":"%s","solana_verify":"%s","compute_unit_price":%s,"programs":{' \
-            "$REPO_URL" "$COMMIT" "$UPLOADER" "$SOLANA_VERIFY_VERSION" "$CU_PRICE" > "$out/manifest.json"
+          printf '{"repo_url":"%s","commit":"%s","uploader":"%s","solana_verify":"%s","compute_unit_price":%s,"base_image":"%s","programs":{' \
+            "$REPO_URL" "$COMMIT" "$UPLOADER" "$SOLANA_VERIFY_VERSION" "$CU_PRICE" "$BASE_IMAGE" > "$out/manifest.json"
+          image_args=()
+          if [ -n "$BASE_IMAGE" ]; then image_args=(--base-image "$BASE_IMAGE"); fi
           sep=""
           for pair in \
             noised_launchpad:CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc \
@@ -108,7 +124,7 @@ jobs:
             echo "::group::$lib $id"
             solana-verify -u "$RPC_URL" --compute-unit-price "$CU_PRICE" export-pda-tx "$REPO_URL" \
               --program-id "$id" --uploader "$UPLOADER" --commit-hash "$COMMIT" \
-              --library-name "$lib" --arch v3 --encoding base64 | tee "$out/$lib.log"
+              --library-name "$lib" "${image_args[@]}" --arch v3 --encoding base64 | tee "$out/$lib.log"
             echo "::endgroup::"
             tx=$(tail -n 1 "$out/$lib.log")
             [[ "$tx" =~ ^[A-Za-z0-9+/]+=*$ ]] || { echo "::error::$lib: last line is not a base64 transaction"; exit 1; }
@@ -127,44 +143,51 @@ jobs:
           retention-days: 7
 
   submit:
-    name: submit ${{ matrix.lib }}
+    name: submit OtterSec remote jobs
     if: inputs.step == 'submit'
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { lib: noised_launchpad, id: CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc }
-          - { lib: noised_autopilot, id: D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx }
-          - { lib: noised_shield, id: BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9 }
-          - { lib: noised_vault, id: 7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb }
-          - { lib: noised_hook, id: cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia }
-    env:
-      LIB: ${{ matrix.lib }}
-      PROGRAM_ID: ${{ matrix.id }}
+    timeout-minutes: 180
     steps:
       - name: Inputs
-        id: sel
         run: |
           [[ "$UPLOADER" =~ ^[1-9A-HJ-NP-Za-km-z]{32,44}$ ]] || { echo "::error::uploader is not a base58 address"; exit 1; }
-          if [ -n "$ONLY" ] && [ "$ONLY" != "$LIB" ]; then echo "run=false" >> "$GITHUB_OUTPUT"; else echo "run=true" >> "$GITHUB_OUTPUT"; fi
+          [[ -z "$ONLY" || "$ONLY" =~ ^noised_(launchpad|autopilot|shield|vault|hook)$ ]] || { echo "::error::unknown program $ONLY"; exit 1; }
       - name: Install Rust and solana-verify
-        if: steps.sel.outputs.run == 'true'
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
           rustup default "$RUST_TOOLCHAIN"
           cargo install solana-verify --version "$SOLANA_VERIFY_VERSION" --locked
           solana-verify --version
-      - name: The uploader's PDA on chain
-        if: steps.sel.outputs.run == 'true'
-        run: solana-verify -u "$RPC_URL" get-program-pda --program-id "$PROGRAM_ID" --signer "$UPLOADER"
-      - name: Remote job (waits for OtterSec's build)
-        if: steps.sel.outputs.run == 'true'
-        run: solana-verify -u "$RPC_URL" remote submit-job --program-id "$PROGRAM_ID" --uploader "$UPLOADER"
-      - name: Verification status
-        if: always() && steps.sel.outputs.run == 'true'
+      # One program at a time: OtterSec answers "Too Many Requests! Wait for Ns"
+      # to submissions that come too close together; those are retried.
+      # submit-job exits 0 whether or not the build matched, so the status
+      # check below is what counts.
+      - name: Remote jobs (each waits for OtterSec's build)
         run: |
-          solana-verify remote get-status --program-id "$PROGRAM_ID" || true
-          curl -sS "https://verify.osec.io/status/$PROGRAM_ID" || true
-          echo
+          set -uo pipefail
+          for pair in \
+            noised_launchpad:CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc \
+            noised_autopilot:D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx \
+            noised_shield:BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9 \
+            noised_vault:7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb \
+            noised_hook:cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia; do
+            lib="${pair%%:*}"; id="${pair##*:}"
+            if [ -n "$ONLY" ] && [ "$ONLY" != "$lib" ]; then continue; fi
+            echo "::group::$lib $id"
+            solana-verify -u "$RPC_URL" get-program-pda --program-id "$id" --signer "$UPLOADER" || true
+            for try in 1 2 3 4 5 6; do
+              solana-verify -u "$RPC_URL" remote submit-job --program-id "$id" --uploader "$UPLOADER" 2>&1 | tee submit.log
+              grep -q "Too Many Requests" submit.log || break
+              echo "rate limited (try $try), waiting 60 s"; sleep 60
+            done
+            echo "::endgroup::"
+            sleep 30
+          done
+      - name: Verification status
+        if: always()
+        run: |
+          for id in CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx \
+            BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9 7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb \
+            cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia; do
+            echo "$id: $(curl -sS "https://verify.osec.io/status/$id" || true)"
+          done
