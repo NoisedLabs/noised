@@ -1,10 +1,11 @@
 //! The Launch Guard decision function: pure, total and allocation-free, so
 //! it is cheap on-chain and exhaustively testable on the host.
 
-use anchor_lang::prelude::Pubkey;
 use noised_rules::{rules::CODE_MALFORMED, RuleSet, TransferCtx, Violation};
 
-use crate::{state::HookPolicy, SHIELD_PROGRAM_ID, VAULT_PROGRAM_ID};
+#[cfg(test)]
+use crate::state::HookPolicy;
+use crate::{state::PolicyView, Pubkey, SHIELD_PROGRAM_ID, VAULT_PROGRAM_ID};
 
 /// Hard bounds, enforced by the hook itself on every policy (defense in
 /// depth: the launchpad enforces the same and stricter limits).
@@ -81,7 +82,11 @@ pub enum Step {
 /// reaches them, the creator rules (`creator_rules`). `execute` makes the
 /// same two steps and reads what only the rules use (the supply and the
 /// top-level instructions) in between, so nothing else pays for it.
-pub fn evaluate(policy: &HookPolicy, t: &TransferView) -> Result<(), Refusal> {
+///
+/// `policy` is a [`PolicyView`]: the account data's fields on-chain, or a
+/// `&HookPolicy` (clients and tests).
+pub fn evaluate<'a>(policy: impl Into<PolicyView<'a>>, t: &TransferView) -> Result<(), Refusal> {
+    let policy = policy.into();
     match built_ins(policy, t)? {
         Step::Allowed => Ok(()),
         Step::CreatorRules => creator_rules(policy, t),
@@ -104,7 +109,8 @@ pub fn evaluate(policy: &HookPolicy, t: &TransferView) -> Result<(), Refusal> {
 /// 7. Other transfers from an exempt owner are always allowed.
 /// 8. The creator's rules decide only what passes everything above
 ///    (`Step::CreatorRules`, then `creator_rules`): they can only refuse.
-pub fn built_ins(policy: &HookPolicy, t: &TransferView) -> Result<Step, Refusal> {
+pub fn built_ins<'a>(policy: impl Into<PolicyView<'a>>, t: &TransferView) -> Result<Step, Refusal> {
+    let policy = policy.into();
     let is_buy = t.source == policy.base_vault;
     if t.destination == policy.base_vault && !is_buy {
         return Ok(Step::Allowed);
@@ -172,14 +178,18 @@ pub fn built_ins(policy: &HookPolicy, t: &TransferView) -> Result<Step, Refusal>
 /// anti-bot rules (never the built-in ones); a call into the vault or the
 /// shield made by another program's CPI has that program as its top-level
 /// instruction, so the rules still apply to it.
-pub fn creator_rules(policy: &HookPolicy, t: &TransferView) -> Result<(), Refusal> {
+pub fn creator_rules<'a>(
+    policy: impl Into<PolicyView<'a>>,
+    t: &TransferView,
+) -> Result<(), Refusal> {
+    let policy = policy.into();
     if policy.rules.is_empty() {
         return Ok(());
     }
     if t.top_program == VAULT_PROGRAM_ID || t.top_program == SHIELD_PROGRAM_ID {
         return Ok(());
     }
-    let set = RuleSet::parse(&policy.rules).map_err(|_| {
+    let set = RuleSet::parse(policy.rules).map_err(|_| {
         Refusal::Rule(Violation {
             rule: u8::MAX,
             code: CODE_MALFORMED,

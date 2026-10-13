@@ -108,8 +108,9 @@ const declareId = (rel: string): string => /declare_id!\("(\w+)"\)/.exec(src(rel
 describe("constants match the Rust sources", () => {
   it("program ids (declare_id! and IDL addresses)", () => {
     expect(declareId("programs/noised-launchpad/src/lib.rs")).toBe(PROGRAM_IDS.launchpad.toBase58());
-    expect(declareId("programs/noised-hook/src/lib.rs")).toBe(PROGRAM_IDS.hook.toBase58());
-    // The vault is written without Anchor; its Anchor reference (programs/noised-vault/anchor, the same ABI) declares the id.
+    // The hook and the vault are written without Anchor; their Anchor references (programs/noised-{hook,vault}/anchor,
+    // the same ABI) declare the ids.
+    expect(declareId("programs/noised-hook/anchor/lib.rs")).toBe(PROGRAM_IDS.hook.toBase58());
     expect(declareId("programs/noised-vault/anchor/lib.rs")).toBe(PROGRAM_IDS.vault.toBase58());
     expect(declareId("programs/noised-shield/src/lib.rs")).toBe(PROGRAM_IDS.shield.toBase58());
     expect(declareId("programs/noised-autopilot/src/lib.rs")).toBe(PROGRAM_IDS.autopilot.toBase58());
@@ -415,7 +416,8 @@ describe("constants match the Rust sources", () => {
     expect(Number(b.get("MAX_SNIPE_SHIELD_SECS"))).toBe(HOOK_BOUNDS.MAX_SNIPE_SHIELD_SECS);
     expect(b.get("MIN_MAX_WALLET_DIVISOR")).toBe(HOOK_BOUNDS.MIN_MAX_WALLET_DIVISOR);
     expect(b.get("MIN_MAX_BUY_DIVISOR")).toBe(HOOK_BOUNDS.MIN_MAX_BUY_DIVISOR);
-    expect(pubkeyConsts(src("programs/noised-hook/src/lib.rs")).get("LAUNCHPAD_PROGRAM_ID")).toBe(PROGRAM_IDS.launchpad.toBase58());
+    // The hook is written without Anchor: its program ids are `pubkey!` constants in its Anchor reference.
+    expect(pubkeyConsts(src("programs/noised-hook/anchor/lib.rs")).get("LAUNCHPAD_PROGRAM_ID")).toBe(PROGRAM_IDS.launchpad.toBase58());
   });
 
   it("vault v4: seeds, versions, message format, memo program (state.rs, message.rs, token.rs)", () => {
@@ -453,7 +455,9 @@ describe("constants match the Rust sources", () => {
   });
 
   it("Launch Guard: execute_batch discriminator, two metas, four hook accounts (hook lib.rs, hook_accounts.rs)", () => {
-    const hook = src("programs/noised-hook/src/lib.rs");
+    // The hook's Anchor reference (programs/noised-hook/anchor); the program writes the same meta list
+    // (programs/noised-hook/src/processor.rs, tested byte for byte against spl-tlv-account-resolution).
+    const hook = src("programs/noised-hook/anchor/lib.rs");
     const disc = /pub const EXECUTE_BATCH_DISCRIMINATOR: \[u8; 8\] = \[([\d,\s]+)\];/.exec(hook)![1]!.split(",").map((x) => Number(x.trim()));
     expect(disc).toEqual([...LAUNCH_GUARD.EXECUTE_BATCH_DISCRIMINATOR]);
     expect(disc).toEqual(Array.from(sha256(new TextEncoder().encode("global:execute_batch")).slice(0, 8)));
@@ -499,7 +503,7 @@ describe("constants match the Rust sources", () => {
 
   it("review 4: the vault and shield the hook skips creator rules for, pq_authorize's kinds, the autopilot's Launch versions, FreezeExpired, freeze payload v2", () => {
     // R1: creator rules are skipped when the current top-level program is the Noised vault or shield (hook lib.rs, rules.rs).
-    const hook = pubkeyConsts(src("programs/noised-hook/src/lib.rs"));
+    const hook = pubkeyConsts(src("programs/noised-hook/anchor/lib.rs"));
     expect([hook.get("VAULT_PROGRAM_ID"), hook.get("SHIELD_PROGRAM_ID")]).toEqual([PROGRAM_IDS.vault.toBase58(), PROGRAM_IDS.shield.toBase58()]);
     expect([NOISED_VAULT_PROGRAM, NOISED_SHIELD_PROGRAM]).toEqual([PROGRAM_IDS.vault.toBase58(), PROGRAM_IDS.shield.toBase58()]);
     expect([...RULES_SKIPPED_PROGRAMS]).toEqual([NOISED_VAULT_PROGRAM, NOISED_SHIELD_PROGRAM]);
@@ -677,9 +681,9 @@ describe("the IDLs are current with the program sources", () => {
   }
   const programs: [keyof typeof IDLS, string, string][] = [
     ["launchpad", "programs/noised-launchpad/src/error.rs", "programs/noised-launchpad/src/lib.rs"],
-    ["hook", "programs/noised-hook/src/lib.rs", "programs/noised-hook/src/lib.rs"],
-    // Written without Anchor: its IDL is checked against the Anchor reference it implements (and, in
-    // programs/noised-vault/tests/abi.rs, against the program itself).
+    // Written without Anchor (the hook and the vault): the IDL is checked against the Anchor reference each
+    // implements (and, in programs/noised-{hook,vault}/tests/abi.rs, against the program itself).
+    ["hook", "programs/noised-hook/anchor/lib.rs", "programs/noised-hook/anchor/lib.rs"],
     ["vault", "programs/noised-vault/anchor/error.rs", "programs/noised-vault/anchor/lib.rs"],
     ["shield", "programs/noised-shield/src/error.rs", "programs/noised-shield/src/lib.rs"],
     ["autopilot", "programs/noised-autopilot/src/error.rs", "programs/noised-autopilot/src/lib.rs"],
@@ -694,7 +698,7 @@ describe("the IDLs are current with the program sources", () => {
   }
 
   it("P1c error tables: hook 6011 RuleDenied / 6012 InvalidRules, launchpad 6048 InvalidRules, each with a plain message", () => {
-    const hook = errorEnum(src("programs/noised-hook/src/lib.rs"));
+    const hook = errorEnum(src("programs/noised-hook/anchor/lib.rs"));
     expect(hook.slice(-2)).toEqual([
       { code: 6011, name: "RuleDenied", msg: "Launch rule: this transfer is not allowed right now" },
       { code: 6012, name: "InvalidRules", msg: "Launch rules do not verify (PXR1) for this guard" },
@@ -719,11 +723,11 @@ describe("the IDLs are current with the program sources", () => {
     expect(plainErrorMessage(h, 6011)).toMatch(/never block selling/);
     expect(explainProgramError(h, 6010)?.plain).toBeUndefined();
     // The hook's log line names the rule that refused.
-    expect(src("programs/noised-hook/src/lib.rs")).toContain("Launch rule {} (code {}) refused the transfer");
+    expect(src("programs/noised-hook/anchor/lib.rs")).toContain("Launch rule {} (code {}) refused the transfer");
   });
 
   it("hook errors (HOOK_ERRORS) are the Rust enum's numbers; MutableOwner 6010 (audit round 3 F2) is appended with the SDK's message", () => {
-    const rust = errorEnum(src("programs/noised-hook/src/lib.rs"));
+    const rust = errorEnum(src("programs/noised-hook/anchor/lib.rs"));
     for (const e of rust) expect(HOOK_ERRORS[e.name as keyof typeof HOOK_ERRORS], e.name).toBe(e.code);
     expect(Object.keys(HOOK_ERRORS)).toHaveLength(13);
     const appended = { code: 6010, name: "MutableOwner", msg: "Launch guard: the receiving token account must have an immutable owner while the guard is on" };

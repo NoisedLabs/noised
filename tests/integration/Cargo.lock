@@ -1800,12 +1800,9 @@ name = "noised-hook"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
- "anchor-spl",
+ "noised-onchain",
  "noised-rules",
- "solana-instructions-sysvar 3.0.1",
- "spl-discriminator",
- "spl-tlv-account-resolution",
- "spl-transfer-hook-interface",
+ "pinocchio",
 ]
 
 [[package]]

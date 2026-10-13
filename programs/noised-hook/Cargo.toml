@@ -14,30 +14,53 @@ name = "noised_hook"
 
 [features]
 default = []
-cpi = ["no-entrypoint"]
+# Use as a library: no program entrypoint, global allocator or panic handler.
 no-entrypoint = []
-no-idl = []
+# The Anchor CPI client (`cpi::*`, and the Anchor traits of `HookPolicy` and
+# `PolicyParams` on-chain) for Anchor programs that call the hook (the
+# launchpad). It links anchor-lang into *their* binary; the hook's own build
+# never enables it.
+cpi = ["no-entrypoint", "dep:anchor-lang"]
+# Skip the `Instruction: <Name>` log line each instruction starts with.
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
-custom-heap = []
-custom-panic = []
-anchor-debug = []
 
+# Written without a framework (no Anchor): the on-chain binary links only
+# pinocchio (entrypoint, account views, CPI, syscalls), noised-onchain (the
+# shared Anchor-compatible account checks, errors and CPIs) and the PXR1
+# rules verifier and evaluator. The ABI (instruction, account and event
+# layouts, discriminators, the ExtraAccountMetaList contents, error numbers)
+# is the Anchor 1.2.1 build's, byte for byte; `idls/noised_hook.json`
+# describes it.
 [dependencies]
-anchor-lang = { workspace = true }
-anchor-spl = { workspace = true }
-spl-transfer-hook-interface = { workspace = true }
-spl-tlv-account-resolution = { workspace = true }
-spl-discriminator = { workspace = true }
-solana-instructions-sysvar = { workspace = true }
+noised-onchain = { workspace = true }
 # PXR1 creator rules: verified at `create_policy`, evaluated by `execute`
 # (no features: allocation-free).
 noised-rules = { workspace = true }
+pinocchio = { workspace = true }
+anchor-lang = { workspace = true, optional = true }
 
+# Host only (clients and tests), never in the on-chain binary: the Anchor
+# client API the test suites build instructions and read accounts with
+# (`accounts`, `instruction`, `AccountDeserialize` on `HookPolicy`, events).
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+anchor-lang = { workspace = true }
+
+# ABI tests: the program's layouts against Anchor's serialization, the IDL
+# and Borsh; the meta list against spl-tlv-account-resolution; token-account
+# and instructions-sysvar reading against spl-token-2022 and
+# solana-instructions-sysvar (the shared parsers are tested in
+# noised-onchain).
 [dev-dependencies]
-# Host tests encode rule sets and reuse the rules crate's random generators
-# (`rules::rules_gen`).
+anchor-spl = { workspace = true }
+# Host tests encode rule sets and reuse the rules crate's random generators.
 noised-rules = { workspace = true, features = ["alloc"] }
+serde_json = "1"
+solana-instruction = "=3.5.1"
+solana-instructions-sysvar = { workspace = true }
+solana-program-error = "=3.0.1"
+spl-discriminator = { workspace = true }
+spl-tlv-account-resolution = { workspace = true }
+spl-transfer-hook-interface = { workspace = true }
 
 [lints]
 workspace = true

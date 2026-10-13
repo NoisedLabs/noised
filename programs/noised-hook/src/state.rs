@@ -1,4 +1,16 @@
-use anchor_lang::prelude::*;
+//! The policy account and the `create_policy` arguments: layouts, readers
+//! and writers (the Anchor build's Borsh encoding, byte for byte).
+
+#[cfg(any(not(target_os = "solana"), feature = "cpi"))]
+use anchor_lang::{AnchorDeserialize, AnchorSerialize, Discriminator};
+use noised_onchain::args::Reader;
+use pinocchio::error::ProgramError;
+
+use crate::{
+    discriminator,
+    error::{anchor, fail},
+    Pubkey,
+};
 
 pub const POLICY_SEED: &[u8] = b"policy";
 pub const META_LIST_SEED: &[u8] = b"extra-account-metas";
@@ -16,8 +28,20 @@ pub const MAX_RULES_LEN: usize = noised_rules::rules::MAX_LEN;
 /// `end_snipe_shield` moving `snipe_shield_end_ts` earlier once the batch has
 /// bought. It stops mattering when DBC revokes the hook at curve completion.
 /// Its space is exactly its content (`HookPolicy::space`).
-#[account]
-#[derive(InitSpace, Debug)]
+///
+/// Account data: the 8-byte discriminator `sha256("account:HookPolicy")[..8]`,
+/// then the fields in Borsh, in this order ([`HookPolicy::FIXED_LEN`] bytes
+/// through the rules' `u32` length, then the rule bytes). On-chain the
+/// program reads it in place ([`PolicyHead`], [`PolicyView`]) and writes it
+/// with [`write_policy`]; this owned type is the clients' (Anchor's
+/// `AccountDeserialize` / `AccountSerialize` off-chain).
+#[cfg_attr(any(not(target_os = "solana"), feature = "cpi"), anchor_lang::account)]
+#[cfg_attr(
+    any(not(target_os = "solana"), feature = "cpi"),
+    derive(anchor_lang::InitSpace)
+)]
+#[cfg_attr(all(target_os = "solana", not(feature = "cpi")), derive(Clone))]
+#[derive(Debug)]
 pub struct HookPolicy {
     pub version: u8,
     pub bump: u8,
@@ -47,23 +71,73 @@ pub struct HookPolicy {
     /// by `create_policy` against `guard_secs`; empty for none. They can
     /// only refuse, and are checked after every built-in allow and denial
     /// (`rules::evaluate`).
-    #[max_len(MAX_RULES_LEN)]
-    pub rules: Vec<u8>,
+    #[cfg_attr(
+        any(not(target_os = "solana"), feature = "cpi"),
+        max_len(MAX_RULES_LEN)
+    )]
+    pub rules: alloc::vec::Vec<u8>,
+}
+
+/// Byte offsets of the policy's fields in the account data (the 8-byte
+/// discriminator included): its Borsh layout.
+pub mod layout {
+    pub const VERSION: usize = 8;
+    pub const BUMP: usize = 9;
+    pub const MINT: usize = 10;
+    pub const POOL: usize = 42;
+    pub const BASE_VAULT: usize = 74;
+    pub const LAUNCH_TS: usize = 106;
+    pub const SNIPE_SHIELD_END_TS: usize = 114;
+    pub const GUARD_END_TS: usize = 122;
+    pub const MAX_WALLET: usize = 130;
+    pub const MAX_BUY: usize = 138;
+    pub const P2P_LOCKED: usize = 146;
+    pub const EXEMPT: usize = 147;
+    /// The rules' `u32` length.
+    pub const RULES_LEN: usize = 275;
+    /// The rule bytes.
+    pub const RULES: usize = 279;
 }
 
 impl HookPolicy {
     /// Version 2: `rules`.
     pub const VERSION: u8 = 2;
+    /// Bytes before the rule bytes: discriminator, the fixed fields and the
+    /// rules' `u32` length (`8 + INIT_SPACE - MAX_RULES_LEN`).
+    pub const FIXED_LEN: usize = layout::RULES;
 
     /// Account space of a policy with `rules_len` rule bytes: exactly its
     /// borsh encoding (`INIT_SPACE` counts the largest rule set).
     pub fn space(rules_len: usize) -> usize {
-        8 + Self::INIT_SPACE - MAX_RULES_LEN + rules_len
+        Self::FIXED_LEN + rules_len
     }
 
     pub fn is_exempt(&self, owner: &Pubkey) -> bool {
-        *owner != Pubkey::default() && self.exempt.iter().any(|e| e == owner)
+        PolicyView::from(self).is_exempt(owner)
     }
+}
+
+/// `L` bytes of `data` at `at` (`at + L` within `N`: no check remains).
+#[inline(always)]
+fn array<const L: usize, const N: usize>(data: &[u8; N], at: usize) -> [u8; L] {
+    let mut out = [0u8; L];
+    out.copy_from_slice(&data[at..at + L]);
+    out
+}
+
+#[inline(always)]
+fn key<const N: usize>(data: &[u8; N], at: usize) -> Pubkey {
+    Pubkey::new_from_array(array(data, at))
+}
+
+#[inline(always)]
+fn i64_at<const N: usize>(data: &[u8; N], at: usize) -> i64 {
+    i64::from_le_bytes(array(data, at))
+}
+
+#[inline(always)]
+fn u64_at<const N: usize>(data: &[u8; N], at: usize) -> u64 {
+    u64::from_le_bytes(array(data, at))
 }
 
 /// What `execute` reads of a policy before decoding the rest: enough to let
@@ -88,34 +162,175 @@ impl PolicyHead {
 
     /// The head of a policy account's `data`: it must start with
     /// `HookPolicy`'s discriminator and hold at least `LEN` bytes (the same
-    /// errors as Anchor's decoding); nothing after `LEN` is read.
-    pub fn read(data: &[u8]) -> Result<Self> {
-        let discriminator = data
-            .get(..8)
-            .ok_or(ErrorCode::AccountDiscriminatorNotFound)?;
-        require!(
-            discriminator == HookPolicy::DISCRIMINATOR,
-            ErrorCode::AccountDiscriminatorMismatch
-        );
-        let head = data
-            .get(..Self::LEN)
-            .ok_or(ErrorCode::AccountDidNotDeserialize)?;
-        let field = |at: usize, len: usize| &head[at..at + len];
+    /// errors as Anchor's decoding, logged as the Anchor build logged them:
+    /// no account named); nothing after `LEN` is read.
+    pub fn read(data: &[u8]) -> Result<Self, ProgramError> {
+        let Some(discriminator) = data.first_chunk::<8>() else {
+            return Err(fail(anchor::ACCOUNT_DISCRIMINATOR_NOT_FOUND, None));
+        };
+        if *discriminator != discriminator::HOOK_POLICY {
+            return Err(fail(anchor::ACCOUNT_DISCRIMINATOR_MISMATCH, None));
+        }
+        let Some(head) = data.first_chunk::<{ Self::LEN }>() else {
+            return Err(fail(anchor::ACCOUNT_DID_NOT_DESERIALIZE, None));
+        };
         Ok(Self {
-            mint: Pubkey::try_from(field(Self::MINT_OFFSET, 32))
-                .map_err(|_| ErrorCode::AccountDidNotDeserialize)?,
-            base_vault: Pubkey::try_from(field(Self::BASE_VAULT_OFFSET, 32))
-                .map_err(|_| ErrorCode::AccountDidNotDeserialize)?,
-            guard_end_ts: i64::from_le_bytes(
-                field(Self::GUARD_END_TS_OFFSET, 8)
-                    .try_into()
-                    .map_err(|_| ErrorCode::AccountDidNotDeserialize)?,
-            ),
+            mint: key(head, Self::MINT_OFFSET),
+            base_vault: key(head, Self::BASE_VAULT_OFFSET),
+            guard_end_ts: i64_at(head, Self::GUARD_END_TS_OFFSET),
         })
     }
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+/// The fields of a policy the decision reads (`rules::built_ins`,
+/// `rules::creator_rules`), borrowed from the account data on-chain
+/// ([`PolicyView::read`]) or from a [`HookPolicy`] (`From`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PolicyView<'a> {
+    pub base_vault: Pubkey,
+    pub launch_ts: i64,
+    pub snipe_shield_end_ts: i64,
+    pub guard_end_ts: i64,
+    pub max_wallet: u64,
+    pub max_buy: u64,
+    pub p2p_locked: bool,
+    pub exempt: [Pubkey; MAX_EXEMPT],
+    pub rules: &'a [u8],
+}
+
+impl<'a> PolicyView<'a> {
+    /// `HookPolicy`'s Borsh decoding of a policy account's data (the
+    /// discriminator is the caller's to check): `None` exactly when Anchor's
+    /// `try_deserialize` fails after the discriminator
+    /// (`AccountDidNotDeserialize`): fewer than [`HookPolicy::FIXED_LEN`]
+    /// bytes, `p2p_locked` neither 0 nor 1, or fewer rule bytes than their
+    /// length says. Bytes after the rules are ignored.
+    #[inline]
+    pub fn read(data: &'a [u8]) -> Option<Self> {
+        let (fixed, rest) = data.split_first_chunk::<{ HookPolicy::FIXED_LEN }>()?;
+        let p2p_locked = match fixed[layout::P2P_LOCKED] {
+            0 => false,
+            1 => true,
+            _ => return None,
+        };
+        let rules_len = u32::from_le_bytes(array(fixed, layout::RULES_LEN));
+        let rules = rest.get(..rules_len as usize)?;
+        Some(Self {
+            base_vault: key(fixed, layout::BASE_VAULT),
+            launch_ts: i64_at(fixed, layout::LAUNCH_TS),
+            snipe_shield_end_ts: i64_at(fixed, layout::SNIPE_SHIELD_END_TS),
+            guard_end_ts: i64_at(fixed, layout::GUARD_END_TS),
+            max_wallet: u64_at(fixed, layout::MAX_WALLET),
+            max_buy: u64_at(fixed, layout::MAX_BUY),
+            p2p_locked,
+            exempt: [
+                key(fixed, layout::EXEMPT),
+                key(fixed, layout::EXEMPT + 32),
+                key(fixed, layout::EXEMPT + 64),
+                key(fixed, layout::EXEMPT + 96),
+            ],
+            rules,
+        })
+    }
+
+    pub fn is_exempt(&self, owner: &Pubkey) -> bool {
+        *owner != Pubkey::default() && self.exempt.iter().any(|e| e == owner)
+    }
+}
+
+impl<'a> From<&'a HookPolicy> for PolicyView<'a> {
+    fn from(p: &'a HookPolicy) -> Self {
+        Self {
+            base_vault: p.base_vault,
+            launch_ts: p.launch_ts,
+            snipe_shield_end_ts: p.snipe_shield_end_ts,
+            guard_end_ts: p.guard_end_ts,
+            max_wallet: p.max_wallet,
+            max_buy: p.max_buy,
+            p2p_locked: p.p2p_locked,
+            exempt: p.exempt,
+            rules: &p.rules,
+        }
+    }
+}
+
+/// What `end_snipe_shield` uses of its `Account<HookPolicy>`, read from the
+/// account data at the policy's offsets once [`PolicyView::read`] has
+/// accepted the whole layout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PolicyKeys {
+    pub bump: u8,
+    pub mint: Pubkey,
+    pub pool: Pubkey,
+    pub snipe_shield_end_ts: i64,
+}
+
+impl PolicyKeys {
+    /// The fields of a policy whose layout decodes (`Account<HookPolicy>`'s
+    /// deserialization): `None` exactly when [`PolicyView::read`] is `None`.
+    pub fn read(data: &[u8]) -> Option<Self> {
+        let view = PolicyView::read(data)?;
+        let fixed = data.first_chunk::<{ HookPolicy::FIXED_LEN }>()?;
+        Some(Self {
+            bump: fixed[layout::BUMP],
+            mint: key(fixed, layout::MINT),
+            pool: key(fixed, layout::POOL),
+            snipe_shield_end_ts: view.snipe_shield_end_ts,
+        })
+    }
+}
+
+/// The fields `create_policy` writes.
+pub struct NewPolicy<'a> {
+    pub bump: u8,
+    pub mint: &'a Pubkey,
+    pub pool: &'a Pubkey,
+    pub base_vault: &'a Pubkey,
+    pub launch_ts: i64,
+    pub snipe_shield_end_ts: i64,
+    pub guard_end_ts: i64,
+    pub max_wallet: u64,
+    pub max_buy: u64,
+    pub p2p_locked: bool,
+    pub exempt: &'a [Pubkey; MAX_EXEMPT],
+    pub rules: &'a [u8],
+}
+
+/// `HookPolicy::try_serialize` of a version-[`HookPolicy::VERSION`] policy
+/// into `data`: the discriminator and every field, `None` when `data` is
+/// shorter than [`HookPolicy::space`] (`AccountDidNotSerialize`). Bytes
+/// after the rules are left as they are.
+pub fn write_policy(data: &mut [u8], p: &NewPolicy) -> Option<()> {
+    let (fixed, rest) = data.split_first_chunk_mut::<{ HookPolicy::FIXED_LEN }>()?;
+    let rules = rest.get_mut(..p.rules.len())?;
+    fixed[..8].copy_from_slice(&discriminator::HOOK_POLICY);
+    fixed[layout::VERSION] = HookPolicy::VERSION;
+    fixed[layout::BUMP] = p.bump;
+    fixed[layout::MINT..layout::MINT + 32].copy_from_slice(p.mint.as_ref());
+    fixed[layout::POOL..layout::POOL + 32].copy_from_slice(p.pool.as_ref());
+    fixed[layout::BASE_VAULT..layout::BASE_VAULT + 32].copy_from_slice(p.base_vault.as_ref());
+    fixed[layout::LAUNCH_TS..layout::LAUNCH_TS + 8].copy_from_slice(&p.launch_ts.to_le_bytes());
+    fixed[layout::SNIPE_SHIELD_END_TS..layout::SNIPE_SHIELD_END_TS + 8]
+        .copy_from_slice(&p.snipe_shield_end_ts.to_le_bytes());
+    fixed[layout::GUARD_END_TS..layout::GUARD_END_TS + 8]
+        .copy_from_slice(&p.guard_end_ts.to_le_bytes());
+    fixed[layout::MAX_WALLET..layout::MAX_WALLET + 8].copy_from_slice(&p.max_wallet.to_le_bytes());
+    fixed[layout::MAX_BUY..layout::MAX_BUY + 8].copy_from_slice(&p.max_buy.to_le_bytes());
+    fixed[layout::P2P_LOCKED] = u8::from(p.p2p_locked);
+    for (i, owner) in p.exempt.iter().enumerate() {
+        let at = layout::EXEMPT + 32 * i;
+        fixed[at..at + 32].copy_from_slice(owner.as_ref());
+    }
+    fixed[layout::RULES_LEN..layout::RULES].copy_from_slice(&(p.rules.len() as u32).to_le_bytes());
+    rules.copy_from_slice(p.rules);
+    Some(())
+}
+
+#[cfg_attr(
+    any(not(target_os = "solana"), feature = "cpi"),
+    derive(AnchorSerialize, AnchorDeserialize)
+)]
+#[derive(Clone, Debug)]
 pub struct PolicyParams {
     pub pool: Pubkey,
     pub snipe_shield_secs: u32,
@@ -125,12 +340,45 @@ pub struct PolicyParams {
     pub p2p_locked: bool,
     pub exempt: [Pubkey; MAX_EXEMPT],
     /// PXR1 bytes (empty for none), stored as given once they verify.
-    pub rules: Vec<u8>,
+    pub rules: alloc::vec::Vec<u8>,
+}
+
+/// `PolicyParams` read in place from the instruction data (Borsh; trailing
+/// bytes ignored), the rules borrowed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PolicyParamsRef<'a> {
+    pub pool: Pubkey,
+    pub snipe_shield_secs: u32,
+    pub guard_secs: u32,
+    pub max_wallet: u64,
+    pub max_buy: u64,
+    pub p2p_locked: bool,
+    pub exempt: [Pubkey; MAX_EXEMPT],
+    pub rules: &'a [u8],
+}
+
+impl<'a> PolicyParamsRef<'a> {
+    /// Borsh decoding of `create_policy(params: PolicyParams)`'s argument:
+    /// `None` exactly when `PolicyParams::deserialize` fails
+    /// (`InstructionDidNotDeserialize`).
+    pub fn parse(data: &'a [u8]) -> Option<Self> {
+        let mut r = Reader::new(data);
+        Some(Self {
+            pool: r.address()?,
+            snipe_shield_secs: r.u32()?,
+            guard_secs: r.u32()?,
+            max_wallet: r.u64()?,
+            max_buy: r.u64()?,
+            p2p_locked: r.bool()?,
+            exempt: [r.address()?, r.address()?, r.address()?, r.address()?],
+            rules: r.bytes()?,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use anchor_lang::{AccountDeserialize, AccountSerialize};
+    use anchor_lang::{error::ErrorCode, AccountDeserialize, AccountSerialize};
 
     use super::*;
 
@@ -168,6 +416,11 @@ mod tests {
             base_vault: p.base_vault,
             guard_end_ts: p.guard_end_ts,
         }
+    }
+
+    /// Anchor's error, as the program returns it.
+    fn anchor_error(e: ErrorCode) -> ProgramError {
+        ProgramError::Custom(e.into())
     }
 
     /// The head's offsets are the policy's borsh layout: discriminator,
@@ -236,6 +489,8 @@ mod tests {
         assert_eq!(v1.len(), 275);
         assert!(HookPolicy::try_deserialize(&mut &v2[..]).is_ok());
         assert!(HookPolicy::try_deserialize(&mut &v1[..]).is_err());
+        assert!(PolicyView::read(&v2).is_some());
+        assert!(PolicyView::read(v1).is_none());
         assert_eq!(PolicyHead::read(v1).unwrap(), head_of(&p));
         let mut r = 0x9E37_79B9_7F4A_7C15u64;
         for len in PolicyHead::LEN..v2.len() + 64 {
@@ -259,22 +514,32 @@ mod tests {
         for n in 0..8 {
             assert_eq!(
                 err(&data[..n]),
-                ErrorCode::AccountDiscriminatorNotFound.into(),
+                anchor_error(ErrorCode::AccountDiscriminatorNotFound),
                 "{n}"
             );
         }
         for n in 8..PolicyHead::LEN {
             assert_eq!(
                 err(&data[..n]),
-                ErrorCode::AccountDidNotDeserialize.into(),
+                anchor_error(ErrorCode::AccountDidNotDeserialize),
                 "{n}"
             );
         }
         for i in 0..8 {
             let mut other = data.clone();
             other[i] ^= 1;
-            assert_eq!(err(&other), ErrorCode::AccountDiscriminatorMismatch.into());
+            assert_eq!(
+                err(&other),
+                anchor_error(ErrorCode::AccountDiscriminatorMismatch)
+            );
         }
         assert!(PolicyHead::read(&data[..PolicyHead::LEN]).is_ok());
+        // Logged as the Anchor build logged them (no account named).
+        let _ = noised_onchain::sys::take_logs();
+        let _ = err(&data[..3]);
+        assert_eq!(
+            noised_onchain::host::take_log_lines(),
+            vec!["Program log: AnchorError occurred. Error Code: AccountDiscriminatorNotFound. Error Number: 3001. Error Message: No discriminator was found on the account.".to_string()]
+        );
     }
 }
