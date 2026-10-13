@@ -42,16 +42,18 @@
 //! permissionless inside it and refused outside it, so no classical key
 //! decides when a launch opens.
 
-use anchor_lang::{prelude::*, Discriminator};
 use noised_lmots::{lms_verify, LMS_PUBLIC_KEY_LEN};
+use noised_onchain::{pda::find_program_address, AccountView};
 
 use crate::{
     constants::{
         pq_vault, MAX_LAUNCH_LEAD_SECS, MAX_LAUNCH_WINDOW_SECS, METADATA_SEED,
         MIN_LAUNCH_WINDOW_SECS, RULES_SEED,
     },
-    error::LaunchpadError,
+    discriminator,
+    error::{require, LaunchpadError, Result},
     state::{Identity, LaunchRules, TokenMeta, LEAF_BITMAP_LEN},
+    Pubkey,
 };
 
 /// SHA-256 through the `sol_sha256` syscall (host builds use the same API).
@@ -59,13 +61,57 @@ pub struct SolSha256;
 
 impl noised_lmots::Sha256 for SolSha256 {
     fn hashv(parts: &[&[u8]]) -> [u8; 32] {
-        solana_sha256_hasher::hashv(parts).to_bytes()
+        noised_onchain::hashv(parts)
     }
 }
 
 impl noised_rules::Sha256 for SolSha256 {
     fn hashv(parts: &[&[u8]]) -> [u8; 32] {
-        solana_sha256_hasher::hashv(parts).to_bytes()
+        noised_onchain::hashv(parts)
+    }
+}
+
+/// An account the record and vault checks read: its address, owner and
+/// data. The program's `AccountView`; off-chain also Anchor's `AccountInfo`
+/// (the unit tests' API).
+pub trait RawAccount {
+    fn address(&self) -> &Pubkey;
+    fn owner(&self) -> &Pubkey;
+    /// `read` of the account's data; `None` when it cannot be borrowed.
+    fn read_data<R>(&self, read: impl FnOnce(&[u8]) -> R) -> Option<R>;
+}
+
+impl RawAccount for AccountView {
+    #[inline(always)]
+    fn address(&self) -> &Pubkey {
+        AccountView::address(self)
+    }
+
+    #[inline(always)]
+    fn owner(&self) -> &Pubkey {
+        AccountView::owner(self)
+    }
+
+    #[inline(always)]
+    fn read_data<R>(&self, read: impl FnOnce(&[u8]) -> R) -> Option<R> {
+        let data = self.try_borrow().ok()?;
+        Some(read(&data))
+    }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl RawAccount for anchor_lang::prelude::AccountInfo<'_> {
+    fn address(&self) -> &Pubkey {
+        self.key
+    }
+
+    fn owner(&self) -> &Pubkey {
+        self.owner
+    }
+
+    fn read_data<R>(&self, read: impl FnOnce(&[u8]) -> R) -> Option<R> {
+        let data = self.try_borrow_data().ok()?;
+        Some(read(&data))
     }
 }
 
@@ -107,7 +153,7 @@ pub struct AttestedTerms {
 /// record's address seed, so one hash names exactly one content.
 pub fn metadata_hash_v2(name: &[u8], symbol: &[u8], flags: u8, uri: &[u8], doc: &[u8]) -> [u8; 32] {
     let len = |s: &[u8]| (s.len() as u32).to_le_bytes();
-    solana_sha256_hasher::hashv(&[
+    noised_onchain::hashv(&[
         METADATA_HASH_TAG,
         &len(name),
         name,
@@ -119,14 +165,13 @@ pub fn metadata_hash_v2(name: &[u8], symbol: &[u8], flags: u8, uri: &[u8], doc: 
         &len(doc),
         doc,
     ])
-    .to_bytes()
 }
 
 /// The address of the metadata record `metadata_hash` names for `launch`,
 /// `["metadata", launch, metadata_hash]`, and its bump (the canonical one,
 /// which `publish_metadata` creates the record with and stores).
 pub fn metadata_record_address(launch: &Pubkey, metadata_hash: &[u8; 32]) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[METADATA_SEED, launch.as_ref(), metadata_hash], &crate::ID)
+    find_program_address(&[METADATA_SEED, launch.as_ref(), metadata_hash], &crate::ID)
 }
 
 /// Whether `info`, the account at `metadata_record_address(launch,
@@ -138,25 +183,25 @@ pub fn metadata_record_address(launch: &Pubkey, metadata_hash: &[u8; 32]) -> (Pu
 /// is exactly the content the hash names. Reads the fixed fields in place;
 /// never fails (a valid signature must always land, to burn its leaf).
 pub fn is_metadata_record(
-    info: &AccountInfo,
+    info: &impl RawAccount,
     launch: &Pubkey,
     metadata_hash: &[u8; 32],
     bump: u8,
 ) -> bool {
-    if *info.owner != crate::ID {
+    if *info.owner() != crate::ID {
         return false;
     }
-    let Ok(data) = info.try_borrow_data() else {
-        return false;
-    };
-    let launch_at = TokenMeta::LAUNCH_OFFSET;
-    let hash_at = TokenMeta::METADATA_HASH_OFFSET;
-    data.len() >= TokenMeta::FIXED_LEN
-        && data[..8] == *TokenMeta::DISCRIMINATOR
-        && data[TokenMeta::VERSION_OFFSET] == TokenMeta::VERSION
-        && data[TokenMeta::BUMP_OFFSET] == bump
-        && data[launch_at..launch_at + 32] == launch.to_bytes()
-        && data[hash_at..hash_at + 32] == *metadata_hash
+    info.read_data(|data| {
+        let launch_at = TokenMeta::LAUNCH_OFFSET;
+        let hash_at = TokenMeta::METADATA_HASH_OFFSET;
+        data.len() >= TokenMeta::FIXED_LEN
+            && data[..8] == discriminator::TOKEN_META
+            && data[TokenMeta::VERSION_OFFSET] == TokenMeta::VERSION
+            && data[TokenMeta::BUMP_OFFSET] == bump
+            && data[launch_at..launch_at + 32] == launch.to_bytes()
+            && data[hash_at..hash_at + 32] == *metadata_hash
+    })
+    .unwrap_or(false)
 }
 
 /// `SHA256("PHX-RULES-V1" || bytes)`: the rules record's address seed
@@ -169,7 +214,7 @@ pub fn rules_hash(bytes: &[u8]) -> [u8; 32] {
 /// `["rules", launch, rules_hash]`, and its bump (the canonical one, which
 /// `publish_rules` creates the record with and stores).
 pub fn rules_record_address(launch: &Pubkey, rules_hash: &[u8; 32]) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[RULES_SEED, launch.as_ref(), rules_hash], &crate::ID)
+    find_program_address(&[RULES_SEED, launch.as_ref(), rules_hash], &crate::ID)
 }
 
 /// Whether `info`, the account at `rules_record_address(launch,
@@ -182,25 +227,25 @@ pub fn rules_record_address(launch: &Pubkey, rules_hash: &[u8; 32]) -> (Pubkey, 
 /// Reads the fixed fields in place; never fails (a valid signature must
 /// always land, to burn its leaf).
 pub fn is_rules_record(
-    info: &AccountInfo,
+    info: &impl RawAccount,
     launch: &Pubkey,
     rules_hash: &[u8; 32],
     bump: u8,
 ) -> bool {
-    if *info.owner != crate::ID {
+    if *info.owner() != crate::ID {
         return false;
     }
-    let Ok(data) = info.try_borrow_data() else {
-        return false;
-    };
-    let launch_at = LaunchRules::LAUNCH_OFFSET;
-    let hash_at = LaunchRules::RULES_HASH_OFFSET;
-    data.len() >= LaunchRules::FIXED_LEN
-        && data[..8] == *LaunchRules::DISCRIMINATOR
-        && data[LaunchRules::VERSION_OFFSET] == LaunchRules::VERSION
-        && data[LaunchRules::BUMP_OFFSET] == bump
-        && data[launch_at..launch_at + 32] == launch.to_bytes()
-        && data[hash_at..hash_at + 32] == *rules_hash
+    info.read_data(|data| {
+        let launch_at = LaunchRules::LAUNCH_OFFSET;
+        let hash_at = LaunchRules::RULES_HASH_OFFSET;
+        data.len() >= LaunchRules::FIXED_LEN
+            && data[..8] == discriminator::LAUNCH_RULES
+            && data[LaunchRules::VERSION_OFFSET] == LaunchRules::VERSION
+            && data[LaunchRules::BUMP_OFFSET] == bump
+            && data[launch_at..launch_at + 32] == launch.to_bytes()
+            && data[hash_at..hash_at + 32] == *rules_hash
+    })
+    .unwrap_or(false)
 }
 
 /// `parts` back to back; their lengths add up to `N`.
@@ -287,7 +332,7 @@ pub fn burn_leaf(
     // The leaf comes from the signature only.
     let q = lms_verify::<SolSha256>(lms_pk, message, lms_sig)
         .ok_or(LaunchpadError::InvalidPqSignature)?;
-    let leaf = u16::try_from(q).map_err(|_| error!(LaunchpadError::InvalidPqSignature))?;
+    let leaf = u16::try_from(q).map_err(|_| LaunchpadError::InvalidPqSignature)?;
     require!(
         mark_leaf_used(&mut identity.used, q),
         LaunchpadError::PqLeafUsed
@@ -347,16 +392,24 @@ pub fn mark_leaf_used(used: &mut [u8; LEAF_BITMAP_LEN], q: u32) -> bool {
 /// token account for `mint` is its canonical ATA, which `open_vault`
 /// created, so whatever is paid to that ATA moves only with the vault's
 /// hash-based signature.
-pub fn is_vault_of(info: &AccountInfo, mint: &Pubkey) -> Result<bool> {
-    if *info.owner != pq_vault::PROGRAM_ID {
+pub fn is_vault_of(info: &impl RawAccount, mint: &Pubkey) -> Result<bool> {
+    if *info.owner() != pq_vault::PROGRAM_ID {
         return Ok(false);
     }
-    let data = info.try_borrow_data()?;
-    let mint_end = pq_vault::MINT_OFFSET + 32;
-    Ok(data.len() >= mint_end
-        && data[..8] == pq_vault::VAULT_DISCRIMINATOR
-        && data[pq_vault::VERSION_OFFSET] == pq_vault::VAULT_VERSION
-        && data[pq_vault::MINT_OFFSET..mint_end] == mint.to_bytes())
+    info.read_data(|data| {
+        let mint_end = pq_vault::MINT_OFFSET + 32;
+        data.len() >= mint_end
+            && data[..8] == pq_vault::VAULT_DISCRIMINATOR
+            && data[pq_vault::VERSION_OFFSET] == pq_vault::VAULT_VERSION
+            && data[pq_vault::MINT_OFFSET..mint_end] == mint.to_bytes()
+    })
+    .ok_or_else(borrow_failed)
+}
+
+/// `try_borrow_data` failed: the account is mutably borrowed.
+#[cold]
+fn borrow_failed() -> crate::error::Error {
+    pinocchio::error::ProgramError::AccountBorrowFailed.into()
 }
 
 /// A payout owner of a commit is the committer itself or a PQ vault of the
@@ -366,6 +419,6 @@ pub fn is_vault_of(info: &AccountInfo, mint: &Pubkey) -> Result<bool> {
 /// release what it was sent. A vault may be named by several committers, so
 /// `commit` holds what they commit for it to one wallet's cap together
 /// (`["payout-vault", launch, vault]`): shares cannot add up in one account.
-pub fn is_payout_owner(info: &AccountInfo, committer: &Pubkey, mint: &Pubkey) -> Result<bool> {
-    Ok(info.key == committer || is_vault_of(info, mint)?)
+pub fn is_payout_owner(info: &impl RawAccount, committer: &Pubkey, mint: &Pubkey) -> Result<bool> {
+    Ok(info.address() == committer || is_vault_of(info, mint)?)
 }

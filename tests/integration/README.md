@@ -203,7 +203,7 @@ The round-2 key-index binding changed no byte of this file: the vault's message,
 
 ## Mutation check
 
-Green tests only count if they would turn red on a real bug. `mutants.ps1` builds 229 deliberately broken copies of the programs (38 vault, mutations of the framework-free `processor.rs` / `token.rs` / `state.rs` checks; 66 hook, of the framework-free `processor.rs` / `rules.rs` / `state.rs`, 16 of them `HR` for creator rules and review 4; 125 of the launchpad's post-quantum attestation, on-chain metadata record and programmable launches, 36 of them `LR`), SBPF v3 in a scratch workspace outside the repo, and runs the vault, hook, `vectors_onchain`, `metadata_record` and `programmable_vectors` suites against each one. Every mutant must be caught:
+Green tests only count if they would turn red on a real bug. `mutants.ps1` builds 229 deliberately broken copies of the programs (38 vault, mutations of the framework-free `processor.rs` / `token.rs` / `state.rs` checks; 66 hook, of the framework-free `processor.rs` / `rules.rs` / `state.rs`, 16 of them `HR` for creator rules and review 4; 125 of the launchpad's post-quantum attestation, on-chain metadata record and programmable launches, 36 of them `LR`, mutations of the framework-free handlers' checks, field writes and event arguments), SBPF v3 in a scratch workspace outside the repo, and runs the vault, hook, `vectors_onchain`, `metadata_record` and `programmable_vectors` suites against each one. Every mutant must be caught:
 
 | Vault mutant | Hook mutant |
 |---|---|

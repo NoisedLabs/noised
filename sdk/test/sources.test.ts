@@ -107,9 +107,9 @@ const declareId = (rel: string): string => /declare_id!\("(\w+)"\)/.exec(src(rel
 
 describe("constants match the Rust sources", () => {
   it("program ids (declare_id! and IDL addresses)", () => {
-    expect(declareId("programs/noised-launchpad/src/lib.rs")).toBe(PROGRAM_IDS.launchpad.toBase58());
-    // The hook and the vault are written without Anchor; their Anchor references (programs/noised-{hook,vault}/anchor,
-    // the same ABI) declare the ids.
+    // All five programs are written without Anchor; their Anchor references
+    // (programs/noised-*/anchor, the same ABI) declare the ids.
+    expect(declareId("programs/noised-launchpad/anchor/lib.rs")).toBe(PROGRAM_IDS.launchpad.toBase58());
     expect(declareId("programs/noised-hook/anchor/lib.rs")).toBe(PROGRAM_IDS.hook.toBase58());
     expect(declareId("programs/noised-vault/anchor/lib.rs")).toBe(PROGRAM_IDS.vault.toBase58());
     // The shield too: its Anchor reference (programs/noised-shield/anchor) declares the id.
@@ -684,9 +684,9 @@ describe("the IDLs are current with the program sources", () => {
     return [...mod.slice(0, mod.indexOf("\n}\n")).matchAll(/pub fn (\w+)/g)].map((m) => m[1]!).sort();
   }
   const programs: [keyof typeof IDLS, string, string][] = [
-    ["launchpad", "programs/noised-launchpad/src/error.rs", "programs/noised-launchpad/src/lib.rs"],
-    // Written without Anchor (the hook and the vault): the IDL is checked against the Anchor reference each
-    // implements (and, in programs/noised-{hook,vault}/tests/abi.rs, against the program itself).
+    // Written without Anchor: their IDLs are checked against the Anchor references they implement (and, in
+    // programs/noised-*/tests/abi.rs, against the programs themselves).
+    ["launchpad", "programs/noised-launchpad/anchor/error.rs", "programs/noised-launchpad/anchor/lib.rs"],
     ["hook", "programs/noised-hook/anchor/lib.rs", "programs/noised-hook/anchor/lib.rs"],
     ["vault", "programs/noised-vault/anchor/error.rs", "programs/noised-vault/anchor/lib.rs"],
     // The shield likewise (programs/noised-shield/tests/abi.rs checks the program against its IDL).
@@ -711,7 +711,7 @@ describe("the IDLs are current with the program sources", () => {
       { code: 6012, name: "InvalidRules", msg: "Launch rules do not verify (PXR1) for this guard" },
     ]);
     expect([HOOK_ERRORS.RuleDenied, HOOK_ERRORS.InvalidRules]).toEqual([6011, 6012]);
-    const lp = errorEnum(src("programs/noised-launchpad/src/error.rs"));
+    const lp = errorEnum(src("programs/noised-launchpad/anchor/error.rs"));
     expect(lp.at(-1)).toEqual({ code: 6048, name: "InvalidRules", msg: "Launch rules do not verify (PXR1) for this launch's guard" });
     expect(LAUNCH_RULES.ERRORS.InvalidRules).toBe(6048);
     const h = PROGRAM_IDS.hook.toBase58();

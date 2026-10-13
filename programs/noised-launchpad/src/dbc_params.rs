@@ -1,22 +1,11 @@
-//! The full DBC `ConfigParameters` for a launch: creator-chosen fields from a
-//! validated `LaunchParams`, every other field fixed (SPEC §1.2).
+//! The DBC instruction data a launch sends: the full `ConfigParameters`
+//! (creator-chosen fields from a validated `LaunchParams`, every other field
+//! fixed, SPEC §1.2: `external::dbc::create_config_data`) and the pool's
+//! name, symbol and uri.
 
-use anchor_lang::Discriminator;
+use alloc::vec::Vec;
 
-use crate::{
-    constants::dbc,
-    dynamic_bonding_curve::{
-        client::args::InitializeVirtualPoolWithToken2022TransferHook,
-        types::{
-            BaseFeeParameters, ConfigParameters, DynamicFeeParameters,
-            LiquidityDistributionParameters, LiquidityVestingInfoParams, LockedVestingParams,
-            MigratedPoolFee, MigratedPoolMarketCapFeeSchedulerParams, MigrationFee,
-            PoolFeeParameters,
-        },
-    },
-    policy,
-    state::LaunchParams,
-};
+use crate::{external::dbc::INITIALIZE_VIRTUAL_POOL_WITH_TOKEN2022_TRANSFER_HOOK, policy};
 
 /// The data of DBC's `initialize_virtual_pool_with_token2022_transfer_hook`
 /// for a metadata record, and the offset of the uri in it: the
@@ -32,7 +21,7 @@ pub fn initialize_pool_data(
     uri: &str,
     doc: &str,
 ) -> (Vec<u8>, usize) {
-    let discriminator = InitializeVirtualPoolWithToken2022TransferHook::DISCRIMINATOR;
+    let discriminator = &INITIALIZE_VIRTUAL_POOL_WITH_TOKEN2022_TRANSFER_HOOK;
     let uri_len = policy::token_uri_len(flags, uri, doc);
     let mut data =
         Vec::with_capacity(discriminator.len() + 12 + name.len() + symbol.len() + uri_len);
@@ -51,9 +40,23 @@ pub fn initialize_pool_data(
     (data, uri_at)
 }
 
-/// Build the DBC config. Must only be called with parameters that passed
-/// `policy::validate`.
-pub fn config_parameters(params: &LaunchParams) -> ConfigParameters {
+/// The DBC config as the IDL types describe it (host only; the program
+/// sends `external::dbc::create_config_data`, its Borsh encoding, which the
+/// ABI tests compare with this). Must only be called with parameters that
+/// passed `policy::validate`.
+#[cfg(not(target_os = "solana"))]
+pub fn config_parameters(
+    params: &crate::state::LaunchParams,
+) -> crate::dynamic_bonding_curve::types::ConfigParameters {
+    use crate::{
+        constants::dbc,
+        dynamic_bonding_curve::types::{
+            BaseFeeParameters, ConfigParameters, DynamicFeeParameters,
+            LiquidityDistributionParameters, LiquidityVestingInfoParams, LockedVestingParams,
+            MigratedPoolFee, MigratedPoolMarketCapFeeSchedulerParams, MigrationFee,
+            PoolFeeParameters,
+        },
+    };
     let no_vesting = LiquidityVestingInfoParams {
         vesting_percentage: 0,
         bps_per_period: 0,

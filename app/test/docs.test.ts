@@ -29,9 +29,9 @@ function rustFiles(dir: string): string[] {
   });
 }
 
-/** The Anchor sources each program's reference is generated from (`src/`; the hook, the vault, the shield and the autopilot, written without Anchor, from their Anchor references). */
+/** The Anchor sources each program's reference is generated from: all five are written without Anchor, so each is documented from its Anchor reference. */
 const PROGRAM_DIRS: Record<string, string> = {
-  launchpad: "programs/noised-launchpad/src",
+  launchpad: "programs/noised-launchpad/anchor",
   hook: "programs/noised-hook/anchor",
   vault: "programs/noised-vault/anchor",
   shield: "programs/noised-shield/anchor",

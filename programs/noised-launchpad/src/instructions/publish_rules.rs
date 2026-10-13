@@ -1,13 +1,28 @@
-use anchor_lang::prelude::*;
+//! `publish_rules(bytes)`.
+
+use noised_onchain::{args::Reader, sysvar::Rent, ProgramResult, Seed};
 use noised_rules::RuleSet;
 
 use crate::{
     constants::*,
+    discriminator,
     error::LaunchpadError,
     events::RulesPublished,
     pq,
-    state::{Launch, LaunchRules, LaunchStatus},
+    processor::{
+        check_seeds, check_status, check_writable, did_not_deserialize, init_if_needed,
+        log_instruction, require, write_back_parts, Accounts, PAYER, SYSTEM_PROGRAM,
+    },
+    state::{LaunchRules, LaunchRulesRef, LaunchStatus},
 };
+
+const RULES: &str = "rules";
+
+/// Whether an existing record decodes as a `LaunchRules` (Anchor's
+/// `Account::try_from`).
+fn decodes(data: &[u8]) -> bool {
+    LaunchRulesRef::read(data).is_some()
+}
 
 /// Permissionless: write a launch's creator rules (PXR1 bytes) whole, at
 /// `["rules", launch, rules_hash(bytes)]`, once they verify for the launch's
@@ -22,61 +37,83 @@ use crate::{
 /// Records are never modified or closed. Anyone may publish any rules under
 /// a launch while it is configured; only the ones its identity signs are
 /// ever used.
-pub fn handle_publish_rules(ctx: Context<PublishRules>, bytes: Vec<u8>) -> Result<()> {
-    require!(
-        RuleSet::verify(&bytes, ctx.accounts.launch.guard_secs).is_ok(),
-        LaunchpadError::InvalidRules
-    );
-    let launch_key = ctx.accounts.launch.key();
-    let rules_key = ctx.accounts.rules.key();
-    let record = &mut ctx.accounts.rules;
-    if record.version != 0 {
-        // Published already: the address is the hash of these bytes.
+///
+/// Accounts: payer (signer, writable), launch, rules (writable, the
+/// record's PDA, created if needed), system_program.
+pub fn process(mut accounts: Accounts, args: &[u8]) -> ProgramResult {
+    log_instruction("Instruction: PublishRules");
+    let Some(bytes) = Reader::new(args).bytes() else {
+        return Err(did_not_deserialize());
+    };
+
+    let payer = accounts.signer(PAYER)?;
+    let (launch, launch_state) = accounts.launch()?;
+    let rules = accounts.init()?;
+    accounts.program(&noised_onchain::ids::SYSTEM_PROGRAM_ID, SYSTEM_PROGRAM)?;
+
+    // [A] rules: init_if_needed, payer = payer, space =
+    // LaunchRules::space(bytes.len()), seeds = [RULES_SEED, launch,
+    // rules_hash(bytes)], bump; then mut and rent exemption.
+    let rent = Rent::get()?;
+    let rules_hash = pq::rules_hash(bytes);
+    let launch_key = *launch.address();
+    let bump = check_seeds(
+        rules,
+        &[RULES_SEED, launch_key.as_ref(), &rules_hash],
+        RULES,
+    )?;
+    let bump_seed = [bump];
+    let existed = init_if_needed(
+        payer,
+        rules,
+        LaunchRules::space(bytes.len()),
+        &rent,
+        &[
+            Seed::from(RULES_SEED),
+            Seed::from(launch_key.as_ref()),
+            Seed::from(&rules_hash),
+            Seed::from(&bump_seed),
+        ],
+        RULES,
+        &discriminator::LAUNCH_RULES,
+        decodes,
+    )?;
+
+    // [A] payer: mut. launch: constraint = launch.status == Configured @
+    // WrongLaunchState.
+    check_writable(payer, PAYER)?;
+    check_status(&launch_state, LaunchStatus::Configured)?;
+
+    // Handler.
+    require(
+        RuleSet::verify(
+            bytes,
+            launch_state.u32(crate::state::launch_offsets::GUARD_SECS),
+        )
+        .is_ok(),
+        LaunchpadError::InvalidRules,
+    )?;
+    if existed && rules.try_borrow()?.get(LaunchRules::VERSION_OFFSET) != Some(&0) {
+        // Published already: the address is the hash of these bytes (and
+        // writing the record back would not change a byte).
         return Ok(());
     }
-    let rules_hash = pq::rules_hash(&bytes);
     // At most 1,228 bytes (verified).
     let len = bytes.len() as u16;
-    record.version = LaunchRules::VERSION;
-    record.bump = ctx.bumps.rules;
-    record.launch = launch_key;
-    record.rules_hash = rules_hash;
-    record.bytes = bytes;
-    emit!(RulesPublished {
-        launch: launch_key,
-        rules: rules_key,
-        rules_hash,
-        len,
-    });
-    Ok(())
-}
+    RulesPublished::log(&launch_key, rules.address(), &rules_hash, len);
 
-#[derive(Accounts)]
-#[instruction(bytes: Vec<u8>)]
-pub struct PublishRules<'info> {
-    /// Anyone (in practice the throwaway key of the attestation): pays the
-    /// fee and the record's rent.
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    /// The launch the rules are for; rules are published before it goes
-    /// live, and verified for its guard.
-    #[account(
-        constraint = launch.status == LaunchStatus::Configured @ LaunchpadError::WrongLaunchState,
-    )]
-    pub launch: Box<Account<'info, Launch>>,
-
-    /// The record, at the address its content hashes to: created whole here
-    /// (an account pre-funded by anyone is taken over), or already there
-    /// with exactly this content.
-    #[account(
-        init_if_needed,
-        payer = payer,
-        space = LaunchRules::space(bytes.len()),
-        seeds = [RULES_SEED, launch.key().as_ref(), &pq::rules_hash(&bytes)],
-        bump,
-    )]
-    pub rules: Box<Account<'info, LaunchRules>>,
-
-    pub system_program: Program<'info, System>,
+    // Exit: the record, whole: discriminator, version, bump, launch, rules
+    // hash, then the bytes in Borsh.
+    write_back_parts(
+        rules,
+        RULES,
+        &[
+            &discriminator::LAUNCH_RULES,
+            &[LaunchRules::VERSION, bump],
+            launch_key.as_ref(),
+            &rules_hash,
+            &(bytes.len() as u32).to_le_bytes(),
+            bytes,
+        ],
+    )
 }

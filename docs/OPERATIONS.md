@@ -39,12 +39,11 @@ cargo-build-sbf --manifest-path programs/noised-autopilot/Cargo.toml --arch v3
 # Before any deploy: the ELF header's e_flags (offset 48) must print 3, which means SBPF v3
 python -c "import struct,sys; print(struct.unpack_from('<I', open(sys.argv[1],'rb').read(64), 48)[0])" "$env:CARGO_TARGET_DIR\deploy\noised_hook.so"
 
-# IDLs (anchor-cli 1.2.1), into both idls\ and sdk\src\idl\ (verified for all five on 2026-10-11:
-# regenerated IDLs identical to idls\)
-anchor idl build -p noised_launchpad -o idls/noised_launchpad.json   # the hook, vault, shield and autopilot IDLs are hand-maintained
+# IDLs: idls\*.json and sdk\src\idl\*.json are maintained by hand (no program is built with Anchor
+# any more); each program's tests\abi.rs checks its IDL against the program.
 ```
 
-The five Noised IDLs in `idls/` and `sdk/src/idl/` must be identical and regenerated from the sources that are deployed. The Meteora IDLs next to them come from Meteora's MIT-licensed SDKs (`idls/LICENSE-meteora`).
+The five Noised IDLs in `idls/` and `sdk/src/idl/` must be identical, and each is checked against its program by that program's `tests/abi.rs`. The Meteora IDLs next to them come from Meteora's MIT-licensed SDKs (`idls/LICENSE-meteora`).
 
 Supply-chain hygiene:
 - `cargo-build-sbf` downloads platform-tools with no checksum check (FACTS #17). Compare the downloaded archive against the GitHub release digest; for v1.57 on Windows the SHA-256 starts `792bc821…`. CI installs checksum-pinned Agave and platform-tools archives.

@@ -14,35 +14,58 @@ name = "noised_launchpad"
 
 [features]
 default = []
-cpi = ["no-entrypoint"]
+# Use as a library: no program entrypoint, global allocator or panic handler.
 no-entrypoint = []
-no-idl = []
+cpi = ["no-entrypoint"]
+# Skip the `Instruction: <Name>` log line each instruction starts with.
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
-custom-heap = []
-custom-panic = []
-anchor-debug = []
+# Does nothing: the code `declare_program!` generates for the host-only
+# DBC / DAMM v2 client types tests it.
+idl-build = []
 
+# Written without a framework (no Anchor): the on-chain binary links only
+# pinocchio (entrypoint, account views, CPI, syscalls), noised-onchain (the
+# shared Anchor-compatible account checks, errors, Token-2022 parsing and
+# CPIs), the LMS verifier (noised-lmots) and the PXR1 rules verifier
+# (noised-rules). The Meteora DBC / DAMM v2 and Launch Guard hook interfaces
+# it uses are written by hand (`external`): the instructions it invokes and
+# the account fields it reads, nothing else. The ABI (instruction, account
+# and event layouts, discriminators, error numbers) is the Anchor 1.2.1
+# build's, byte for byte; `idls/noised_launchpad.json` describes it.
 [dependencies]
-anchor-lang = { workspace = true, features = ["init-if-needed"] }
-anchor-spl = { workspace = true }
-spl-transfer-hook-interface = { workspace = true }
-solana-sha256-hasher = { workspace = true }
-# Required by the zero-copy types `declare_program!` generates for DBC and DAMM v2.
-bytemuck = { version = "=1.25.2", features = ["derive", "min_const_generics"] }
-noised-hook = { path = "../noised-hook", features = ["cpi"] }
-# LMS verification of launch attestations (no features on-chain).
 noised-lmots = { workspace = true }
-# PXR1 verification of creator rules (no features on-chain: allocation-free).
+noised-onchain = { workspace = true }
 noised-rules = { workspace = true }
+pinocchio = { workspace = true }
+# sol_sha256 on-chain (the sha2 backend only in host builds).
+solana-sha256-hasher = { workspace = true }
+
+# Host only (clients and tests), never in the on-chain binary: the Anchor
+# client API the test suites build instructions and read accounts with
+# (`accounts`, `instruction`, `AccountDeserialize` on the account types,
+# `Event` on the events), and the Meteora DBC / DAMM v2 client types
+# (`declare_program!`, from `idls/`), which the test suites use and the
+# program's hand-written interfaces are tested against.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+anchor-lang = { workspace = true }
+# The zero-copy types `declare_program!` generates for DBC and DAMM v2.
+bytemuck = { version = "=1.25.2", features = ["derive", "min_const_generics"] }
 
 [dev-dependencies]
+anchor-spl = { workspace = true }
 # Host tests sign attestations with the LMS signer.
 noised-lmots = { workspace = true, features = ["signer", "sha2-backend"] }
 # Host tests encode rule sets and hash them with the sha2 backend.
 noised-rules = { workspace = true, features = ["alloc", "sha2-backend"] }
 # Pins the vault bytes `pq::is_vault_of` recognizes against the vault crate.
 noised-vault = { path = "../noised-vault", features = ["no-entrypoint"] }
+# The Launch Guard's ids, seeds, bounds, policy layout and client API: the
+# hand-written hook interface (`external::hook`) is tested against them.
+noised-hook = { path = "../noised-hook", features = ["no-entrypoint"] }
+serde_json = "1"
+spl-transfer-hook-interface = { workspace = true }
+solana-instruction = "=3.5.1"
+solana-program-error = "=3.0.1"
 
 [lints]
 workspace = true
