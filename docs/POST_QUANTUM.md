@@ -38,7 +38,7 @@ Noised gives post-quantum **launch authorization** (its rules and its autopilot'
 >
 > **Audit round 3 (2026-10-10).** An attestation whose window passed unused is replaced by the next one of the same identity while the launch is `Configured`, and a window must have at least 60 s left when its attestation lands (F1, merged; sections 3.7 and 3.8). No finding concerned the LMS or LM-OTS code.
 >
-> **Programmable launches and review 4 (2026-10-11).** Attestation message v3 also signs the creator rules' hash, and `launch` installs exactly the attested rules (sections 3.6, 3.7 and 3.9). `pq_authorize` lets the same identity, with the same leaves, authorize changes to a launch's autopilot (section 3.12). Review 4 limited authorizations to kinds 1 to 3 (Ra), made a freeze expire at its signed `not_after` (R5) and has `launch` hash the rules record again (R6a); all merged. Nothing is deployed yet: the programs deploy fresh.
+> **Programmable launches and review 4 (2026-10-11).** Attestation message v3 also signs the creator rules' hash, and `launch` installs exactly the attested rules (sections 3.6, 3.7 and 3.9). `pq_authorize` lets the same identity, with the same leaves, authorize changes to a launch's autopilot (section 3.12). Review 4 limited authorizations to kinds 1 to 3 (Ra), made a freeze expire at its signed `not_after` (R5) and has `launch` hash the rules record again (R6a); all merged. Nothing was deployed then, and the programs were later deployed fresh (devnet 2026-10-12, mainnet 2026-10-13, [MAINNET.md](MAINNET.md)).
 
 ## 2. Threat model
 

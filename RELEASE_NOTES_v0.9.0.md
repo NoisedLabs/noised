@@ -2,6 +2,9 @@
 
 **The quantum security layer for Solana, open source.** This release publishes the whole Noised repository under Apache-2.0, the TypeScript SDK **`@noisedlabs/sdk` 0.9.0** and the MCP server for AI agents **`@noisedlabs/mcp` 0.2.0** on npm, and documents the five on-chain programs that run on **Solana devnet**.
 
+> [!NOTE]
+> **Update, 2026-10-13: Noised is now on mainnet, but not finalized.** After this release, all five programs were deployed to Solana mainnet from verifiable builds of a later commit (`e673175`). They are upgradeable, not finalized, and the mainnet protocol is not initialized yet, so no launch can be created there yet ([docs/MAINNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/MAINNET.md)). The status below is as of this release.
+
 > [!WARNING]
 > **Devnet only, pre-audit.** Four of the five programs (launchpad, hook, autopilot, vault) are deployed on Solana **devnet**; the Shield is not deployed yet. They are **upgradeable** (the devnet deployer holds the upgrade authority) and have **not been audited by a professional security firm**: the reviews so far were internal and carried out by AI agents ([docs/AUDIT.md](https://github.com/NoisedLabs/noised/blob/main/docs/AUDIT.md)). **Nothing is deployed on mainnet.** Do not use Noised with funds you cannot afford to lose.
 

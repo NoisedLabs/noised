@@ -23,7 +23,7 @@ Each program was deployed with `solana program deploy --max-len <size of its .so
 | `noised_vault` | [`7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb`](https://explorer.solana.com/address/7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb) | `AXNGGsEypP6ocuiAkm3EMuABGGkFGL4F88cmG8A8dwS7` | 456,526,449 | 62,416 | `fde35f7dfcf8ca096d3d404308a021c3d71dc6000de9a1f98510ce12a165daf8` |
 | `noised_hook` | [`cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia`](https://explorer.solana.com/address/cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia) | `CPh2VRvpRG1Utp8kkPtxvsEM2kvyHeBJLdXojn33Jowx` | 456,526,515 | 46,952 | `d43da765ef46f9e61e49f8f80bbfc2319285c60ceb912369a7275005f087a7d8` |
 
-The release run's `EXECUTABLE_HASHES`: what `solana-verify get-executable-hash` prints for each release file, and so what `solana-verify get-program-hash -um <program id>` must print for the deployed program. It differs from the plain SHA-256 above because solana-verify strips trailing zero bytes before hashing.
+The release run's `EXECUTABLE_HASHES`: what `solana-verify get-executable-hash` prints for each release file, and so what `solana-verify get-program-hash -um <program id>` must print for the deployed program. It differs from the plain SHA-256 above because solana-verify strips trailing zero bytes before hashing. `solana-verify get-program-hash` has not been run against the deployed programs yet (solana-verify does not build on the Windows machine the deploy ran from); the check made at deploy time is the SHA-256 of each dump, which covers the same bytes.
 
 | Program | Executable hash (solana-verify) |
 |---|---|
