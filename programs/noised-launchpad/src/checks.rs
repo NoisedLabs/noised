@@ -10,8 +10,8 @@
 use noised_onchain::{
     token::{
         get_extension, get_extension_bytes, optional_key, unpack_mint, ExtensionTypes,
-        EXT_METADATA_POINTER, EXT_TOKEN_METADATA, EXT_TRANSFER_HOOK, METADATA_POINTER_LEN,
-        TOKEN_2022_PROGRAM_ID, TRANSFER_HOOK_LEN,
+        ACCOUNT_TYPE_MINT, EXT_METADATA_POINTER, EXT_TOKEN_METADATA, EXT_TRANSFER_HOOK,
+        METADATA_POINTER_LEN, TOKEN_2022_PROGRAM_ID, TRANSFER_HOOK_LEN,
     },
     AccountView, ProgramError,
 };
@@ -95,7 +95,7 @@ pub fn inspect_mint(
     flags |= checks::EXTENSION_SET_EXACT;
 
     // TransferHook: authority (32) | program_id (32).
-    let hook = get_extension(tlv, EXT_TRANSFER_HOOK, TRANSFER_HOOK_LEN)
+    let hook = get_extension(tlv, ACCOUNT_TYPE_MINT, EXT_TRANSFER_HOOK, TRANSFER_HOOK_LEN)
         .map_err(|_| LaunchpadError::UnsafeMint)?;
     require!(
         optional_key(hook, 32).as_ref() == Some(hook_program)
@@ -105,8 +105,13 @@ pub fn inspect_mint(
     flags |= checks::HOOK_IS_NOISED;
 
     // MetadataPointer: authority (32) | metadata_address (32).
-    let pointer = get_extension(tlv, EXT_METADATA_POINTER, METADATA_POINTER_LEN)
-        .map_err(|_| LaunchpadError::UnsafeMint)?;
+    let pointer = get_extension(
+        tlv,
+        ACCOUNT_TYPE_MINT,
+        EXT_METADATA_POINTER,
+        METADATA_POINTER_LEN,
+    )
+    .map_err(|_| LaunchpadError::UnsafeMint)?;
     require!(
         optional_key(pointer, 0).is_none() && optional_key(pointer, 32).as_ref() == Some(mint_key),
         LaunchpadError::UnsafeMint
@@ -115,8 +120,8 @@ pub fn inspect_mint(
 
     // TokenMetadata starts with `update_authority` (32 bytes, zero = None)
     // followed by `mint`; reading them avoids decoding the strings.
-    let metadata =
-        get_extension_bytes(tlv, EXT_TOKEN_METADATA).map_err(|_| LaunchpadError::UnsafeMint)?;
+    let metadata = get_extension_bytes(tlv, ACCOUNT_TYPE_MINT, EXT_TOKEN_METADATA)
+        .map_err(|_| LaunchpadError::UnsafeMint)?;
     require!(metadata.len() >= 64, LaunchpadError::UnsafeMint);
     require!(
         metadata[..32].iter().all(|b| *b == 0) && metadata[32..64] == mint_key.to_bytes(),
@@ -175,7 +180,7 @@ pub fn verify_token_metadata_bytes(
     uri: &[u8],
 ) -> Result<u32> {
     let state = unpack_mint(data).map_err(|_| LaunchpadError::MetadataMismatch)?;
-    let value = get_extension_bytes(state.tlv, EXT_TOKEN_METADATA)
+    let value = get_extension_bytes(state.tlv, ACCOUNT_TYPE_MINT, EXT_TOKEN_METADATA)
         .map_err(|_| LaunchpadError::MetadataMismatch)?;
     require!(
         token_metadata_matches(value, name, symbol, uri),

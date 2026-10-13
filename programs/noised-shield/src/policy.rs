@@ -8,8 +8,8 @@
 
 use noised_onchain::token::{
     get_extension, get_extension_bytes, optional_key, unpack_mint, ExtensionTypes,
-    EXT_METADATA_POINTER, EXT_TOKEN_METADATA, EXT_TRANSFER_FEE_CONFIG, EXT_TRANSFER_HOOK,
-    METADATA_POINTER_LEN,
+    ACCOUNT_TYPE_MINT, EXT_METADATA_POINTER, EXT_TOKEN_METADATA, EXT_TRANSFER_FEE_CONFIG,
+    EXT_TRANSFER_HOOK, METADATA_POINTER_LEN,
 };
 
 use crate::{
@@ -79,12 +79,17 @@ pub fn inspect_token_2022_mint(data: &[u8], mint: &Pubkey) -> Result<ZMetadata, 
         }
     }
     // MetadataPointer: authority (32) | metadata_address (32).
-    let points_to_self = get_extension(state.tlv, EXT_METADATA_POINTER, METADATA_POINTER_LEN)
-        .ok()
-        .and_then(|pointer| optional_key(pointer, 32))
+    let points_to_self = get_extension(
+        state.tlv,
+        ACCOUNT_TYPE_MINT,
+        EXT_METADATA_POINTER,
+        METADATA_POINTER_LEN,
+    )
+    .ok()
+    .and_then(|pointer| optional_key(pointer, 32))
         == Some(*mint);
     let embedded = if points_to_self {
-        get_extension_bytes(state.tlv, EXT_TOKEN_METADATA).ok()
+        get_extension_bytes(state.tlv, ACCOUNT_TYPE_MINT, EXT_TOKEN_METADATA).ok()
     } else {
         None
     };

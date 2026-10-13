@@ -29,8 +29,8 @@ use noised_onchain::{
     token::{
         get_extension, get_extension_bytes, initialize_mint2_data, initialize_mint_extension,
         metadata_pointer_initialize_data, optional_key, unpack_mint, ExtensionTypes,
-        EXT_CONFIDENTIAL_TRANSFER_MINT, EXT_METADATA_POINTER, EXT_TOKEN_METADATA,
-        METADATA_POINTER_LEN,
+        ACCOUNT_TYPE_MINT, EXT_CONFIDENTIAL_TRANSFER_MINT, EXT_METADATA_POINTER,
+        EXT_TOKEN_METADATA, METADATA_POINTER_LEN,
     },
 };
 use pinocchio::{
@@ -361,6 +361,7 @@ pub fn verify(
 
     let ct = get_extension(
         state.tlv,
+        ACCOUNT_TYPE_MINT,
         EXT_CONFIDENTIAL_TRANSFER_MINT,
         CONFIDENTIAL_TRANSFER_MINT_LEN,
     )?;
@@ -374,14 +375,19 @@ pub fn verify(
         return Err(misconfigured());
     }
 
-    let pointer = get_extension(state.tlv, EXT_METADATA_POINTER, METADATA_POINTER_LEN)?;
+    let pointer = get_extension(
+        state.tlv,
+        ACCOUNT_TYPE_MINT,
+        EXT_METADATA_POINTER,
+        METADATA_POINTER_LEN,
+    )?;
     let pointer_ok = optional_key(pointer, 0).is_none()
         && optional_key(pointer, 32).is_some_and(|address| same(&address, z_mint.address()));
     if !pointer_ok {
         return Err(misconfigured());
     }
 
-    let value = get_extension_bytes(state.tlv, EXT_TOKEN_METADATA)?;
+    let value = get_extension_bytes(state.tlv, ACCOUNT_TYPE_MINT, EXT_TOKEN_METADATA)?;
     let tm = decode_token_metadata(value).ok_or(ProgramError::BorshIoError)?;
     let tm_ok = *tm.update_authority == [0u8; 32]
         && tm.mint == z_mint.address().as_array()

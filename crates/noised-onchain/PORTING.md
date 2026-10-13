@@ -461,6 +461,27 @@ Measured on the vault (SBPF v3, `cargo-build-sbf --arch v3`): Anchor build
   the field; `InterfaceAccount`'s 3007 has no keys, `Account`'s has.
 * **SPL errors** inside `InterfaceAccount` unpacking come back as plain
   `ProgramError`s (`InvalidAccountData` ...), as Anchor returns them.
+* **Token-2022 extension lookups** (`token::get_extension` /
+  `get_extension_bytes`) take the base state the TLV belongs to
+  (`ACCOUNT_TYPE_MINT` / `ACCOUNT_TYPE_ACCOUNT`) and refuse an extension
+  type of the other base, or of none, with `InvalidAccountData` before
+  reading anything: SPL's base-type check (`get_extension_bytes::<S, V>`).
+  The walk itself is deliberately lenient: like spl-token-2022-interface
+  2.1.0's `get_extension_indices` (which compares the raw `u16`; the
+  differential test feeds unknown types too), it steps over entries of
+  any other type, including types 2.1.0 does not know, where the strict
+  pass (`ExtensionTypes` / `for_each_extension_type`, SPL's
+  `get_extension_types`) fails with `InvalidAccountData`. Kept on purpose:
+  the programs will be immutable, and a lookup must keep working if
+  Token-2022 later adds account or mint extensions. The rule that goes
+  with it: **every decision that accepts or refuses a mint by its
+  extensions runs the strict pass over the whole TLV first** (the vault's
+  mint policy, the shield's allowlist and zToken check, the launchpad's
+  `inspect_mint`, whose result the later metadata re-read relies on). The
+  lenient lookups that decide nothing about a mint are routing reads: the
+  hook program (`hook_program_id`, found as Token-2022 itself finds the
+  hook it calls: the hook's own `WrongHookProgram` check uses it too) and
+  the memo requirement (`requires_memo`).
 * **Discriminators**: instructions `global:<snake_case>`, accounts
   `account:<TypeName>`, events `event:<TypeName>`; check them against the
   IDL, never hand-type them without a test.

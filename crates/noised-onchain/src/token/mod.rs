@@ -386,19 +386,103 @@ pub fn for_each_extension_type(
     Ok(())
 }
 
-/// The value of the first entry of type `extension_type`, whatever its
-/// length (`get_extension_bytes`; variable-length extensions such as
-/// `TokenMetadata`).
+/// Mint extension types (`ExtensionType::get_account_type() == Mint`), as
+/// bits.
+const MINT_EXTENSIONS: u32 = 1 << EXT_TRANSFER_FEE_CONFIG
+    | 1 << EXT_MINT_CLOSE_AUTHORITY
+    | 1 << EXT_CONFIDENTIAL_TRANSFER_MINT
+    | 1 << EXT_DEFAULT_ACCOUNT_STATE
+    | 1 << EXT_NON_TRANSFERABLE
+    | 1 << EXT_INTEREST_BEARING_CONFIG
+    | 1 << EXT_PERMANENT_DELEGATE
+    | 1 << EXT_TRANSFER_HOOK
+    | 1 << EXT_CONFIDENTIAL_TRANSFER_FEE_CONFIG
+    | 1 << EXT_METADATA_POINTER
+    | 1 << EXT_TOKEN_METADATA
+    | 1 << EXT_GROUP_POINTER
+    | 1 << EXT_TOKEN_GROUP
+    | 1 << EXT_GROUP_MEMBER_POINTER
+    | 1 << EXT_TOKEN_GROUP_MEMBER
+    | 1 << EXT_CONFIDENTIAL_MINT_BURN
+    | 1 << EXT_SCALED_UI_AMOUNT
+    | 1 << EXT_PAUSABLE;
+/// Account extension types (`get_account_type() == Account`), as bits.
+const ACCOUNT_EXTENSIONS: u32 = 1 << EXT_TRANSFER_FEE_AMOUNT
+    | 1 << EXT_CONFIDENTIAL_TRANSFER_ACCOUNT
+    | 1 << EXT_IMMUTABLE_OWNER
+    | 1 << EXT_MEMO_TRANSFER
+    | 1 << EXT_CPI_GUARD
+    | 1 << EXT_NON_TRANSFERABLE_ACCOUNT
+    | 1 << EXT_TRANSFER_HOOK_ACCOUNT
+    | 1 << EXT_CONFIDENTIAL_TRANSFER_FEE_AMOUNT
+    | 1 << EXT_PAUSABLE_ACCOUNT;
+
+/// `ExtensionType::get_account_type`: the base state an extension type
+/// belongs to, [`ACCOUNT_TYPE_MINT`] or [`ACCOUNT_TYPE_ACCOUNT`]; 0
+/// (`AccountType::Uninitialized`) for `Uninitialized` and for a type
+/// spl-token-2022-interface 2.1.0 does not know.
+pub const fn extension_account_type(extension_type: u16) -> u8 {
+    if extension_type > EXTENSION_TYPE_MAX {
+        return 0;
+    }
+    let bit = 1u32 << extension_type;
+    if MINT_EXTENSIONS & bit != 0 {
+        ACCOUNT_TYPE_MINT
+    } else if ACCOUNT_EXTENSIONS & bit != 0 {
+        ACCOUNT_TYPE_ACCOUNT
+    } else {
+        0
+    }
+}
+
+/// `get_extension_bytes::<S, V>`: the value of the first entry of type
+/// `extension_type`, whatever its length (variable-length extensions such
+/// as `TokenMetadata`), in the TLV data `tlv` of a base state of type
+/// `base` ([`ACCOUNT_TYPE_MINT`] or [`ACCOUNT_TYPE_ACCOUNT`]).
+///
+/// As SPL: an extension type of the other base (or no base) is
+/// `InvalidAccountData` before anything is read
+/// (spl-token-2022-interface 2.1.0 `extension/mod.rs:334-337`); then the
+/// walk ([`extension_value`]). With constant arguments the base check
+/// folds away at compile time.
+#[inline(always)]
+pub fn get_extension_bytes(
+    tlv: &[u8],
+    base: u8,
+    extension_type: u16,
+) -> Result<&[u8], ProgramError> {
+    if extension_account_type(extension_type) != base {
+        return Err(invalid());
+    }
+    extension_bytes(tlv, extension_type)
+}
+
+/// [`get_extension_bytes`]'s walk, out of line.
 #[inline(never)]
-pub fn get_extension_bytes(tlv: &[u8], extension_type: u16) -> Result<&[u8], ProgramError> {
+fn extension_bytes(tlv: &[u8], extension_type: u16) -> Result<&[u8], ProgramError> {
     extension_value(tlv, extension_type)
 }
 
-/// `get_extension::<V>()` for an extension of type `extension_type` and
-/// `Pod` size `len`: the value of the first entry of that type, which must
-/// be exactly `len` bytes (`InvalidArgument` otherwise).
+/// `get_extension::<V>()` of a base state of type `base` for an extension
+/// of type `extension_type` and `Pod` size `len`: the base-type check of
+/// [`get_extension_bytes`], then the value of the first entry of that type,
+/// which must be exactly `len` bytes (`InvalidArgument` otherwise).
+#[inline(always)]
+pub fn get_extension(
+    tlv: &[u8],
+    base: u8,
+    extension_type: u16,
+    len: usize,
+) -> Result<&[u8], ProgramError> {
+    if extension_account_type(extension_type) != base {
+        return Err(invalid());
+    }
+    extension_sized(tlv, extension_type, len)
+}
+
+/// [`get_extension`]'s walk and size check, out of line.
 #[inline(never)]
-pub fn get_extension(tlv: &[u8], extension_type: u16, len: usize) -> Result<&[u8], ProgramError> {
+fn extension_sized(tlv: &[u8], extension_type: u16, len: usize) -> Result<&[u8], ProgramError> {
     let value = extension_value(tlv, extension_type)?;
     // `pod_from_bytes`: the value must be exactly the type's size.
     if value.len() != len {
@@ -407,7 +491,20 @@ pub fn get_extension(tlv: &[u8], extension_type: u16, len: usize) -> Result<&[u8
     Ok(value)
 }
 
-/// The TLV walk of `get_extension` / `get_extension_bytes`.
+/// The TLV walk of `get_extension` / `get_extension_bytes`
+/// (`get_extension_indices`): entry by entry, the first of type
+/// `extension_type`; `ExtensionNotFound` at an `Uninitialized` entry,
+/// `InvalidAccountData` at a truncated entry or the end.
+///
+/// Like spl-token-2022-interface 2.1.0's `get_extension_indices` (which
+/// compares the raw `u16`), it walks past entries of any other type,
+/// including types that version does not know: only [`ExtensionTypes`]
+/// (`get_extension_types`) rejects those. So a lookup keeps working if a
+/// future Token-2022 adds an extension type, which matters for immutable
+/// programs; every decision that accepts or refuses a mint by its
+/// extensions (the vault's mint policy, the shield's allowlist and zToken
+/// check, the launchpad's mint check) runs the strict [`ExtensionTypes`]
+/// pass over the whole TLV first.
 #[inline(always)]
 fn extension_value(tlv: &[u8], extension_type: u16) -> Result<&[u8], ProgramError> {
     let mut start = 0usize;
@@ -441,21 +538,28 @@ pub fn optional_key(data: &[u8], at: usize) -> Option<Address> {
     }
 }
 
-/// `transfer_hook::get_program_id`: the hook program of a Token-2022 mint,
-/// `None` if it has none (or its extension does not parse).
+/// `transfer_hook::get_program_id`: the hook program of a Token-2022 mint
+/// (`tlv`: the mint's TLV data), `None` if it has none (or its extension
+/// does not parse).
 #[inline]
 pub fn hook_program_id(tlv: &[u8]) -> Option<Address> {
-    let hook = get_extension(tlv, EXT_TRANSFER_HOOK, TRANSFER_HOOK_LEN).ok()?;
+    let hook = get_extension(tlv, ACCOUNT_TYPE_MINT, EXT_TRANSFER_HOOK, TRANSFER_HOOK_LEN).ok()?;
     // authority (32) | program_id (32)
     optional_key(hook, 32)
 }
 
-/// Whether a Token-2022 account requires a memo before incoming transfers
-/// (`MemoTransfer.require_incoming_transfer_memos`, false if absent).
+/// Whether a Token-2022 account (`tlv`: its TLV data) requires a memo
+/// before incoming transfers (`MemoTransfer.require_incoming_transfer_memos`,
+/// false if absent).
 #[inline]
 pub fn requires_memo(tlv: &[u8]) -> bool {
-    get_extension(tlv, EXT_MEMO_TRANSFER, MEMO_TRANSFER_LEN)
-        .is_ok_and(|memo| memo.first().is_some_and(|b| *b != 0))
+    get_extension(
+        tlv,
+        ACCOUNT_TYPE_ACCOUNT,
+        EXT_MEMO_TRANSFER,
+        MEMO_TRANSFER_LEN,
+    )
+    .is_ok_and(|memo| memo.first().is_some_and(|b| *b != 0))
 }
 
 // ---------------------------------------------------- InterfaceAccount<T>

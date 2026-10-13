@@ -206,6 +206,82 @@ fn extension_types_and_sizes() {
     }
 }
 
+/// Each extension type's base state is spl-token-2022-interface's
+/// `ExtensionType::get_account_type` (0 for `Uninitialized` and unknown
+/// types), and a lookup of an extension of the other base fails with
+/// `InvalidAccountData` before the TLV is read, as SPL's
+/// `get_extension_bytes::<S, V>` does (review I-2).
+#[test]
+fn extension_lookups_check_the_base_type() {
+    use spl_token_2022::extension::ExtensionType as E;
+    for ty in 0..=token::EXTENSION_TYPE_MAX {
+        let theirs = E::try_from(&ty.to_le_bytes()[..])
+            .unwrap()
+            .get_account_type() as u8;
+        assert_eq!(token::extension_account_type(ty), theirs, "type {ty}");
+    }
+    for ty in [token::EXTENSION_TYPE_MAX + 1, 31, 32, 255, 256, u16::MAX] {
+        assert_eq!(token::extension_account_type(ty), 0, "type {ty}");
+    }
+    // A mint TLV holding a MemoTransfer entry (an account extension): the
+    // review's probe returned the value; SPL refuses the lookup.
+    let tlv = [
+        &token::EXT_MEMO_TRANSFER.to_le_bytes()[..],
+        &1u16.to_le_bytes(),
+        &[1],
+    ]
+    .concat();
+    let invalid = Err(ProgramError::InvalidAccountData);
+    assert_eq!(
+        token::get_extension(
+            &tlv,
+            token::ACCOUNT_TYPE_MINT,
+            token::EXT_MEMO_TRANSFER,
+            token::MEMO_TRANSFER_LEN
+        ),
+        invalid
+    );
+    assert_eq!(
+        token::get_extension_bytes(&tlv, token::ACCOUNT_TYPE_MINT, token::EXT_MEMO_TRANSFER),
+        invalid
+    );
+    assert_eq!(
+        token::get_extension(
+            &tlv,
+            token::ACCOUNT_TYPE_ACCOUNT,
+            token::EXT_MEMO_TRANSFER,
+            token::MEMO_TRANSFER_LEN
+        ),
+        Ok(&[1u8][..])
+    );
+    // Unknown and Uninitialized types belong to no base.
+    assert_eq!(
+        token::get_extension_bytes(&tlv, token::ACCOUNT_TYPE_ACCOUNT, 28),
+        invalid
+    );
+    assert_eq!(
+        token::get_extension_bytes(&tlv, token::ACCOUNT_TYPE_MINT, 0),
+        invalid
+    );
+    // An entry of a type 2.1.0 does not know before the one looked up is
+    // walked past (as SPL's `get_extension_indices`, which compares the raw
+    // u16), while the strict pass (`get_extension_types`) rejects it.
+    let tlv = [
+        &28u16.to_le_bytes()[..],
+        &2u16.to_le_bytes(),
+        &[9, 9],
+        &token::EXT_MEMO_TRANSFER.to_le_bytes(),
+        &1u16.to_le_bytes(),
+        &[1],
+    ]
+    .concat();
+    assert!(token::requires_memo(&tlv));
+    assert_eq!(
+        token::for_each_extension_type(&tlv, |_| Ok(())),
+        Err(ProgramError::InvalidAccountData)
+    );
+}
+
 // ------------------------------------------------------- token accounts
 
 fn coption_key<T: Into<Option<anchor_lang::prelude::Pubkey>>>(v: T) -> Option<Address> {
@@ -282,17 +358,33 @@ fn token_parsing_matches_spl_token_2022() {
                             .map(bytemuck::bytes_of),
                     };
                     assert_eq!(
-                        token::get_extension(o.tlv, ty, len),
+                        token::get_extension(o.tlv, token::ACCOUNT_TYPE_MINT, ty, len),
                         theirs,
                         "round {round}"
                     );
                 }
                 // Variable-length: TokenMetadata's raw bytes.
                 assert_eq!(
-                    token::get_extension_bytes(o.tlv, token::EXT_TOKEN_METADATA),
+                    token::get_extension_bytes(
+                        o.tlv,
+                        token::ACCOUNT_TYPE_MINT,
+                        token::EXT_TOKEN_METADATA
+                    ),
                     t.get_extension_bytes::<
                         anchor_spl::compat::spl_token_metadata_interface::state::TokenMetadata,
                     >(),
+                    "round {round}"
+                );
+                // An account extension read from a mint: InvalidAccountData
+                // before the walk (review I-2), as SPL's base-type check.
+                assert_eq!(
+                    token::get_extension(
+                        o.tlv,
+                        token::ACCOUNT_TYPE_MINT,
+                        token::EXT_MEMO_TRANSFER,
+                        token::MEMO_TRANSFER_LEN
+                    ),
+                    t.get_extension::<MemoTransfer>().map(bytemuck::bytes_of),
                     "round {round}"
                 );
             }
@@ -336,8 +428,25 @@ fn token_parsing_matches_spl_token_2022() {
                 );
                 memos += usize::from(memo);
                 assert_eq!(
-                    token::get_extension(o.tlv, token::EXT_MEMO_TRANSFER, token::MEMO_TRANSFER_LEN),
+                    token::get_extension(
+                        o.tlv,
+                        token::ACCOUNT_TYPE_ACCOUNT,
+                        token::EXT_MEMO_TRANSFER,
+                        token::MEMO_TRANSFER_LEN
+                    ),
                     t.get_extension::<MemoTransfer>().map(bytemuck::bytes_of),
+                    "round {round}"
+                );
+                // A mint extension read from an account (review I-2).
+                assert_eq!(
+                    token::get_extension(
+                        o.tlv,
+                        token::ACCOUNT_TYPE_ACCOUNT,
+                        token::EXT_TRANSFER_HOOK,
+                        token::TRANSFER_HOOK_LEN
+                    ),
+                    t.get_extension::<transfer_hook::TransferHook>()
+                        .map(bytemuck::bytes_of),
                     "round {round}"
                 );
             }

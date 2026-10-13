@@ -3,9 +3,9 @@
 //! which the Anchor build used through anchor-spl).
 
 use noised_onchain::token::{
-    for_each_extension_type, get_extension, optional_key, EXT_MINT_CLOSE_AUTHORITY,
-    EXT_NON_TRANSFERABLE, EXT_PERMANENT_DELEGATE, EXT_TRANSFER_FEE_CONFIG,
-    MINT_CLOSE_AUTHORITY_LEN, TRANSFER_FEE_CONFIG_LEN,
+    for_each_extension_type, get_extension, optional_key, ACCOUNT_TYPE_MINT,
+    EXT_MINT_CLOSE_AUTHORITY, EXT_NON_TRANSFERABLE, EXT_PERMANENT_DELEGATE,
+    EXT_TRANSFER_FEE_CONFIG, MINT_CLOSE_AUTHORITY_LEN, TRANSFER_FEE_CONFIG_LEN,
 };
 pub use noised_onchain::token::{
     ASSOCIATED_TOKEN_PROGRAM_ID, MEMO_PROGRAM_ID, SYSTEM_PROGRAM_ID, TOKEN_2022_PROGRAM_ID,
@@ -47,12 +47,21 @@ pub fn mint_is_supported(tlv: &[u8]) -> Result<bool, ProgramError> {
         match extension_type {
             EXT_NON_TRANSFERABLE | EXT_PERMANENT_DELEGATE => supported = false,
             EXT_MINT_CLOSE_AUTHORITY => {
-                let config =
-                    get_extension(tlv, EXT_MINT_CLOSE_AUTHORITY, MINT_CLOSE_AUTHORITY_LEN)?;
+                let config = get_extension(
+                    tlv,
+                    ACCOUNT_TYPE_MINT,
+                    EXT_MINT_CLOSE_AUTHORITY,
+                    MINT_CLOSE_AUTHORITY_LEN,
+                )?;
                 supported = optional_key(config, 0).is_none();
             }
             EXT_TRANSFER_FEE_CONFIG => {
-                let config = get_extension(tlv, EXT_TRANSFER_FEE_CONFIG, TRANSFER_FEE_CONFIG_LEN)?;
+                let config = get_extension(
+                    tlv,
+                    ACCOUNT_TYPE_MINT,
+                    EXT_TRANSFER_FEE_CONFIG,
+                    TRANSFER_FEE_CONFIG_LEN,
+                )?;
                 // transfer_fee_config_authority (32) | withdraw_withheld_authority (32) | ...
                 supported = optional_key(config, 0).is_none() && optional_key(config, 32).is_none();
             }
