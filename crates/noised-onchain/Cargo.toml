@@ -1,0 +1,43 @@
+[package]
+name = "noised-onchain"
+version = "0.1.0"
+description = "Anchor 1.2.1-compatible building blocks for framework-free Solana programs on pinocchio: accounts, constraints, errors, events, SPL Token / Token-2022"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+# Shared by the Noised programs; not published (yet).
+publish = false
+
+# On-chain: pinocchio (entrypoint, account views, CPI, syscalls) and the
+# sol_sha256 wrapper, nothing else. Everything is generic or `#[inline]`, so
+# a program's binary carries only what it calls.
+[dependencies]
+pinocchio = { workspace = true }
+solana-sha256-hasher = { workspace = true }
+
+# Host only (tests and clients), never in a program binary: PDA derivation
+# off-chain. A caret requirement, as in noised-vault: the LiteSVM test
+# workspaces resolve solana-address 2.7 (LiteSVM pins it), the root
+# workspace 2.9; both are the same `Address` type pinocchio re-exports.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+solana-address = { version = "2.7", features = ["curve25519"] }
+
+# Differential tests against the code an Anchor 1.2.1 build runs (the same
+# exact pins as the root workspace and noised-vault).
+[dev-dependencies]
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+bytemuck = "=1.25.2"
+solana-account-info = "=3.1.1"
+solana-instruction = "=3.5.1"
+solana-program-error = "=3.0.1"
+solana-rent = "=3.1.0"
+spl-discriminator = { workspace = true }
+spl-pod = "=0.7.4"
+spl-tlv-account-resolution = { workspace = true }
+spl-transfer-hook-interface = { workspace = true }
+spl-type-length-value = "=0.9.1"
+
+[lints]
+workspace = true

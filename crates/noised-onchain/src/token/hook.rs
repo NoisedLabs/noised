@@ -1,5 +1,5 @@
 //! The transfer-hook accounts of a `transfer_checked` CPI, resolved the way
-//! the Anchor build did with spl-transfer-hook-interface 2.1.0
+//! an Anchor build does with spl-transfer-hook-interface 2.1.0
 //! (`onchain::add_extra_accounts_for_execute_cpi`) and
 //! spl-tlv-account-resolution 0.11.1 (`ExtraAccountMetaList::
 //! add_to_cpi_instruction`, `ExtraAccountMeta::resolve`), with the same
@@ -8,9 +8,9 @@
 
 use alloc::vec::Vec;
 
-use pinocchio::error::ProgramError;
+use pinocchio::{error::ProgramError, AccountView, Address as Pubkey};
 
-use crate::Pubkey;
+use crate::{pda, same, sys};
 
 /// `sha256("spl-transfer-hook-interface:execute")[..8]`.
 pub const EXECUTE_DISCRIMINATOR: [u8; 8] = [105, 37, 101, 197, 75, 251, 102, 26];
@@ -38,8 +38,22 @@ pub const EXTRA_ACCOUNT_META_LEN: usize = 35;
 pub trait HookAccount {
     fn key(&self) -> &Pubkey;
     /// The account's data (Anchor's `try_borrow_data`; no account is
-    /// mutably borrowed while the vault resolves hook accounts).
+    /// mutably borrowed while hook accounts are resolved).
     fn data(&self) -> &[u8];
+}
+
+impl HookAccount for AccountView {
+    #[inline]
+    fn key(&self) -> &Pubkey {
+        self.address()
+    }
+
+    #[inline]
+    fn data(&self) -> &[u8] {
+        // The resolution runs between the account checks and the
+        // `transfer_checked` CPI, while nothing is mutably borrowed.
+        sys::data_unchecked(self)
+    }
 }
 
 /// An instruction account: address, signer, writable.
@@ -59,6 +73,7 @@ pub struct Entry<'a, A> {
 }
 
 impl<'a, A> Entry<'a, A> {
+    #[inline]
     pub fn new(account: &'a A, is_signer: bool, is_writable: bool) -> Self {
         Self {
             account,
@@ -71,30 +86,34 @@ impl<'a, A> Entry<'a, A> {
 /// The account of `accounts` at `key`, if any (the first one).
 #[inline(never)]
 fn find<'a, A: HookAccount>(accounts: &'a [A], key: &Pubkey) -> Option<&'a A> {
-    accounts.iter().find(|a| crate::same(a.key(), key))
+    accounts.iter().find(|a| same(a.key(), key))
 }
 
+#[inline]
 fn custom(code: u32) -> ProgramError {
     ProgramError::Custom(code)
 }
 
+#[inline]
 fn invalid() -> ProgramError {
     ProgramError::InvalidAccountData
 }
 
 /// PDA derivation, `Pubkey::find_program_address` (a syscall on-chain;
-/// panics, as the Anchor build's did, when no bump works or the seeds are
-/// invalid).
-pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(seeds, program_id)
+/// panics, as SPL's does, when no bump works or the seeds are invalid).
+#[inline]
+fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
+    pda::find_program_address(seeds, program_id)
 }
 
 /// The validation account of `mint` for the hook `program_id`.
+#[inline]
 pub fn extra_account_metas_address(mint: &Pubkey, program_id: &Pubkey) -> Pubkey {
     find_program_address(&[EXTRA_ACCOUNT_METAS_SEED, mint.as_ref()], program_id).0
 }
 
 /// The little-endian `u32` at `at`, if there.
+#[inline]
 fn u32_at(data: &[u8], at: usize) -> Option<u32> {
     let bytes = data.get(at..)?.first_chunk::<4>()?;
     Some(u32::from_le_bytes(*bytes))
@@ -103,6 +122,7 @@ fn u32_at(data: &[u8], at: usize) -> Option<u32> {
 /// spl-type-length-value 0.9 `TlvStateBorrowed::unpack` (every entry must
 /// parse) and `get_first_bytes::<ExecuteInstruction>()`: the value of the
 /// first `Execute` entry. Entries: 8-byte discriminator, `u32` length, value.
+#[inline(never)]
 pub fn execute_entry(data: &[u8]) -> Result<&[u8], ProgramError> {
     // check_data (get_discriminators_and_end_index)
     let mut start = 0usize;
@@ -145,6 +165,7 @@ pub fn execute_entry(data: &[u8]) -> Result<&[u8], ProgramError> {
 
 /// spl-pod 0.7 `ListView::<ExtraAccountMeta, PodU32>::unpack`: a `u32`
 /// count, then the metas. Returns the metas in use.
+#[inline]
 pub fn extra_account_metas(value: &[u8]) -> Result<&[u8], ProgramError> {
     let Some((count, metas)) = value.split_first_chunk::<4>() else {
         return Err(custom(POD_BUFFER_TOO_SMALL));
@@ -210,6 +231,7 @@ enum Seed {
 /// `Seed::unpack_address_config`: the seeds packed into an address config,
 /// up to the first `Uninitialized` one. At most 16 fit (2 bytes each at
 /// least).
+#[inline(never)]
 fn unpack_seeds(config: &[u8; 32]) -> Result<([Option<Seed>; 16], usize), ProgramError> {
     let mut seeds = [None; 16];
     let mut count = 0usize;
@@ -346,7 +368,7 @@ fn de_escalate<A: HookAccount>(meta: &mut Meta, entries: &[Entry<A>]) {
     let mut any_writable = false;
     for entry in entries
         .iter()
-        .filter(|e| crate::same(e.account.key(), &meta.pubkey))
+        .filter(|e| same(e.account.key(), &meta.pubkey))
     {
         seen = true;
         any_writable |= entry.is_writable;

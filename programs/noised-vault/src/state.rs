@@ -1,6 +1,7 @@
 #[cfg(not(target_os = "solana"))]
 use anchor_lang::{AnchorDeserialize, AnchorSerialize, Discriminator};
 use noised_lmots::{PublicKey, Sha256, ID_LEN, N};
+use noised_onchain::accounts::ProgramAccount;
 
 use crate::{discriminator, Pubkey};
 
@@ -12,7 +13,7 @@ pub struct SolSha256;
 
 impl Sha256 for SolSha256 {
     fn hashv(parts: &[&[u8]]) -> [u8; 32] {
-        solana_sha256_hasher::hashv(parts).to_bytes()
+        noised_onchain::hashv(parts)
     }
 }
 
@@ -181,6 +182,14 @@ impl Vault {
     }
 }
 
+impl ProgramAccount for Vault {
+    const ACCOUNT_DISCRIMINATOR: [u8; 8] = discriminator::VAULT;
+
+    fn try_read(data: &[u8]) -> Option<Self> {
+        data.first_chunk::<{ Self::LEN }>().map(Self::read)
+    }
+}
+
 /// Tokens a withdrawal set aside for its recipient. They stay in the vault's
 /// token account, counted in `Vault::reserved`, until `release` or
 /// `release_to` delivers them; then this account closes.
@@ -234,6 +243,14 @@ impl Payout {
         data[50..82].copy_from_slice(self.destination_owner.as_ref());
         data[82..90].copy_from_slice(&self.amount.to_le_bytes());
         data[90..122].copy_from_slice(self.rent_payer.as_ref());
+    }
+}
+
+impl ProgramAccount for Payout {
+    const ACCOUNT_DISCRIMINATOR: [u8; 8] = discriminator::PAYOUT;
+
+    fn try_read(data: &[u8]) -> Option<Self> {
+        data.first_chunk::<{ Self::LEN }>().map(Self::read)
     }
 }
 

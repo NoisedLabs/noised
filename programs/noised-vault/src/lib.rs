@@ -35,8 +35,9 @@
 //!
 //! # No framework
 //!
-//! The program is written on `pinocchio` alone (entrypoint, account views,
-//! CPI, syscalls); no Anchor code is linked into it. Its ABI is the one the
+//! The program is written on `pinocchio` and `noised-onchain` (the shared
+//! Anchor-compatible building blocks: account checks, errors, Token-2022
+//! parsing, CPIs); no Anchor code is linked into it. Its ABI is the one the
 //! Anchor 1.2.1 build had, byte for byte: the same instruction
 //! discriminators (`sha256("global:<name>")[..8]`), account order and
 //! signer/writable flags, Borsh argument layouts, account discriminators
@@ -59,21 +60,18 @@ use anchor_lang::{AnchorDeserialize, AnchorSerialize, Discriminator};
 
 #[cfg(not(target_os = "solana"))]
 mod client;
-#[cfg(not(feature = "no-entrypoint"))]
-mod entrypoint;
 pub mod error;
-#[doc(hidden)]
-pub mod hook;
 pub mod message;
 pub mod processor;
 pub mod state;
 #[doc(hidden)]
-pub mod sys;
-#[doc(hidden)]
 pub mod token;
 
 #[cfg(not(target_os = "solana"))]
-pub use client::{accounts, instruction, program};
+pub use client::{accounts, instruction};
+
+#[cfg(not(feature = "no-entrypoint"))]
+noised_onchain::entrypoint!(crate::processor::process_instruction);
 
 /// An account address (`solana_address::Address`, which Anchor's `Pubkey`
 /// also is).
@@ -95,11 +93,25 @@ pub fn check_id(id: &Pubkey) -> bool {
     *id == ID
 }
 
-/// Address equality, out of line: a 32-byte compare is a dozen
-/// instructions every time it is inlined.
-#[inline(never)]
-pub(crate) fn same(a: &Pubkey, b: &Pubkey) -> bool {
-    a == b
+/// The program type (`Id` off-chain, as `#[program]` generated it), and the
+/// [`noised_onchain::Program`] the account checks and errors are generic
+/// over.
+pub mod program {
+    /// The vault program.
+    #[derive(Clone)]
+    pub struct NoisedVault;
+
+    impl noised_onchain::Program for NoisedVault {
+        const ID: crate::Pubkey = crate::ID;
+        const ERRORS: noised_onchain::ErrorTable = crate::error::ERRORS;
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    impl anchor_lang::Id for NoisedVault {
+        fn id() -> crate::Pubkey {
+            crate::ID
+        }
+    }
 }
 
 /// Instruction discriminators: `sha256("global:<snake_case name>")[..8]`.
@@ -121,7 +133,7 @@ pub mod discriminator {
     /// Anchor's `EVENT_IX_TAG` (`0x1d9acb512ea545e4`, little-endian): the
     /// event-CPI instruction tag, which this program (like the Anchor build,
     /// compiled without `event-cpi`) refuses with `EventInstructionStub`.
-    pub const EVENT_IX_TAG_LE: [u8; 8] = [228, 69, 165, 46, 81, 203, 154, 29];
+    pub const EVENT_IX_TAG_LE: [u8; 8] = noised_onchain::event::EVENT_IX_TAG_LE;
 }
 
 /// `withdraw`'s argument (Borsh, after the discriminator).

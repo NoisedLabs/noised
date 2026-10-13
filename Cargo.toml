@@ -45,6 +45,8 @@ solana-sha256-hasher = { version = "=3.1.0", features = ["sha2"] }
 # account views `Copy`, `cpi` the invoke helpers.
 pinocchio = { version = "=0.11.2", default-features = false, features = ["alloc", "copy", "cpi"] }
 noised-lmots = { path = "crates/noised-lmots" }
+# Anchor-compatible building blocks of the lean (pinocchio) programs.
+noised-onchain = { path = "crates/noised-onchain" }
 noised-rules = { path = "crates/noised-rules" }
 
 [workspace.lints.rust]

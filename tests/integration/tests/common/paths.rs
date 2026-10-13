@@ -35,7 +35,11 @@ struct OurProgram {
 const OUR_PROGRAMS: &[OurProgram] = &[
     OurProgram {
         so_name: "noised_vault",
-        sources: &["programs/noised-vault", "crates/noised-lmots"],
+        sources: &[
+            "programs/noised-vault",
+            "crates/noised-lmots",
+            "crates/noised-onchain",
+        ],
     },
     OurProgram {
         so_name: "noised_hook",

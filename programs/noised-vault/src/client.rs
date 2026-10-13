@@ -1,7 +1,7 @@
 //! Host-only client API, as the Anchor build generated it: `accounts`
-//! (account lists with Anchor's `ToAccountMetas`), `instruction` (argument
-//! structs with Anchor's `InstructionData`) and `program::NoisedVault`.
-//! Never compiled into the program binary.
+//! (account lists with Anchor's `ToAccountMetas`) and `instruction`
+//! (argument structs with Anchor's `InstructionData`); `program::NoisedVault`
+//! is in the crate root. Never compiled into the program binary.
 
 /// The accounts of each instruction, in order, with their signer and
 /// writable flags (`ToAccountMetas`).
@@ -177,18 +177,4 @@ pub mod instruction {
     impl InstructionData for Withdraw {}
     impl InstructionData for Release {}
     impl InstructionData for ReleaseTo {}
-}
-
-/// The program type (`Id`), as `#[program]` generated it.
-pub mod program {
-    use crate::Pubkey;
-
-    #[derive(Clone)]
-    pub struct NoisedVault;
-
-    impl anchor_lang::Id for NoisedVault {
-        fn id() -> Pubkey {
-            crate::ID
-        }
-    }
 }

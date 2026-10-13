@@ -45,7 +45,7 @@ $pristine = "$WorkDir\pristine"; $logs = "$WorkDir\logs"; $bins = "$WorkDir\bin"
 $env:CARGO_TARGET_DIR = $target
 if (-not $env:CARGO_BUILD_JOBS) { $env:CARGO_BUILD_JOBS = '4' }
 $utf8 = New-Object System.Text.UTF8Encoding $false
-$members = @('crates/noised-lmots', 'crates/noised-rules', 'programs/noised-vault', 'programs/noised-hook', 'programs/noised-launchpad')
+$members = @('crates/noised-lmots', 'crates/noised-onchain', 'crates/noised-rules', 'programs/noised-vault', 'programs/noised-hook', 'programs/noised-launchpad')
 $programs = @('noised-vault', 'noised-hook', 'noised-launchpad')
 $testBins = @('vault', 'hook', 'vectors_onchain', 'metadata_record', 'programmable_vectors')
 
@@ -158,10 +158,10 @@ $mutants = @(
     (M 'V11' 'noised-vault' 'max_amount not in the signed message' (E 'src\processor.rs' "        args.max_amount,`n        &args.next_key_id,`n    );" "        0,`n        &args.next_key_id,`n    );")),
     (M 'V12' 'noised-vault' 'next key id not in the signed message' (E 'src\processor.rs' "        &args.next_key_id,`n    );" "        &[0u8; 32],`n    );")),
     (M 'V13' 'noised-vault' 'delivery keeps the reservation' (E 'src\processor.rs' "    d.state.reserved = d`n        .state`n        .reserved`n        .checked_sub(amount)`n        .ok_or_else(|| vault_error(VaultError::MathOverflow))?;`n" '')),
-    (M 'V14' 'noised-vault' 'payout address not per sequence' @((E 'src\processor.rs' 'hook::find_program_address(&[PAYOUT_SEED, vault.address().as_ref(), &sequence_le], &ID);' 'hook::find_program_address(&[PAYOUT_SEED, vault.address().as_ref()], &ID);'), (E 'src\processor.rs' "            Seed::from(&sequence_le),`n" ''))),
+    (M 'V14' 'noised-vault' 'payout address not per sequence' @((E 'src\processor.rs' '        &[PAYOUT_SEED, vault.address().as_ref(), &sequence_le],' '        &[PAYOUT_SEED, vault.address().as_ref()],'), (E 'src\processor.rs' "            Seed::from(&sequence_le),`n" ''))),
     (M 'V15' 'noised-vault' 'withdraw reads any token account of the mint as the balance' (E 'src\processor.rs' "    check_vault(vault, &state, mint)?;`n    check_vault_token_account(`n        vault_token_account,`n        &vault_tokens,`n        vault,`n        mint,`n        token_program,`n    )?;" "    check_vault(vault, &state, mint)?;`n    if !same(&vault_tokens.mint, mint.address()) || !owned_by(vault_token_account, token_program.address()) {`n        return Err(fail(CONSTRAINT_TOKEN_MINT, Some(VAULT_TOKEN_ACCOUNT)));`n    }")),
-    (M 'V16' 'noised-vault' 'release / release_to: payout not bound to its recipient (one check serves both)' (E 'src\processor.rs' "    check_has_one(&state.destination_owner, destination_owner, PAYOUT)?;`n" '')),
-    (M 'V17' 'noised-vault' 'release / release_to: payout not bound to its rent payer' (E 'src\processor.rs' "    check_has_one(&state.rent_payer, rent_payer, PAYOUT)?;`n" '')),
+    (M 'V16' 'noised-vault' 'release / release_to: payout not bound to its recipient (one check serves both)' (E 'src\processor.rs' "    check_has_one::<P>(&state.destination_owner, destination_owner, PAYOUT)?;`n" '')),
+    (M 'V17' 'noised-vault' 'release / release_to: payout not bound to its rent payer' (E 'src\processor.rs' "    check_has_one::<P>(&state.rent_payer, rent_payer, PAYOUT)?;`n" '')),
     (M 'V18' 'noised-vault' 'release_to: the vault''s own token account accepted as the destination (no duplicate-account check)' (E 'src\processor.rs' "        (payout, PAYOUT),`n        (destination, DESTINATION),`n    ])?;" "        (payout, PAYOUT),`n    ])?;")),
     (M 'V19' 'noised-vault' 'release_to without the recipient signature' (E 'src\processor.rs' 'let destination_owner = accounts.signer(DESTINATION_OWNER)?;' 'let destination_owner = accounts.unchecked(DESTINATION_OWNER)?;')),
     (M 'V20' 'noised-vault' 'release_to accepts an account of another mint' (E 'src\processor.rs' '    if !same(&destination_tokens.mint, mint.address()) {' '    if false && !same(&destination_tokens.mint, mint.address()) {')),

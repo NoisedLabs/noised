@@ -1850,6 +1850,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "noised-onchain"
+version = "0.1.0"
+dependencies = [
+ "pinocchio",
+ "solana-address 2.7.0",
+ "solana-sha256-hasher",
+]
+
+[[package]]
 name = "noised-rules"
 version = "0.1.0"
 
@@ -1859,9 +1868,8 @@ version = "0.2.0"
 dependencies = [
  "anchor-lang",
  "noised-lmots",
+ "noised-onchain",
  "pinocchio",
- "solana-address 2.7.0",
- "solana-sha256-hasher",
 ]
 
 [[package]]
