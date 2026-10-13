@@ -44,6 +44,11 @@ on:
         required: false
         type: string
         default: ""
+      compute_unit_price:
+        description: "export: priority fee in micro-lamports per CU (solana-verify --compute-unit-price; the transaction sets no CU limit, so it requests about 200k CU)"
+        required: false
+        type: string
+        default: "100000"
 
 permissions:
   contents: read
@@ -60,6 +65,7 @@ env:
   COMMIT: ${{ inputs.commit }}
   UPLOADER: ${{ inputs.uploader }}
   ONLY: ${{ inputs.program }}
+  CU_PRICE: ${{ inputs.compute_unit_price }}
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -74,7 +80,8 @@ jobs:
           [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::commit must be a full 40-hex hash"; exit 1; }
           [[ "$UPLOADER" =~ ^[1-9A-HJ-NP-Za-km-z]{32,44}$ ]] || { echo "::error::uploader is not a base58 address"; exit 1; }
           [[ -z "$ONLY" || "$ONLY" =~ ^noised_(launchpad|autopilot|shield|vault|hook)$ ]] || { echo "::error::unknown program $ONLY"; exit 1; }
-          echo "repo $REPO_URL commit $COMMIT uploader $UPLOADER only '${ONLY}'"
+          [[ "$CU_PRICE" =~ ^[0-9]{1,8}$ ]] || { echo "::error::compute_unit_price must be an integer below 10^8"; exit 1; }
+          echo "repo $REPO_URL commit $COMMIT uploader $UPLOADER only '${ONLY}' compute unit price $CU_PRICE"
       - name: Install Rust and solana-verify
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
@@ -87,8 +94,8 @@ jobs:
           out="$GITHUB_WORKSPACE/ottersec-pda-tx"
           mkdir -p "$out"
           cd "$RUNNER_TEMP"
-          printf '{"repo_url":"%s","commit":"%s","uploader":"%s","solana_verify":"%s","programs":{' \
-            "$REPO_URL" "$COMMIT" "$UPLOADER" "$SOLANA_VERIFY_VERSION" > "$out/manifest.json"
+          printf '{"repo_url":"%s","commit":"%s","uploader":"%s","solana_verify":"%s","compute_unit_price":%s,"programs":{' \
+            "$REPO_URL" "$COMMIT" "$UPLOADER" "$SOLANA_VERIFY_VERSION" "$CU_PRICE" > "$out/manifest.json"
           sep=""
           for pair in \
             noised_launchpad:CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc \
@@ -99,7 +106,7 @@ jobs:
             lib="${pair%%:*}"; id="${pair##*:}"
             if [ -n "$ONLY" ] && [ "$ONLY" != "$lib" ]; then continue; fi
             echo "::group::$lib $id"
-            solana-verify -u "$RPC_URL" export-pda-tx "$REPO_URL" \
+            solana-verify -u "$RPC_URL" --compute-unit-price "$CU_PRICE" export-pda-tx "$REPO_URL" \
               --program-id "$id" --uploader "$UPLOADER" --commit-hash "$COMMIT" \
               --library-name "$lib" --arch v3 --encoding base64 | tee "$out/$lib.log"
             echo "::endgroup::"
