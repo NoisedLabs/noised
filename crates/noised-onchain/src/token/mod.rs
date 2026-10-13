@@ -695,7 +695,8 @@ pub struct AssociatedToken<'a> {
 /// owned by the system program (any account for plain `init`) is created
 /// with the ATA program's `Create` (which derives the address and fails for
 /// any other); then `InterfaceAccount::try_from_unchecked` (owner checks
-/// and unpack, errors naming no account). For `init_if_needed` the account
+/// caused by `name`, as anchor-syn's `with_account_name` wraps them, then
+/// unpack, its errors unchanged). For `init_if_needed` the account
 /// must then hold `mint` (`ConstraintTokenMint`), be owned by `authority`
 /// (`ConstraintTokenOwner`), by `token_program`
 /// (`ConstraintAssociatedTokenTokenProgram`), each with both keys, and sit
@@ -725,8 +726,9 @@ pub fn init_associated_token_account<P: Program, const IF_NEEDED: bool>(
             a.token_program,
         )?;
     }
-    // InterfaceAccount::try_from_unchecked (the owner is read after the CPI).
-    let state = load_token_account::<P>(a.account, None)?;
+    // InterfaceAccount::try_from_unchecked (the owner is read after the CPI),
+    // `with_account_name(field)`.
+    let state = load_token_account::<P>(a.account, Some(name))?;
     if IF_NEEDED {
         if !same(&state.mint, a.mint.address()) {
             return Err(fail_keys::<P>(

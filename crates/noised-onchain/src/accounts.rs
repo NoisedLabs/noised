@@ -229,8 +229,9 @@ pub fn is_missing(account: &AccountView) -> bool {
 /// (`AccountOwnedByWrongProgram`, with the owner and the program id), it
 /// starts with `discriminator` (`AccountDiscriminatorNotFound` when shorter
 /// than 8 bytes, else `AccountDiscriminatorMismatch`). The caller decodes
-/// the fields from the returned data. `name` is the field (`None` inside
-/// `init_if_needed`, where Anchor names none).
+/// the fields from the returned data. `name` is the field (Anchor names it
+/// everywhere, `init_if_needed` included); `None` for an account read
+/// outside the account list.
 #[inline(never)]
 pub fn load_program_account<'a, P: Program>(
     account: &'a AccountView,
@@ -391,23 +392,24 @@ pub fn check_distinct<P: Program>(fields: &[(&AccountView, &'static str)]) -> Pr
 
 // ------------------------------------------------------- init, exit, close
 
-/// The checks of `Account::try_from_unchecked` on a just created account
-/// (errors name no account): it exists, the program owns it, and it holds
-/// at least `space` bytes (the fields decode).
-fn check_created<P: Program>(account: &AccountView, space: usize) -> ProgramResult {
+/// The checks of `Account::try_from_unchecked` on a just created account,
+/// each caused by `name` (anchor-syn wraps the call in
+/// `with_account_name(field)`): it exists, the program owns it (with both
+/// keys), and it holds at least `space` bytes (the fields decode).
+fn check_created<P: Program>(account: &AccountView, space: usize, name: &'static str) -> ProgramResult {
     if is_missing(account) {
-        return Err(fail::<P>(ACCOUNT_NOT_INITIALIZED, None));
+        return Err(fail::<P>(ACCOUNT_NOT_INITIALIZED, Some(name)));
     }
     if !owned_by(account, &P::ID) {
         return Err(fail_keys::<P>(
             ACCOUNT_OWNED_BY_WRONG_PROGRAM,
-            None,
+            Some(name),
             account.owner(),
             &P::ID,
         ));
     }
     if account.data_len() < space {
-        return Err(fail::<P>(ACCOUNT_DID_NOT_DESERIALIZE, None));
+        return Err(fail::<P>(ACCOUNT_DID_NOT_DESERIALIZE, Some(name)));
     }
     Ok(())
 }
@@ -416,7 +418,7 @@ fn check_created<P: Program>(account: &AccountView, space: usize) -> ProgramResu
 /// caller checked `seeds` first: [`crate::pda::check_seeds`]):
 /// [`create_account_or_fund_allocate_assign`] owned by the program (the
 /// PDA signs with `signers`), the checks of `Account::try_from_unchecked`
-/// (errors name no account), then `mut` (`ConstraintMut`). The caller then
+/// (errors caused by `name`), then `mut` (`ConstraintMut`). The caller then
 /// runs the field's other constraints (raw, rent exemption: init implies
 /// `rent_exempt = enforce`) and, at exit, writes the account
 /// ([`write_back`]).
@@ -430,19 +432,20 @@ pub fn init_program_account<P: Program>(
     name: &'static str,
 ) -> ProgramResult {
     create_account_or_fund_allocate_assign::<P>(payer, account, space, &P::ID, rent, signers)?;
-    check_created::<P>(account, space)?;
+    check_created::<P>(account, space, name)?;
     check_mut::<P>(account, name)
 }
 
 /// [A] `init_if_needed, payer = payer, space = space` of a program account:
 /// an account still owned by the system program is created as by
 /// [`init_program_account`] (`Ok(None)`); any other is loaded as
-/// `Account::try_from` does (errors name no account) and must then have
-/// exactly `space` bytes (`ConstraintSpace`, with both values), be owned by
-/// the program (`ConstraintOwner`, with both keys) and hold the
-/// rent-exempt minimum for `space` (`ConstraintRentExempt`), each caused by
-/// `name` (`Ok(Some(fields))`). Then `mut`. The caller must not assume the
-/// account is new: anyone may have created it first.
+/// `Account::try_from` does (its errors caused by `name`, as anchor-syn's
+/// `with_account_name` wraps them) and must then have exactly `space` bytes
+/// (`ConstraintSpace`, with both values), be owned by the program
+/// (`ConstraintOwner`, with both keys) and hold the rent-exempt minimum for
+/// `space` (`ConstraintRentExempt`), each caused by `name`
+/// (`Ok(Some(fields))`). Then `mut`. The caller must not assume the account
+/// is new: anyone may have created it first.
 #[inline(never)]
 pub fn init_if_needed_program_account<P: Program, T: ProgramAccount>(
     payer: &AccountView,
@@ -454,10 +457,10 @@ pub fn init_if_needed_program_account<P: Program, T: ProgramAccount>(
 ) -> Result<Option<T>, ProgramError> {
     let existing = if owned_by(account, &SYSTEM_PROGRAM_ID) {
         create_account_or_fund_allocate_assign::<P>(payer, account, space, &P::ID, rent, signers)?;
-        check_created::<P>(account, space)?;
+        check_created::<P>(account, space, name)?;
         None
     } else {
-        let fields = read_program_account::<P, T>(account, None)?;
+        let fields = read_program_account::<P, T>(account, Some(name))?;
         if account.data_len() != space {
             return Err(fail_values::<P>(
                 CONSTRAINT_SPACE,
@@ -508,8 +511,9 @@ pub fn write_back<P: Program, const LEN: usize>(
 }
 
 /// [A] exit of `close = destination`: the lamports go to `destination`
-/// (`ArithmeticOverflow` if its balance would overflow, where Anchor
-/// panics), the account goes back to the system program with no data.
+/// (`ArithmeticOverflow` if its balance would overflow, as anchor-lang
+/// 1.2.1's `common::close` returns through `add_lamports`), the account goes
+/// back to the system program with no data.
 #[inline]
 pub fn close(account: &AccountView, destination: &AccountView) -> ProgramResult {
     let mut destination = *destination;

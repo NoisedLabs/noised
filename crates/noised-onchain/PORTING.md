@@ -236,11 +236,11 @@ top-up or refund, then resize). None of the five programs uses `zero`,
 
 | Anchor | Helper | Notes and errors |
 |---|---|---|
-| `init, seeds = [..], bump` | `pda::check_seeds::<P>(acc, seeds, &ID, name)` → bump, then `accounts::init_program_account::<P>(payer, acc, space, &rent, &[Signer::from(&seeds_with_bump)], name)` | 2006 (keys) if not the PDA; then `create_account_or_fund_allocate_assign`: 0 lamports → `create_account`; else payer = account → 4101 `TryingToInitPayerAsProgramAccount` (keys, **no account named**), top up to `max(min_balance, 1)`, `allocate`, `assign` (PDA signs `allocate` / `assign` / `create_account`, never the top-up). Then `Account::try_from_unchecked` with **no account named** (3012, 3007 keys, 3003), then `mut` (2000). |
+| `init, seeds = [..], bump` | `pda::check_seeds::<P>(acc, seeds, &ID, name)` → bump, then `accounts::init_program_account::<P>(payer, acc, space, &rent, &[Signer::from(&seeds_with_bump)], name)` | 2006 (keys) if not the PDA; then `create_account_or_fund_allocate_assign`: 0 lamports → `create_account`; else payer = account → 4101 `TryingToInitPayerAsProgramAccount` (keys, **no account named**), top up to `max(min_balance, 1)`, `allocate`, `assign` (PDA signs `allocate` / `assign` / `create_account`, never the top-up). Then `Account::try_from_unchecked`, its errors **named** (anchor-syn wraps the call in `with_account_name(field)`: 3012, 3007 keys, 3003), then `mut` (2000). |
 | `init, seeds, bump = b` | `pda::check_seeds_canonical_bump::<P>` | 2006 keys, or 2006 values (found bump, given) |
 | `init` (keypair account) | `init_program_account` with `signers = &[]` | the account signs the transaction |
-| `init_if_needed` (program account) | `accounts::init_if_needed_program_account::<P, T>` → `Option<T>` (`None` = created) | system-owned → created as above; otherwise `Account::try_from` (no account named), then `ConstraintSpace` 2019 (values: space, data_len), `ConstraintOwner` 2004 (keys), `ConstraintRentExempt` 2005, each named; then `mut`. Anyone may have created it first: never assume it is new. |
-| `init(_if_needed), associated_token::mint/authority/token_program` | `token::init_associated_token_account::<P, IF_NEEDED>(&AssociatedToken {..}, &rent, name)` → mint/owner/amount | ATA `Create` (instruction 0) when system-owned (always for plain `init`); the instruction **names the derived address**, so another account fails in the runtime (`MissingAccount`), not with an Anchor error. Then `InterfaceAccount::try_from_unchecked` (no account named). If needed: 2014 keys, 2015 keys, 2023 keys, 3014 (named). Then 2000, 2005. |
+| `init_if_needed` (program account) | `accounts::init_if_needed_program_account::<P, T>` → `Option<T>` (`None` = created) | system-owned → created as above; otherwise `Account::try_from` (its errors named, as above), then `ConstraintSpace` 2019 (values: space, data_len), `ConstraintOwner` 2004 (keys), `ConstraintRentExempt` 2005, each named; then `mut`. Anyone may have created it first: never assume it is new. |
+| `init(_if_needed), associated_token::mint/authority/token_program` | `token::init_associated_token_account::<P, IF_NEEDED>(&AssociatedToken {..}, &rent, name)` → mint/owner/amount | ATA `Create` (instruction 0) when system-owned (always for plain `init`); the instruction **names the derived address**, so another account fails in the runtime (`MissingAccount`), not with an Anchor error. Then `InterfaceAccount::try_from_unchecked` (3012, 3007 named; the SPL unpack error unchanged). If needed: 2014 keys, 2015 keys, 2023 keys, 3014 (named). Then 2000, 2005. |
 | `init, token::mint/authority` | not provided | `create_account_or_fund_allocate_assign` with `owner = token program` and the account size of `get_required_init_account_extensions`, then `InitializeAccount3`; if needed 2014/2015/2021 keys |
 | `init, mint::decimals/authority/freeze_authority (+ extensions::*)` | `cpi::create_account_or_fund_allocate_assign::<P>` (owner = token program, space = base + extensions), then `token::initialize_mint_extension` for each extension in **Anchor's order** (group pointer, group member pointer, metadata pointer, close authority, transfer hook, non-transferable, permanent delegate, pausable), then `token::initialize_mint2` | if needed: 2016, 2017, 2018 (values), 2022 (keys). Compute the space as `find_mint_account_size` does (add a test against it). |
 | `rent_exempt = enforce` (implied by every `init`) | `accounts::check_rent_exempt::<P>` | 2005 named; runs in the constraint order (after raw constraints) |
@@ -435,8 +435,10 @@ Measured on the vault (SBPF v3, `cargo-build-sbf --arch v3`): Anchor build
 ## 9. Pitfalls
 
 * **Missing account of an `init` field** names no account (3005 occurred).
-* **`init` errors after the CPI name no account** (`try_from_unchecked`),
-  but `mut` / `rent_exempt` / raw constraints on the same field do.
+* **`init` errors after the CPI name the field** too: anchor-syn wraps
+  `try_from_unchecked` (and `init_if_needed`'s `try_from`) in
+  `with_account_name(field)`, like every other load; only the payer check
+  (4101) and a missing `init` account (3005) name none.
 * **`TryingToInitPayerAsProgramAccount`** only on the pre-funded path; a
   pre-funded PDA is topped up to `max(minimum_balance, 1)` by the payer,
   then allocated and assigned — the PDA must sign `allocate` / `assign`.
@@ -466,10 +468,10 @@ Measured on the vault (SBPF v3, `cargo-build-sbf --arch v3`): Anchor build
   tag 0/1; `String` must be UTF-8; `Vec` length is a `u32`; enums a `u8`.
   Reading a `Vec<T>` of non-bytes: loop `vec_len()` times.
 * **`find_program_address` panics** (as Anchor's does) when no bump works.
-* **`close`** credits the target with `checked_add` (Anchor panics on
-  overflow, here `ArithmeticOverflow`), then zeroes lamports, assigns to
-  the system program and sets the data length to 0 (pinocchio
-  `AccountView::close`).
+* **`close`** credits the target with `checked_add` (`ArithmeticOverflow`
+  on overflow, as anchor-lang 1.2.1's `common::close` returns it through
+  `add_lamports`), then zeroes lamports, assigns to the system program and
+  sets the data length to 0 (pinocchio `AccountView::close`).
 * **Duplicate accounts**: the runtime passes the same account twice as
   two views of one account (the entrypoint copies the view); writing one
   is visible in the other, as in Anchor.

@@ -421,7 +421,8 @@ fn init_makes_anchors_system_cpis() {
     let seeds = [Seed::from(b"x".as_ref())];
     let signers = [Signer::from(&seeds)];
     // The runtime would create the account; on the host it stays empty,
-    // which the checks after the CPI report (no account named).
+    // which the checks after the CPI report, naming the field (anchor-syn's
+    // `with_account_name` around `try_from_unchecked`).
     assert_eq!(
         accounts::init_program_account::<P>(&p, &f, space, &rent, &signers, "c"),
         Err(ProgramError::Custom(3012))
@@ -439,7 +440,7 @@ fn init_makes_anchors_system_cpis() {
     assert_eq!(cpis[0].signers, 1);
     assert_eq!(
         take_log_lines(),
-        [line(ErrorCode::AccountNotInitialized, None)]
+        [line(ErrorCode::AccountNotInitialized, Some("c"))]
     );
 
     // Pre-funded with 1 lamport.
@@ -498,8 +499,9 @@ fn init_makes_anchors_system_cpis() {
     );
 }
 
-/// `init_if_needed`: an existing account is loaded (no account named),
-/// then space (values), owner and rent are checked, each named.
+/// `init_if_needed`: an existing account is loaded (its errors named, as
+/// anchor-syn's `with_account_name` around `try_from`), then space (values),
+/// owner and rent are checked, each named.
 #[test]
 fn init_if_needed_checks_an_existing_account() {
     let _ = take_log_lines();
@@ -578,7 +580,11 @@ fn init_if_needed_checks_an_existing_account() {
     );
     let logs = take_log_lines();
     assert_eq!(logs[0], line(ErrorCode::ConstraintRentExempt, Some("c")));
-    assert_eq!(logs[1], line(ErrorCode::AccountOwnedByWrongProgram, None));
+    assert_eq!(
+        logs[1],
+        line(ErrorCode::AccountOwnedByWrongProgram, Some("c"))
+    );
+    assert_eq!(logs[2..6], keys(&key(8), &ID));
 }
 
 /// Exit: write back (skipped once closed, 3004 when too short) and close.
@@ -704,6 +710,49 @@ fn token_accounts_check_as_anchor_does() {
     assert_eq!(logs[3..7], keys(&key(1), &key(2)));
     assert_eq!(logs[7], line(ErrorCode::ConstraintTokenOwner, Some("ata")));
     assert_eq!(logs[8..12], keys(&wallet, &key(1)));
+}
+
+/// `init` / `init_if_needed` of an associated token account: the `Create`
+/// CPI names the derived address, then `InterfaceAccount::try_from_unchecked`
+/// fails caused by the field (anchor-syn's `with_account_name`), as every
+/// other load does (review I-1).
+#[test]
+fn associated_token_init_names_the_field() {
+    let _ = take_log_lines();
+    let _ = take_cpis();
+    let rent = Rent::new(3480, 2.0);
+    let wallet = key(5);
+    let ata = token::associated_token_address(&wallet, &key(1), &TOKEN_PROGRAM_ID);
+    let hosts = [
+        Acc::new(key(7)).signer().writable().build(),
+        Acc::new(ata).lamports(0).writable().build(),
+        Acc::new(wallet).build(),
+        Acc::new(key(1)).owner(TOKEN_PROGRAM_ID).build(),
+        Acc::new(TOKEN_PROGRAM_ID).executable().build(),
+        Acc::new(SYSTEM_PROGRAM_ID).executable().build(),
+    ];
+    let v = views(&hosts);
+    let a = token::AssociatedToken {
+        payer: &v[0],
+        account: &v[1],
+        authority: &v[2],
+        mint: &v[3],
+        token_program: &v[4],
+        system_program: &v[5],
+    };
+    // The host makes no account: still missing after the CPI.
+    assert_eq!(
+        token::init_associated_token_account::<P, true>(&a, &rent, "ata").map(|_| ()),
+        Err(ProgramError::Custom(3012))
+    );
+    let cpis = take_cpis();
+    assert_eq!(cpis.len(), 1);
+    assert_eq!(cpis[0].program_id, ASSOCIATED_TOKEN_PROGRAM_ID);
+    assert_eq!(cpis[0].accounts[1], (ata, false, true));
+    assert_eq!(
+        take_log_lines(),
+        [line(ErrorCode::AccountNotInitialized, Some("ata"))]
+    );
 }
 
 /// `invoke` checks the borrow state of the instruction's accounts first, as
