@@ -24,8 +24,8 @@ Each line holds for every mint that has a Noised certificate, and each is enforc
 - **No admin.** No pause, no settings update, no privileged withdrawal.
 - **Post-quantum origin.** Every launch is signed by its creator's hash-based identity, over its parameters, metadata and opening window, and the launchpad verifies that signature on-chain before the launch can go live. See [Post-quantum creator identity](/docs/concepts/pq-identity).
 
-:::warn Status: not yet finalized
-The programs are not yet finalized (made immutable). They have had three rounds of internal adversarial review by AI agents ([Security](/docs/security#internal-reviews)). Until their upgrade authority is set to None, whoever holds it can replace the code. Check any program with `solana program show <program id>`: the line `Authority:` must read `none`. Do not use Noised with funds you cannot afford to lose until then.
+:::warn Status: on mainnet, not yet finalized
+The programs are deployed on Solana mainnet since 2026-10-13, and launches open once the protocol is initialized. They are not yet finalized (made immutable), and no independent audit has been completed. They have had three rounds of internal adversarial review by AI agents ([Security](/docs/security#internal-reviews)). Until their upgrade authority is set to None, whoever holds it can replace the code. Check any program with `solana program show <program id>`: the line `Authority:` must read `none`. Do not use Noised with funds you cannot afford to lose until then.
 :::
 
 ## How these docs are organized

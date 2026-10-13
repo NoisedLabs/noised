@@ -4,7 +4,7 @@ nav: Overview
 summary: Program IDs, the PDAs each program derives, and per-program references of every instruction, account, event and error, generated from the Anchor sources.
 ---
 
-Noised is five Anchor 1.2.1 programs and one `no_std` crate. The fifth, the autopilot (programmable launches: a token's own treasury jobs), is not deployed on any cluster yet; the app shows it as coming soon and runs it in the demo. The per-program pages are generated from the Rust sources (`app/scripts/gen-docs-reference.mjs`): instruction order, accounts with their signer and writable flags, seeds and constraints, account layouts with their byte sizes, errors with their codes, events and constants.
+Noised is five programs, written without a framework but keeping the ABI of their Anchor 1.2.1 builds, and one `no_std` crate. All five, the autopilot (programmable launches: a token's own treasury jobs) included, are deployed on Solana mainnet since 2026-10-13, still upgradeable; the mainnet protocol is not initialized yet, so no launch can be created there yet. The per-program pages are generated from the Rust sources (`app/scripts/gen-docs-reference.mjs`): instruction order, accounts with their signer and writable flags, seeds and constraints, account layouts with their byte sizes, errors with their codes, events and constants.
 
 ::figure program-ids
 

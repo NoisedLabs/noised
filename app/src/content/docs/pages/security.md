@@ -5,7 +5,7 @@ summary: What Noised guarantees and how, who you still trust, what the internal 
 ---
 
 :::warn Status: not yet finalized
-The programs have not been finalized. Until a program's upgrade authority is set to None, its holder can replace that program's code, and every guarantee it enforces is only as strong as that key. Check with `solana program show <program id>`: `Authority:` must read `none`.
+The programs are deployed on Solana mainnet since 2026-10-13 but have not been finalized. Until a program's upgrade authority is set to None, its holder can replace that program's code, and every guarantee it enforces is only as strong as that key. Check with `solana program show <program id>`: `Authority:` must read `none`.
 :::
 
 ## Guarantees
