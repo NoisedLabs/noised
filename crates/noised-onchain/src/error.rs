@@ -975,31 +975,39 @@ pub fn fail_keys<P: Program>(
     e
 }
 
-/// `"<label><n>"` in decimal, into `line`; the length.
-#[inline]
-fn put_decimal(line: &mut [u8; 32], label: &[u8], n: u64) -> usize {
-    let mut len = 0;
-    for byte in label {
-        line[len] = *byte;
-        len += 1;
-    }
+/// Logs `"<label><n>"`, `n` in decimal (Anchor's `msg!("Left: {}", n)`).
+/// Written without an index that could panic (a bounds-check panic would
+/// link `core::fmt`): the labels are at most 7 bytes and a `u64` has at most
+/// 20 digits, so everything fits in the 32 bytes anyway. Out of line: one
+/// copy for both lines.
+#[cold]
+#[inline(never)]
+fn log_decimal(label: &[u8], n: u64) {
+    // The digits, right to left, at the end of `digits`. (`black_box`: a
+    // trip count the optimizer cannot see, so the loop is not unrolled 20
+    // times in the programs built at opt-level 3.)
     let mut digits = [0u8; 20];
-    let mut count = 0;
+    let mut start = core::hint::black_box(digits.len());
     let mut rest = n;
-    loop {
-        digits[count] = b'0' + (rest % 10) as u8;
-        count += 1;
+    while let Some(at) = start.checked_sub(1) {
+        start = at;
+        if let Some(digit) = digits.get_mut(at) {
+            *digit = b'0' + (rest % 10) as u8;
+        }
         rest /= 10;
         if rest == 0 {
             break;
         }
     }
-    while count > 0 {
-        count -= 1;
-        line[len] = digits[count];
-        len += 1;
+    let mut line = [0u8; 32];
+    let mut len = 0;
+    for byte in label.iter().chain(digits.get(start..).unwrap_or(&[])) {
+        if let Some(slot) = line.get_mut(len) {
+            *slot = *byte;
+            len += 1;
+        }
     }
-    len
+    sys::log_bytes(line.get(..len).unwrap_or(&[]));
 }
 
 /// [`fail`], then the two compared numbers as Anchor logs them
@@ -1015,11 +1023,8 @@ pub fn fail_values<P: Program>(
     right: u64,
 ) -> ProgramError {
     let e = fail::<P>(code, account);
-    let mut line = [0u8; 32];
-    let len = put_decimal(&mut line, b"Left: ", left);
-    sys::log_bytes(&line[..len]);
-    let len = put_decimal(&mut line, b"Right: ", right);
-    sys::log_bytes(&line[..len]);
+    log_decimal(b"Left: ", left);
+    log_decimal(b"Right: ", right);
     e
 }
 

@@ -1019,8 +1019,9 @@ fn error_table_matches_anchor_and_the_idl() {
     assert_eq!(error::describe(1), [b"" as &[u8]; 3]);
 }
 
-/// The program's `fail_values` logs exactly what `noised_onchain`'s does
-/// (`Left: <n>` / `Right: <n>` after the error line), for any numbers.
+/// The program's `fail_values` is `noised_onchain`'s (which `publish_graph`'s
+/// `init_if_needed` calls): `Left: <n>` / `Right: <n>` in decimal after the
+/// error line, as Anchor's `with_values` logs them, for any numbers.
 #[test]
 fn fail_values_logs_as_the_shared_helper() {
     type P = noised_autopilot::program::NoisedAutopilot;

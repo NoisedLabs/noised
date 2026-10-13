@@ -191,47 +191,15 @@ pub fn fail_keys(
 }
 
 /// [`fail`], then the two compared numbers as Anchor logs them
-/// (`with_values`: `Left: <left>`, `Right: <right>`): the lines of
-/// `noised_onchain::error::fail_values`, written without any code path that
-/// can panic (a panic's formatted message would link `core::fmt`).
-#[cold]
-#[inline(never)]
+/// (`with_values`: `Left: <left>`, `Right: <right>`).
+#[inline(always)]
 pub fn fail_values(
     code: u32,
     account: Option<&'static str>,
     left: u64,
     right: u64,
 ) -> ProgramError {
-    let e = fail(code, account);
-    log_value(b"Left: ", left);
-    log_value(b"Right: ", right);
-    e
-}
-
-/// Logs `<label><n>`, `n` in decimal.
-fn log_value(label: &[u8], mut n: u64) {
-    // The digits, right to left, at the end of `digits` (u64::MAX has 20).
-    let mut digits = [0u8; 20];
-    let mut start = digits.len();
-    while let Some(at) = start.checked_sub(1) {
-        start = at;
-        if let Some(digit) = digits.get_mut(at) {
-            *digit = b'0' + (n % 10) as u8;
-        }
-        n /= 10;
-        if n == 0 {
-            break;
-        }
-    }
-    let mut line = [0u8; 32];
-    let mut len = 0;
-    for byte in label.iter().chain(digits.get(start..).unwrap_or(&[])) {
-        if let Some(slot) = line.get_mut(len) {
-            *slot = *byte;
-            len += 1;
-        }
-    }
-    noised_onchain::sys::log_bytes(line.get(..len).unwrap_or(&[]));
+    onchain::fail_values::<NoisedAutopilot>(code, account, left, right)
 }
 
 /// `require_keys_eq!(left, right, e)` failed: `e` with both keys, no

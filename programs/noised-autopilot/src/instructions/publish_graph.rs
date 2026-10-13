@@ -1,12 +1,7 @@
 use noised_onchain::{
-    accounts::{check_mut, check_rent_exempt, is_missing, read_program_account},
+    accounts::{check_mut, check_rent_exempt, init_if_needed_program_account},
     args::Reader,
-    cpi::create_account_or_fund_allocate_assign,
-    error::anchor::{
-        ACCOUNT_DID_NOT_DESERIALIZE, ACCOUNT_DID_NOT_SERIALIZE, ACCOUNT_NOT_INITIALIZED,
-        ACCOUNT_OWNED_BY_WRONG_PROGRAM, CONSTRAINT_OWNER, CONSTRAINT_RENT_EXEMPT, CONSTRAINT_SPACE,
-        INSTRUCTION_DID_NOT_DESERIALIZE,
-    },
+    error::anchor::{ACCOUNT_DID_NOT_SERIALIZE, INSTRUCTION_DID_NOT_DESERIALIZE},
     ids::SYSTEM_PROGRAM_ID,
     owned_by,
     pda::check_seeds,
@@ -22,11 +17,11 @@ use pinocchio::{
 use crate::processor::*;
 use crate::{
     constants::*,
-    error::{fail, fail_keys, fail_values, AutopilotError},
+    error::{fail, AutopilotError},
     events::GraphPublished,
     launchpad,
     state::GraphRecord,
-    ProgramError, Pubkey, SolSha256, ID,
+    Pubkey, SolSha256, ID,
 };
 
 /// `publish_graph(bytes: Vec<u8>)` arguments (Borsh; trailing bytes
@@ -67,7 +62,9 @@ pub fn publish_graph(mut accounts: Accounts, data: &[u8]) -> ProgramResult {
     // [A] graph: init_if_needed, payer = payer, space =
     // GraphRecord::space(bytes.len()), seeds = [GRAPH_SEED, launch.key(),
     // &hash_of(&bytes)], bump; then mut and rent exemption. A record already
-    // there is loaded (its space, owner and rent checked) and kept.
+    // there is loaded (its space, owner and rent checked) and kept
+    // (`init_if_needed_program_account`: created, or loaded as
+    // `Account::try_from`, errors caused by `graph`).
     let rent = Rent::get()?;
     let hash = hash_of(bytes);
     let bump = check_seeds::<P>(
@@ -77,7 +74,7 @@ pub fn publish_graph(mut accounts: Accounts, data: &[u8]) -> ProgramResult {
         GRAPH,
     )?;
     let bump_seed = [bump];
-    let existing = init_graph(
+    let existing = init_if_needed_program_account::<P, GraphRecord>(
         payer,
         graph,
         GraphRecord::space(bytes.len()),
@@ -88,6 +85,7 @@ pub fn publish_graph(mut accounts: Accounts, data: &[u8]) -> ProgramResult {
             Seed::from(&hash),
             Seed::from(&bump_seed),
         ])],
+        GRAPH,
     )?;
     check_rent_exempt::<P>(graph, &rent, GRAPH)?;
 
@@ -126,63 +124,6 @@ pub fn publish_graph(mut accounts: Accounts, data: &[u8]) -> ProgramResult {
         &hash,
         bytes,
     )
-}
-
-/// [A] `init_if_needed, payer = payer, space = space` of the graph record,
-/// as `noised_onchain::accounts::init_if_needed_program_account` runs it: an
-/// account still owned by the system program is created
-/// (`create_account_or_fund_allocate_assign`, the PDA signing) and checked
-/// as `Account::try_from_unchecked` does (errors name no account: 3012,
-/// 3007 with keys, 3003); any other is loaded as `Account::try_from` does
-/// (no account named) and must have exactly `space` bytes
-/// (`ConstraintSpace`, with both values), be owned by the program
-/// (`ConstraintOwner`, with both keys) and hold the rent-exempt minimum
-/// (`ConstraintRentExempt`), each caused by `graph`. Then `mut`. Here so
-/// that `ConstraintSpace`'s values are logged by `error::fail_values`.
-fn init_graph(
-    payer: &AccountView,
-    graph: &AccountView,
-    space: usize,
-    rent: &Rent,
-    signers: &[Signer],
-) -> Result<Option<GraphRecord>, ProgramError> {
-    let existing = if owned_by(graph, &SYSTEM_PROGRAM_ID) {
-        create_account_or_fund_allocate_assign::<P>(payer, graph, space, &ID, rent, signers)?;
-        if is_missing(graph) {
-            return Err(fail(ACCOUNT_NOT_INITIALIZED, None));
-        }
-        if !owned_by(graph, &ID) {
-            return Err(fail_keys(
-                ACCOUNT_OWNED_BY_WRONG_PROGRAM,
-                None,
-                graph.owner(),
-                &ID,
-            ));
-        }
-        if graph.data_len() < space {
-            return Err(fail(ACCOUNT_DID_NOT_DESERIALIZE, None));
-        }
-        None
-    } else {
-        let fields = read_program_account::<P, GraphRecord>(graph, None)?;
-        if graph.data_len() != space {
-            return Err(fail_values(
-                CONSTRAINT_SPACE,
-                Some(GRAPH),
-                space as u64,
-                graph.data_len() as u64,
-            ));
-        }
-        if !owned_by(graph, &ID) {
-            return Err(fail_keys(CONSTRAINT_OWNER, Some(GRAPH), graph.owner(), &ID));
-        }
-        if graph.lamports() < rent.minimum_balance(space) {
-            return Err(fail(CONSTRAINT_RENT_EXEMPT, Some(GRAPH)));
-        }
-        Some(fields)
-    };
-    check_mut::<P>(graph, GRAPH)?;
-    Ok(existing)
 }
 
 /// `msg!("PXG1: {}", name)`.
