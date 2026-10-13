@@ -71,9 +71,12 @@ export function AutopilotEditor({
   onUndo,
   pulse,
   poolFeeBps,
+  pricesNow,
 }: {
   /** The pool's fee after graduation (bps), for the buyback premium check. */
   poolFeeBps: number;
+  /** Today's prices (sqrt Q64.64: the reference, the pool's), to warn about a price limit close to them; omitted when unknown (a launch not created yet). */
+  pricesNow?: readonly bigint[];
   canvas: Canvas;
   onCanvas: (c: Canvas) => void;
   selected: string | null;
@@ -277,6 +280,7 @@ export function AutopilotEditor({
                 readOnly={readOnly}
                 now={now}
                 poolFeeBps={poolFeeBps}
+                {...(pricesNow !== undefined ? { pricesNow } : {})}
                 onAnnounce={say}
                 onChange={(c, select) => {
                   onCanvas(c);

@@ -253,6 +253,12 @@ function AutopilotView({ launch }: { launch: LaunchAccount }): ReactNode {
     };
     // A stable start (the minute), so the simulation does not re-run every second.
   }, [info, migration.data, spot, decimals, launch.market?.supply, launch.migrationQuoteThreshold, poolFeeBps, Math.floor(now / 60)]);
+  // Today's prices, for the editor's warning on a price limit close to them (follow-up review L-1): the autopilot's
+  // reference (else the migration price it starts from) and, once graduated, the pool's price.
+  const pricesNow = useMemo(() => {
+    const ref = info !== null && info.refSqrtPrice > 0n ? info.refSqrtPrice : (migration.data ?? 0n);
+    return [ref, graduated ? spot : 0n].filter((p) => p > 0n);
+  }, [info, migration.data, graduated, spot]);
   const nextDue = due.data?.[0];
   const reloadAll = (): void => {
     ap.reload();
@@ -377,6 +383,7 @@ function AutopilotView({ launch }: { launch: LaunchAccount }): ReactNode {
             onUndo={history.undo}
             pulse={pulse}
             poolFeeBps={poolFeeBps}
+            pricesNow={pricesNow}
           />
         </div>
         {frozen ? null : <PayeeCheck check={payees} />}

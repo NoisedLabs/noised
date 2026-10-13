@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildCanvas, canvasOf, compileRuleSet, graphTemplates, printGraphText, parseGraphText, type Canvas, type Graph } from "../src/lib/programmable";
+import { buildCanvas, canvasOf, compileRuleSet, graphTemplates, printGraphText, parseGraphText, sqrtPriceOf, type Canvas, type Graph } from "../src/lib/programmable";
 import {
   autoLayout,
   boundsOf,
@@ -33,12 +33,16 @@ import {
   addStep,
   afterChoices,
   chainCondition,
+  CONDITION_ITEMS,
   conditionChain,
+  condSqrtPrice,
   connectSteps,
   emptyCanvas,
   graphOrNull,
   moveStep,
   nodeViews,
+  PRICE_NEAR_PCT,
+  priceNearNow,
   removeStep,
   renameStep,
   setTrigger,
@@ -160,6 +164,38 @@ function bytesOf(c: Canvas): Uint8Array {
   if (!b.ok) throw new Error(b.issues.map((x) => x.message).join("; "));
   return b.bytes;
 }
+
+describe("price limits close to today's price (review L-1)", () => {
+  it("the hints use the program's rule: the price has stayed past the limit", () => {
+    for (const id of ["priceLte", "priceGte"] as const) {
+      const hint = CONDITION_ITEMS.find((c) => c.id === id)?.hint ?? "";
+      expect(hint).toMatch(/has stayed at or (below|above) this for the last 15 to 30 minutes/);
+      expect(hint).not.toMatch(/reference price/);
+    }
+  });
+
+  it("warns within PRICE_NEAR_PCT of any known price, on either side, and never for unknown prices", () => {
+    const at = (sol: string): bigint => sqrtPriceOf(sol, 6);
+    const today = at("0.000001");
+    expect(PRICE_NEAR_PCT).toBe(5);
+    for (const sol of ["0.000001", "0.00000096", "0.00000104", "0.000000951", "0.000001049"]) expect(priceNearNow(at(sol), [today]), sol).toBe(true);
+    for (const sol of ["0.00000094", "0.00000106", "0.0000008", "0.000002"]) expect(priceNearNow(at(sol), [today]), sol).toBe(false);
+    // Any of the prices: the reference or the pool's.
+    expect(priceNearNow(at("0.00000098"), [at("0.000002"), today])).toBe(true);
+    // Unknown (zero) prices and an empty list never warn; nor does a zero limit.
+    expect(priceNearNow(at("0.000001"), [])).toBe(false);
+    expect(priceNearNow(at("0.000001"), [0n])).toBe(false);
+    expect(priceNearNow(0n, [today])).toBe(false);
+  });
+
+  it("reads a limit given as a sqrt price or as SOL per token", () => {
+    const s = sqrtPriceOf("0.000002", 6);
+    expect(condSqrtPrice({ op: "priceLte", price: { sqrtPriceQ64: s } }, 6)).toBe(s);
+    expect(condSqrtPrice({ op: "priceGte", price: { sol: "0.000002" } }, 6)).toBe(s);
+    expect(condSqrtPrice({ op: "priceGte", price: { sol: "not a price" } }, 6)).toBeNull();
+    expect(condSqrtPrice({ op: "priceGte", price: { sqrtPriceQ64: 0n } }, 6)).toBeNull();
+  });
+});
 
 describe("editor operations", () => {
   it("adds steps with the SDK's defaults at free spots on the grid, and they compile", () => {

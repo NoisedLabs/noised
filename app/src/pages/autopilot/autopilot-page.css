@@ -123,6 +123,10 @@
 .ap-unit-t { position: absolute; right: 12px; color: var(--pg-dim); font-size: 13px; pointer-events: none; }
 .ap-conds { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .ap-cond { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; padding: 8px; background: var(--pg-glass-well-2); box-shadow: inset 0 0 0 1px var(--pg-hair); }
+/* A condition's note (a price limit's rule or warning) is a full-width row under the field; the remove button stays by the input. */
+.ap-cond > .rl-icon { grid-row: 1; grid-column: 2; }
+.ap-cond-note { grid-column: 1 / -1; margin: 0; }
+.ap-cond-note.pg-note-box { padding: 10px 12px; gap: 4px; }
 .ap-cond-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 6px; }
 .ap-cond-t { align-self: center; font-size: 13.5px; }
 .ap-codeonly { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 8px 10px; background: var(--pg-ink-soft); font-size: 13px; }

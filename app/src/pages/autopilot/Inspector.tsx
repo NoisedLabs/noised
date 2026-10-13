@@ -10,18 +10,20 @@ import { Button } from "../../components/ui";
 import { tryParseUnits } from "../../lib/amounts";
 import { describeSeconds } from "../../lib/format";
 import { explainGraphNode, GRAPH_LIMITS, minPremiumBps, sqrtPriceOf, type Action, type ActionKind, type Canvas, type CanvasNode, type Cond, type Graph } from "../../lib/programmable";
-import { Comment, Toggle } from "../inner/kit";
+import { Comment, NoteBox, Toggle } from "../inner/kit";
 import {
   ACTION_ITEMS,
   afterChoices,
   chainCondition,
   conditionChain,
   CONDITION_ITEMS,
+  condSqrtPrice,
   dateText,
   defaultLeaf,
   LAMPORTS,
   leafText,
   patchStep,
+  priceNearNow,
   priceText,
   renameStep,
   setTrigger,
@@ -117,6 +119,7 @@ export function Inspector({
   readOnly,
   now,
   poolFeeBps,
+  pricesNow = [],
 }: {
   canvas: Canvas;
   node: CanvasNode;
@@ -129,6 +132,8 @@ export function Inspector({
   onAnnounce: (text: string) => void;
   readOnly: boolean;
   now: number;
+  /** Today's prices (sqrt Q64.64: the reference, the pool's), to warn about a price limit close to them; empty when unknown. */
+  pricesNow?: readonly bigint[];
 }): ReactNode {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const dec = canvas.tokenDecimals ?? 6;
@@ -275,6 +280,7 @@ export function Inspector({
                   cond={c}
                   decimals={dec}
                   canvas={canvas}
+                  pricesNow={pricesNow}
                   onChange={(next) => setLeaves(chain.map((x, j) => (j === i ? next : x)))}
                 />
                 <button type="button" className="rl-icon" onClick={() => setLeaves(chain.filter((_, j) => j !== i))} aria-label={`Remove condition ${i + 1}`}>
@@ -399,7 +405,21 @@ export function Inspector({
 }
 
 /** One condition with its value. */
-function CondEditor({ id, cond, decimals, canvas, onChange }: { id: string; cond: Cond; decimals: number; canvas: Canvas; onChange: (c: Cond) => void }): ReactNode {
+function CondEditor({
+  id,
+  cond,
+  decimals,
+  canvas,
+  pricesNow,
+  onChange,
+}: {
+  id: string;
+  cond: Cond;
+  decimals: number;
+  canvas: Canvas;
+  pricesNow: readonly bigint[];
+  onChange: (c: Cond) => void;
+}): ReactNode {
   const label = CONDITION_ITEMS.find((c) => c.id === cond.op)?.label ?? cond.op;
   switch (cond.op) {
     case "treasurySolGte":
@@ -419,7 +439,7 @@ function CondEditor({ id, cond, decimals, canvas, onChange }: { id: string; cond
       return <span className="ap-cond-t">The token has graduated</span>;
     case "priceLte":
     case "priceGte":
-      return <PriceField id={id} label={label} cond={cond} decimals={decimals} onChange={onChange} />;
+      return <PriceField id={id} label={label} cond={cond} decimals={decimals} pricesNow={pricesNow} onChange={onChange} />;
     case "nowGe":
     case "nowLt":
       return (
@@ -476,44 +496,81 @@ function CondEditor({ id, cond, decimals, canvas, onChange }: { id: string; cond
   }
 }
 
-function PriceField({ id, label, cond, decimals, onChange }: { id: string; label: string; cond: Extract<Cond, { op: "priceLte" | "priceGte" }>; decimals: number; onChange: (c: Cond) => void }): ReactNode {
+/**
+ * A price limit. A price condition holds only while the price has stayed past its limit for the last 15 to 30
+ * minutes, so someone willing to pay trading fees can delay its step (one trade across the limit and back every
+ * 15 minutes) but never trigger it, and the closer the limit is to today's price, the cheaper that is
+ * (follow-up review L-1): warn within PRICE_NEAR_PCT, and say it plainly when today's price is unknown.
+ */
+function PriceField({
+  id,
+  label,
+  cond,
+  decimals,
+  pricesNow,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  cond: Extract<Cond, { op: "priceLte" | "priceGte" }>;
+  decimals: number;
+  pricesNow: readonly bigint[];
+  onChange: (c: Cond) => void;
+}): ReactNode {
   const shown = "sqrtPriceQ64" in cond.price ? priceText(cond.price.sqrtPriceQ64, decimals) : cond.price.sol;
+  const limit = condSqrtPrice(cond, decimals);
+  const known = pricesNow.some((p) => p > 0n);
+  const near = limit !== null && priceNearNow(limit, pricesNow);
+  const hint = CONDITION_ITEMS.find((c) => c.id === cond.op)?.hint;
   const [text, setText] = useState(shown);
   const [bad, setBad] = useState(false);
   const focused = useRef(false);
   useEffect(() => {
     if (!focused.current) setText(shown);
   }, [shown]);
+  // The note is its own row of the condition (under the field and its remove button), so the button stays by the input.
   return (
-    <div className="ap-field">
-      <label className="pg-label" htmlFor={id}>
-        {label} (SOL per token)
-      </label>
-      <input
-        id={id}
-        className="input mono"
-        inputMode="decimal"
-        value={text}
-        aria-invalid={bad}
-        onFocus={() => {
-          focused.current = true;
-        }}
-        onBlur={() => {
-          focused.current = false;
-        }}
-        onChange={(e) => {
-          setText(e.target.value);
-          try {
-            const s = sqrtPriceOf(e.target.value.trim(), decimals);
-            if (s <= 0n) throw new Error("zero");
-            setBad(false);
-            onChange({ op: cond.op, price: { sqrtPriceQ64: s } });
-          } catch {
-            setBad(true);
-          }
-        }}
-      />
-      {bad ? <span className="field-error">Enter a price such as 0.000002.</span> : null}
-    </div>
+    <>
+      <div className="ap-field">
+        <label className="pg-label" htmlFor={id}>
+          {label} (SOL per token)
+        </label>
+        <input
+          id={id}
+          className="input mono"
+          inputMode="decimal"
+          value={text}
+          aria-invalid={bad}
+          onFocus={() => {
+            focused.current = true;
+          }}
+          onBlur={() => {
+            focused.current = false;
+          }}
+          onChange={(e) => {
+            setText(e.target.value);
+            try {
+              const s = sqrtPriceOf(e.target.value.trim(), decimals);
+              if (s <= 0n) throw new Error("zero");
+              setBad(false);
+              onChange({ op: cond.op, price: { sqrtPriceQ64: s } });
+            } catch {
+              setBad(true);
+            }
+          }}
+        />
+        {bad ? <span className="field-error">Enter a price such as 0.000002.</span> : null}
+      </div>
+      {!bad && near ? (
+        <NoteBox tone="warn" title="Close to today's price" className="ap-cond-note">
+          Someone willing to pay trading fees could delay this step. They can never trigger it.
+        </NoteBox>
+      ) : (
+        <Comment className="ap-cond-note">
+          {hint}
+          {known ? null : " Someone willing to pay trading fees could delay this step, but never trigger it. A limit far from the going price makes that costly."}
+        </Comment>
+      )}
+    </>
   );
 }

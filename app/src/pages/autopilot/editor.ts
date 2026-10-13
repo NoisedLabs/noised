@@ -52,8 +52,8 @@ export const CONDITION_ITEMS: readonly PaletteEntry<GraphLeafOp>[] = [
   { id: "treasurySolGte", label: "Treasury has SOL", hint: "Only when the treasury holds at least this much SOL." },
   { id: "treasuryTokensGte", label: "Treasury has tokens", hint: "Only when the treasury holds at least this many tokens." },
   { id: "graduated", label: "Has graduated", hint: "Only after the token moved to its locked pool." },
-  { id: "priceLte", label: "Price at most", hint: "Only while the reference price is at or below this." },
-  { id: "priceGte", label: "Price at least", hint: "Only while the reference price is at or above this." },
+  { id: "priceLte", label: "Price at most", hint: "Only while the price has stayed at or below this for the last 15 to 30 minutes." },
+  { id: "priceGte", label: "Price at least", hint: "Only while the price has stayed at or above this for the last 15 to 30 minutes." },
   { id: "nowGe", label: "From a date", hint: "Only from this date on." },
   { id: "nowLt", label: "Until a date", hint: "Only before this date." },
   { id: "runsInEpochLt", label: "Runs this period", hint: "Only while a step ran fewer times this period." },
@@ -256,6 +256,37 @@ export function priceText(sqrtPriceQ64: bigint, decimals: number): string {
   const p = priceOf(sqrtPriceQ64, decimals);
   if (!(p > 0)) return "0";
   return p >= 0.001 ? trimNum(p) : p.toExponential(2);
+}
+
+/**
+ * How close (in percent of price) a price condition's limit may sit to today's price before the editor warns.
+ * One trade across the limit and back every 15 minutes keeps a price condition false (never true), and the
+ * closer the limit, the cheaper that is (follow-up review of the price-condition fix, L-1; THREAT_MODEL R37).
+ */
+export const PRICE_NEAR_PCT = 5;
+
+/** A price condition's limit as a sqrt price (Q64.64), or null when it is not a valid price. */
+export function condSqrtPrice(c: Extract<Cond, { op: "priceLte" | "priceGte" }>, decimals: number): bigint | null {
+  if ("sqrtPriceQ64" in c.price) return c.price.sqrtPriceQ64 > 0n ? c.price.sqrtPriceQ64 : null;
+  try {
+    const s = sqrtPriceOf(c.price.sol, decimals);
+    return s > 0n ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a limit (sqrt price, Q64.64) is within PRICE_NEAR_PCT of any of today's prices (sqrt prices; zeros,
+ * unknown, are skipped). Prices are the squares of sqrt prices, so the price ratio is (limit / now)^2.
+ */
+export function priceNearNow(limitSqrt: bigint, now: readonly bigint[]): boolean {
+  if (limitSqrt <= 0n) return false;
+  return now.some((n) => {
+    if (n <= 0n) return false;
+    const r = Number(limitSqrt) / Number(n);
+    return Math.abs(r * r - 1) * 100 <= PRICE_NEAR_PCT;
+  });
 }
 
 export function dateText(unix: bigint): string {

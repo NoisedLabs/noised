@@ -14,7 +14,7 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { buildCanvas, canvasOf, graphTemplates, type Canvas, type GuardFacts } from "../src/lib/programmable";
+import { buildCanvas, canvasOf, graphTemplates, sqrtPriceOf, type Canvas, type GuardFacts } from "../src/lib/programmable";
 import { AutopilotSimple } from "../src/pages/autopilot/AutopilotSimple";
 import { defaultChoices, type JobContext } from "../src/pages/autopilot/simple";
 import { GraphCanvas } from "../src/pages/autopilot/GraphCanvas";
@@ -174,6 +174,47 @@ describe("autopilot canvas", () => {
     const html = render(createElement(Inspector, { canvas: c, node, graph: null, onChange: () => undefined, onRemove: () => undefined, onAnnounce: () => undefined, readOnly: false, now: 1_790_000_000, poolFeeBps: 100 }));
     expect(a11yProblems(html)).toEqual([]);
     for (const legend of ["Starts", "Only if", "Does", "Limits"]) expect(html).toContain(`<legend class="ap-legend">${legend}</legend>`);
+  });
+
+  it("a price limit says it can be delayed, never triggered, and warns when it is close to today's price (review L-1)", () => {
+    const base = demoCanvas();
+    const first = base.nodes[0];
+    if (!first) throw new Error("no node");
+    const withLimit = (sol: string): Canvas => ({ ...base, nodes: [{ ...first, when: { op: "priceGte", price: { sqrtPriceQ64: sqrtPriceOf(sol, 6) } } }, ...base.nodes.slice(1)] });
+    const show = (sol: string, pricesNow?: readonly bigint[]): string => {
+      const c = withLimit(sol);
+      const node = c.nodes[0]!;
+      return render(
+        createElement(Inspector, {
+          canvas: c,
+          node,
+          graph: null,
+          onChange: () => undefined,
+          onRemove: () => undefined,
+          onAnnounce: () => undefined,
+          readOnly: false,
+          now: 1_790_000_000,
+          poolFeeBps: 100,
+          ...(pricesNow !== undefined ? { pricesNow } : {}),
+        }),
+      );
+    };
+    const today = [sqrtPriceOf("0.000001", 6)];
+    // 2% under today's price: the warning.
+    const near = show("0.00000098", today);
+    expect(a11yProblems(near)).toEqual([]);
+    expect(near).toContain("Close to today");
+    expect(near).toContain("Someone willing to pay trading fees could delay this step. They can never trigger it.");
+    // 20% under it: the plain rule, no warning.
+    const far = show("0.0000008", today);
+    expect(far).not.toContain("Close to today");
+    expect(far).toContain("has stayed at or above this for the last 15 to 30 minutes");
+    expect(far).not.toContain("could delay");
+    // Today's price unknown (a launch not created yet): the rule and the hold-back, always.
+    const unknown = show("0.00000098");
+    expect(unknown).not.toContain("Close to today");
+    expect(unknown).toContain("has stayed at or above this");
+    expect(unknown).toContain("could delay this step, but never trigger it");
   });
 });
 
