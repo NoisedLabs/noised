@@ -109,7 +109,8 @@ describe("constants match the Rust sources", () => {
   it("program ids (declare_id! and IDL addresses)", () => {
     expect(declareId("programs/noised-launchpad/src/lib.rs")).toBe(PROGRAM_IDS.launchpad.toBase58());
     expect(declareId("programs/noised-hook/src/lib.rs")).toBe(PROGRAM_IDS.hook.toBase58());
-    expect(declareId("programs/noised-vault/src/lib.rs")).toBe(PROGRAM_IDS.vault.toBase58());
+    // The vault is written without Anchor; its Anchor reference (programs/noised-vault/anchor, the same ABI) declares the id.
+    expect(declareId("programs/noised-vault/anchor/lib.rs")).toBe(PROGRAM_IDS.vault.toBase58());
     expect(declareId("programs/noised-shield/src/lib.rs")).toBe(PROGRAM_IDS.shield.toBase58());
     expect(declareId("programs/noised-autopilot/src/lib.rs")).toBe(PROGRAM_IDS.autopilot.toBase58());
     expect(IDLS.autopilot.address).toBe(PROGRAM_IDS.autopilot.toBase58());
@@ -418,6 +419,8 @@ describe("constants match the Rust sources", () => {
   });
 
   it("vault v4: seeds, versions, message format, memo program (state.rs, message.rs, token.rs)", () => {
+    // The program's own sources keep the seeds, versions and message format; the memo program id is read from
+    // its Anchor reference (programs/noised-vault/anchor), as a `pubkey!` there.
     const state = src("programs/noised-vault/src/state.rs");
     expect(byteSeeds(state).get("VAULT_SEED")).toBe(SEEDS.vault);
     expect(byteSeeds(state).get("PAYOUT_SEED")).toBe(SEEDS.payout);
@@ -430,7 +433,7 @@ describe("constants match the Rust sources", () => {
     expect(/WITHDRAW_MESSAGE_LEN: usize = 8 \+ 1 \+ 32 \* 3 \+ 8 \+ 32 \+ 8 \+ 32;/.test(msg)).toBe(true);
     expect(Number(intConsts(msg).get("WITHDRAW_MESSAGE_LEN"))).toBe(185);
     expect(VAULT.WITHDRAW_MESSAGE_LEN).toBe(185);
-    expect(pubkeyConsts(src("programs/noised-vault/src/token.rs")).get("MEMO_PROGRAM_ID")).toBe(KNOWN_ACCOUNTS.memo.toBase58());
+    expect(pubkeyConsts(src("programs/noised-vault/anchor/token.rs")).get("MEMO_PROGRAM_ID")).toBe(KNOWN_ACCOUNTS.memo.toBase58());
     expect(KNOWN_ACCOUNTS.memo.toBase58()).toBe("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
     // The IDL pins the memo program in release / release_to.
     for (const name of ["release", "release_to"]) {
@@ -675,7 +678,9 @@ describe("the IDLs are current with the program sources", () => {
   const programs: [keyof typeof IDLS, string, string][] = [
     ["launchpad", "programs/noised-launchpad/src/error.rs", "programs/noised-launchpad/src/lib.rs"],
     ["hook", "programs/noised-hook/src/lib.rs", "programs/noised-hook/src/lib.rs"],
-    ["vault", "programs/noised-vault/src/error.rs", "programs/noised-vault/src/lib.rs"],
+    // Written without Anchor: its IDL is checked against the Anchor reference it implements (and, in
+    // programs/noised-vault/tests/abi.rs, against the program itself).
+    ["vault", "programs/noised-vault/anchor/error.rs", "programs/noised-vault/anchor/lib.rs"],
     ["shield", "programs/noised-shield/src/error.rs", "programs/noised-shield/src/lib.rs"],
     ["autopilot", "programs/noised-autopilot/src/error.rs", "programs/noised-autopilot/src/lib.rs"],
   ];

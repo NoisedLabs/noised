@@ -203,7 +203,7 @@ The round-2 key-index binding changed no byte of this file: the vault's message,
 
 ## Mutation check
 
-Green tests only count if they would turn red on a real bug. `mutants.ps1` builds 229 deliberately broken copies of the programs (38 vault; 66 hook, 16 of them `HR` for creator rules and review 4; 125 of the launchpad's post-quantum attestation, on-chain metadata record and programmable launches, 36 of them `LR`), SBPF v3 in a scratch workspace outside the repo, and runs the vault, hook, `vectors_onchain`, `metadata_record` and `programmable_vectors` suites against each one. Every mutant must be caught:
+Green tests only count if they would turn red on a real bug. `mutants.ps1` builds 229 deliberately broken copies of the programs (38 vault, mutations of the framework-free `processor.rs` / `token.rs` / `state.rs` checks; 66 hook, 16 of them `HR` for creator rules and review 4; 125 of the launchpad's post-quantum attestation, on-chain metadata record and programmable launches, 36 of them `LR`), SBPF v3 in a scratch workspace outside the repo, and runs the vault, hook, `vectors_onchain`, `metadata_record` and `programmable_vectors` suites against each one. Every mutant must be caught:
 
 | Vault mutant | Hook mutant |
 |---|---|
@@ -219,8 +219,8 @@ Green tests only count if they would turn red on a real bug. `mutants.ps1` build
 | delivery keeps the reservation | `create_policy` skips the max-wallet floor |
 | payout address not per sequence | `create_policy` accepts a pool DBC does not own |
 | `withdraw` reads any token account of the mint as the balance | `create_policy` ignores which pool account is passed |
-| `release`: payout not bound to its recipient / to its rent payer | base vault derived with swapped seeds |
-| `release_to`: payout not bound to its recipient; no recipient signature; accepts another mint's account | exempt recipients open the snipe shield (L2) |
+| `release` / `release_to` (one shared check each): payout not bound to its recipient / to its rent payer | base vault derived with swapped seeds |
+| `release_to`: the vault's own token account accepted (no duplicate-account check); no recipient signature; accepts another mint's account | exempt recipients open the snipe shield (L2) |
 | `release` pays any account (canonical ATA not required) | batch check ignores the program id |
 | `release` does not create a missing ATA | batch check ignores the discriminator |
 | `release` checks the destination of an empty payout | batch check reads the first instruction, not the current one |

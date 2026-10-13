@@ -4,7 +4,8 @@
  *
  *   src/content/docs/generated/sdk.ts       every export of ../sdk/src/index.ts: kind, module, signature, JSDoc,
  *                                           and the integrator notes of sdk/README.md (TypeScript compiler API)
- *   src/content/docs/generated/programs.ts  the five Anchor programs under ../programs: program IDs, every
+ *   src/content/docs/generated/programs.ts  the five programs under ../programs (the vault from the Anchor
+ *                                           reference it implements, programs/noised-vault/anchor): program IDs, every
  *                                           instruction (docs, arguments, accounts in order with their
  *                                           constraints), account layouts with their sizes, errors with their
  *                                           codes, events, PDAs and constants (a tolerant Rust item scanner)
@@ -265,7 +266,8 @@ function generateSdk() {
 const PROGRAMS = [
   { dir: "noised-launchpad", crate: "noised_launchpad", title: "Launchpad", slug: "launchpad" },
   { dir: "noised-hook", crate: "noised_hook", title: "Launch Guard (transfer hook)", slug: "hook" },
-  { dir: "noised-vault", crate: "noised_vault", title: "PQ vault", slug: "vault" },
+  // Written without Anchor; its Anchor reference (same ABI and checks, not compiled) documents it.
+  { dir: "noised-vault", crate: "noised_vault", title: "PQ vault", slug: "vault", src: "anchor" },
   { dir: "noised-shield", crate: "noised_shield", title: "Shield", slug: "shield" },
   { dir: "noised-autopilot", crate: "noised_autopilot", title: "Autopilot", slug: "autopilot" },
 ];
@@ -712,14 +714,14 @@ function generatePrograms() {
   // Seed constants of every program (the launchpad derives the hook's policy PDA with POLICY_SEED, ...).
   const seedConsts = new Map();
   for (const meta of PROGRAMS) {
-    for (const file of rustFiles(join(REPO, "programs", meta.dir, "src"))) {
+    for (const file of rustFiles(join(REPO, "programs", meta.dir, meta.src ?? "src"))) {
       for (const m of readFileSync(file, "utf8").matchAll(/pub const ([A-Z_]+_SEED): &\[u8\] = b"([^"]*)";/g)) seedConsts.set(m[1], m[2]);
     }
   }
 
   const programs = [];
   for (const meta of PROGRAMS) {
-    const root = join(REPO, "programs", meta.dir, "src");
+    const root = join(REPO, "programs", meta.dir, meta.src ?? "src");
     const files = rustFiles(root).map((p) => ({ path: posix(relative(REPO, p)), src: readFileSync(p, "utf8") }));
     const consts = [];
     const structs = new Map();
@@ -954,7 +956,7 @@ const sdk = generateSdk();
 const programs = generatePrograms();
 
 const sdkText = `${header("sdk/src (exports of index.ts) and sdk/README.md")}import type { SdkReference } from "../types";\n\nexport const SDK_REFERENCE: SdkReference = ${JSON.stringify(sdk, null, 1)};\n`;
-const programsText = `${header("programs/*/src (Anchor sources) and crates/noised-lmots")}import type { ProgramDoc } from "../types";\n\nexport const PROGRAMS: readonly ProgramDoc[] = ${JSON.stringify(programs, null, 1)};\n`;
+const programsText = `${header("programs/*/src (Anchor sources; the vault's Anchor reference, programs/noised-vault/anchor) and crates/noised-lmots")}import type { ProgramDoc } from "../types";\n\nexport const PROGRAMS: readonly ProgramDoc[] = ${JSON.stringify(programs, null, 1)};\n`;
 
 let stale = false;
 stale = emit("sdk.ts", sdkText) || stale;

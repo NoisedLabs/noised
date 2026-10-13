@@ -29,12 +29,13 @@ function rustFiles(dir: string): string[] {
   });
 }
 
+/** The Anchor sources each program's reference is generated from (`src/`; the vault, written without Anchor, from its Anchor reference). */
 const PROGRAM_DIRS: Record<string, string> = {
-  launchpad: "programs/noised-launchpad",
-  hook: "programs/noised-hook",
-  vault: "programs/noised-vault",
-  shield: "programs/noised-shield",
-  autopilot: "programs/noised-autopilot",
+  launchpad: "programs/noised-launchpad/src",
+  hook: "programs/noised-hook/src",
+  vault: "programs/noised-vault/anchor",
+  shield: "programs/noised-shield/src",
+  autopilot: "programs/noised-autopilot/src",
 };
 
 describe("generated reference", () => {
@@ -100,10 +101,10 @@ describe("generated reference", () => {
       const p = PROGRAMS.find((x) => x.slug === slug);
       expect(p).toBeDefined();
       if (!p) return;
-      const src = rustFiles(join(REPO, dir, "src"))
+      const src = rustFiles(join(REPO, dir))
         .map((f) => readFileSync(f, "utf8"))
         .join("\n");
-      const lib = readFileSync(join(REPO, dir, "src/lib.rs"), "utf8");
+      const lib = readFileSync(join(REPO, dir, "lib.rs"), "utf8");
       const programMod = lib.slice(lib.indexOf("#[program]"));
       const instructions = [...programMod.matchAll(/pub fn (\w+)\s*(?:<[^>]*>)?\s*\(\s*(?:_?ctx|_)\s*:/g)].map((m) => m[1]);
       expect(instructions.length).toBeGreaterThan(0);
@@ -120,7 +121,7 @@ describe("generated reference", () => {
 
   it("matches the program ids declared in the sources", () => {
     for (const [slug, dir] of Object.entries(PROGRAM_DIRS)) {
-      const lib = readFileSync(join(REPO, dir, "src/lib.rs"), "utf8");
+      const lib = readFileSync(join(REPO, dir, "lib.rs"), "utf8");
       const id = /declare_id!\("(\w+)"\)/.exec(lib)?.[1];
       expect(PROGRAMS.find((p) => p.slug === slug)?.programId).toBe(id);
     }

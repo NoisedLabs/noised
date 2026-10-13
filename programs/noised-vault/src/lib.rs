@@ -32,226 +32,104 @@
 //! Anyone can relay a signed withdrawal; a relayer cannot change anything
 //! because everything is signed. A withdrawal carries a 2176-byte
 //! signature, so clients send it in a v1 (4 KiB) transaction.
+//!
+//! # No framework
+//!
+//! The program is written on `pinocchio` alone (entrypoint, account views,
+//! CPI, syscalls); no Anchor code is linked into it. Its ABI is the one the
+//! Anchor 1.2.1 build had, byte for byte: the same instruction
+//! discriminators (`sha256("global:<name>")[..8]`), account order and
+//! signer/writable flags, Borsh argument layouts, account discriminators
+//! (`sha256("account:<Name>")[..8]`) and field layouts, PDA seeds, events
+//! (`sha256("event:<Name>")[..8]` + Borsh, through `sol_log_data`) and error
+//! numbers, the framework's included (`ConstraintSeeds` 2006, ...).
+//! [`processor`] lists, per instruction, every account constraint the
+//! Anchor build enforced and checks them in the Anchor order. The
+//! hand-maintained `idls/noised_vault.json` describes the ABI.
+//!
+//! Off-chain (`not(target_os = "solana")`), the crate keeps the Anchor
+//! client API its users have: [`accounts`], [`instruction`], and the Anchor
+//! account traits on [`state::Vault`] and [`state::Payout`]. That code is
+//! host-only and never part of the program binary.
 
-use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token_interface::{Mint, TokenAccount, TokenInterface},
-};
+extern crate alloc;
 
+#[cfg(not(target_os = "solana"))]
+use anchor_lang::{AnchorDeserialize, AnchorSerialize, Discriminator};
+
+#[cfg(not(target_os = "solana"))]
+mod client;
+#[cfg(not(feature = "no-entrypoint"))]
+mod entrypoint;
 pub mod error;
+#[doc(hidden)]
+pub mod hook;
 pub mod message;
+pub mod processor;
 pub mod state;
+#[doc(hidden)]
+pub mod sys;
+#[doc(hidden)]
 pub mod token;
 
-use error::VaultError;
-use message::withdraw_message;
-use state::{
-    key_id, next_key_index, Payout, SolSha256, Vault, VaultKey, GENESIS_KEY_INDEX, PAYOUT_SEED,
-    VAULT_SEED,
-};
-use token::MEMO_PROGRAM_ID;
+#[cfg(not(target_os = "solana"))]
+pub use client::{accounts, instruction, program};
 
-declare_id!("7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb");
+/// An account address (`solana_address::Address`, which Anchor's `Pubkey`
+/// also is).
+pub type Pubkey = pinocchio::Address;
 
-#[program]
-pub mod noised_vault {
-    use super::*;
+/// `7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb`.
+pub const ID: Pubkey = Pubkey::new_from_array([
+    91, 208, 9, 196, 48, 57, 200, 36, 155, 174, 112, 27, 169, 36, 26, 59, 189, 19, 20, 129, 48, 61,
+    18, 50, 64, 23, 160, 254, 107, 106, 132, 244,
+]);
 
-    /// Create a vault for `mint` controlled by the LM-OTS public key `key`.
-    ///
-    /// The address commits to this first key, so nobody can open a vault at
-    /// someone else's address with a different key. The first key has LM-OTS
-    /// index `q = 0`: every key of a vault is bound to its position.
-    pub fn open_vault(ctx: Context<OpenVault>, key_id_arg: [u8; 32], key: VaultKey) -> Result<()> {
-        require!(key.q == GENESIS_KEY_INDEX, VaultError::InvalidKeyIndex);
-        token::require_supported_mint(&ctx.accounts.mint)?;
-        let vault = &mut ctx.accounts.vault;
-        vault.init(ctx.bumps.vault, ctx.accounts.mint.key(), key_id_arg, &key);
-        emit!(VaultOpened {
-            vault: vault.key(),
-            mint: vault.mint,
-            key_id: key_id_arg,
-        });
-        Ok(())
-    }
-
-    /// Spend the current key: reserve up to `max_amount` for
-    /// `destination_owner` and hand the vault to the next key, whose LM-OTS
-    /// index must be the vault's `sequence + 1`.
-    ///
-    /// Reads no account the recipient or any other third party controls, so
-    /// a valid signature that names the key of the next position always
-    /// executes.
-    pub fn withdraw(ctx: Context<Withdraw>, args: WithdrawArgs) -> Result<()> {
-        let vault_key = ctx.accounts.vault.key();
-        let mint_key = ctx.accounts.mint.key();
-        let balance = ctx.accounts.vault_token_account.amount;
-        let vault = &mut ctx.accounts.vault;
-
-        require!(
-            key_id(&args.next_key.public_key()) == args.next_key_id,
-            VaultError::KeyIdMismatch
-        );
-        require!(args.next_key_id != vault.key_id, VaultError::InvalidNextKey);
-
-        // Verify the post-quantum signature over the exact withdrawal.
-        let sequence = vault.sequence;
-        let msg = withdraw_message(
-            &crate::ID,
-            &vault_key,
-            &mint_key,
-            sequence,
-            &args.destination_owner,
-            args.max_amount,
-            &args.next_key_id,
-        );
-        require!(
-            noised_lmots::verify::<SolSha256>(&vault.public_key(), &msg, &args.signature),
-            VaultError::InvalidSignature
-        );
-        // The next key's index must be its position, `sequence + 1`, so no
-        // key that ever controlled this vault (each had a smaller index) can
-        // be installed again. The signed `next_key_id` commits to the index,
-        // so only a signer that named a key of another position sees this.
-        require!(
-            next_key_index(sequence) == Some(args.next_key.q),
-            VaultError::InvalidKeyIndex
-        );
-
-        // Pay only from what earlier payouts have not set aside. Paying the
-        // vault itself would move nothing, so it reserves nothing.
-        let available = balance.saturating_sub(vault.reserved);
-        let amount = if args.destination_owner == vault_key {
-            0
-        } else {
-            args.max_amount.min(available)
-        };
-        vault.reserved = vault
-            .reserved
-            .checked_add(amount)
-            .ok_or(VaultError::MathOverflow)?;
-        vault.sequence = sequence.checked_add(1).ok_or(VaultError::MathOverflow)?;
-        vault.set_key(args.next_key_id, &args.next_key);
-
-        let payout = &mut ctx.accounts.payout;
-        payout.version = Payout::VERSION;
-        payout.bump = ctx.bumps.payout;
-        payout.vault = vault_key;
-        payout.sequence = sequence;
-        payout.destination_owner = args.destination_owner;
-        payout.amount = amount;
-        payout.rent_payer = ctx.accounts.payer.key();
-
-        emit!(VaultWithdrawn {
-            vault: vault_key,
-            mint: mint_key,
-            sequence,
-            destination_owner: args.destination_owner,
-            amount,
-            payout: payout.key(),
-            next_key_id: args.next_key_id,
-        });
-        Ok(())
-    }
-
-    /// Deliver a payout to the recipient's canonical associated token
-    /// account, creating it if needed. Permissionless.
-    pub fn release<'info>(ctx: Context<'info, Release<'info>>) -> Result<()> {
-        let a = &ctx.accounts;
-        if a.payout.amount > 0 {
-            token::ensure_canonical_ata(
-                &a.payer.to_account_info(),
-                &a.destination_owner.to_account_info(),
-                &a.destination.to_account_info(),
-                &a.mint.to_account_info(),
-                &a.token_program.to_account_info(),
-                &a.system_program.to_account_info(),
-            )?;
-        }
-        let destination = a.destination.to_account_info();
-        deliver(
-            &mut ctx.accounts.vault,
-            &ctx.accounts.payout,
-            &ctx.accounts.mint,
-            &ctx.accounts.vault_token_account,
-            destination,
-            &ctx.accounts.memo_program,
-            &ctx.accounts.token_program,
-            ctx.remaining_accounts,
-        )
-    }
-
-    /// Deliver a payout to any token account of the mint, chosen and signed
-    /// for by the recipient wallet. For recipients whose canonical account
-    /// cannot receive (for example confidential-only accounts).
-    pub fn release_to<'info>(ctx: Context<'info, ReleaseTo<'info>>) -> Result<()> {
-        let destination = ctx.accounts.destination.to_account_info();
-        deliver(
-            &mut ctx.accounts.vault,
-            &ctx.accounts.payout,
-            &ctx.accounts.mint,
-            &ctx.accounts.vault_token_account,
-            destination,
-            &ctx.accounts.memo_program,
-            &ctx.accounts.token_program,
-            ctx.remaining_accounts,
-        )
-    }
+/// The program id.
+pub const fn id() -> Pubkey {
+    ID
 }
 
-/// Move a payout's tokens out of the vault and release the reservation. The
-/// payout account itself is closed by the `close` constraint.
-#[allow(clippy::too_many_arguments)]
-fn deliver<'info>(
-    vault: &mut Account<'info, Vault>,
-    payout: &Account<'info, Payout>,
-    mint: &InterfaceAccount<'info, Mint>,
-    vault_token_account: &InterfaceAccount<'info, TokenAccount>,
-    destination: AccountInfo<'info>,
-    memo_program: &UncheckedAccount<'info>,
-    token_program: &Interface<'info, TokenInterface>,
-    extra: &'info [AccountInfo<'info>],
-) -> Result<()> {
-    let amount = payout.amount;
-    vault.reserved = vault
-        .reserved
-        .checked_sub(amount)
-        .ok_or(VaultError::MathOverflow)?;
-    if amount > 0 {
-        if token::requires_memo(&destination)? {
-            token::memo(&memo_program.to_account_info())?;
-        }
-        let mint_key = mint.key();
-        let bump = [vault.bump];
-        let genesis = vault.genesis_key_id;
-        let seeds: &[&[u8]] = &[VAULT_SEED, mint_key.as_ref(), &genesis, &bump];
-        token::transfer_signed(
-            token_program,
-            mint,
-            vault_token_account,
-            destination.clone(),
-            vault.to_account_info(),
-            amount,
-            seeds,
-            extra,
-        )?;
-    }
-    emit!(PayoutReleased {
-        vault: vault.key(),
-        payout: payout.key(),
-        sequence: payout.sequence,
-        destination_owner: payout.destination_owner,
-        destination: destination.key(),
-        amount,
-    });
-    Ok(())
+/// Whether `id` is the program id.
+pub fn check_id(id: &Pubkey) -> bool {
+    *id == ID
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+/// Address equality, out of line: a 32-byte compare is a dozen
+/// instructions every time it is inlined.
+#[inline(never)]
+pub(crate) fn same(a: &Pubkey, b: &Pubkey) -> bool {
+    a == b
+}
+
+/// Instruction discriminators: `sha256("global:<snake_case name>")[..8]`.
+pub mod discriminator {
+    pub const OPEN_VAULT: [u8; 8] = [181, 248, 228, 67, 6, 175, 37, 167];
+    pub const WITHDRAW: [u8; 8] = [183, 18, 70, 156, 148, 109, 161, 34];
+    pub const RELEASE: [u8; 8] = [253, 249, 15, 206, 28, 127, 193, 241];
+    pub const RELEASE_TO: [u8; 8] = [89, 11, 150, 168, 140, 201, 56, 132];
+    /// `sha256("account:Vault")[..8]`.
+    pub const VAULT: [u8; 8] = [211, 8, 232, 43, 2, 152, 117, 119];
+    /// `sha256("account:Payout")[..8]`.
+    pub const PAYOUT: [u8; 8] = [69, 45, 245, 131, 218, 101, 158, 228];
+    /// `sha256("event:VaultOpened")[..8]`.
+    pub const VAULT_OPENED: [u8; 8] = [198, 250, 195, 25, 26, 107, 197, 16];
+    /// `sha256("event:VaultWithdrawn")[..8]`.
+    pub const VAULT_WITHDRAWN: [u8; 8] = [238, 9, 219, 172, 188, 77, 72, 104];
+    /// `sha256("event:PayoutReleased")[..8]`.
+    pub const PAYOUT_RELEASED: [u8; 8] = [245, 195, 37, 2, 200, 70, 126, 210];
+    /// Anchor's `EVENT_IX_TAG` (`0x1d9acb512ea545e4`, little-endian): the
+    /// event-CPI instruction tag, which this program (like the Anchor build,
+    /// compiled without `event-cpi`) refuses with `EventInstructionStub`.
+    pub const EVENT_IX_TAG_LE: [u8; 8] = [228, 69, 165, 46, 81, 203, 154, 29];
+}
+
+/// `withdraw`'s argument (Borsh, after the discriminator).
+#[cfg_attr(not(target_os = "solana"), derive(AnchorSerialize, AnchorDeserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WithdrawArgs {
     /// LM-OTS signature `C || y[0..67]` (2176 bytes).
-    pub signature: Vec<u8>,
+    pub signature: alloc::vec::Vec<u8>,
     /// The recipient wallet (never a token account).
     pub destination_owner: Pubkey,
     /// Upper bound on the payout; `min(max_amount, unreserved balance)` is reserved.
@@ -259,206 +137,21 @@ pub struct WithdrawArgs {
     /// key_id of the key that controls the vault after this withdrawal.
     pub next_key_id: [u8; 32],
     /// The next key; its index `q` must be the vault's `sequence + 1`.
-    pub next_key: VaultKey,
+    pub next_key: state::VaultKey,
 }
 
-#[derive(Accounts)]
-#[instruction(key_id_arg: [u8; 32], key: VaultKey)]
-pub struct OpenVault<'info> {
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    #[account(mint::token_program = token_program)]
-    pub mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + Vault::INIT_SPACE,
-        seeds = [VAULT_SEED, mint.key().as_ref(), key_id_arg.as_ref()],
-        bump,
-        constraint = key_id(&key.public_key()) == key_id_arg @ VaultError::KeyIdMismatch,
-    )]
-    pub vault: Box<Account<'info, Vault>>,
-
-    // init_if_needed: anyone can pre-create an ATA, which must not block opening.
-    #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = mint,
-        associated_token::authority = vault,
-        associated_token::token_program = token_program,
-    )]
-    pub vault_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct Withdraw<'info> {
-    /// Pays the payout account's rent (refunded on release). Has no
-    /// authority over the vault.
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    #[account(mint::token_program = token_program)]
-    pub mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(
-        mut,
-        seeds = [VAULT_SEED, mint.key().as_ref(), vault.genesis_key_id.as_ref()],
-        bump = vault.bump,
-        has_one = mint,
-    )]
-    pub vault: Box<Account<'info, Vault>>,
-
-    /// Read only: the balance a withdrawal can reserve from.
-    #[account(
-        associated_token::mint = mint,
-        associated_token::authority = vault,
-        associated_token::token_program = token_program,
-    )]
-    pub vault_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    // Only this program can create an account at this address, and each
-    // sequence number is used once, so the address can never be squatted.
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + Payout::INIT_SPACE,
-        seeds = [PAYOUT_SEED, vault.key().as_ref(), &vault.sequence.to_le_bytes()],
-        bump,
-    )]
-    pub payout: Box<Account<'info, Payout>>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct Release<'info> {
-    /// Anyone; pays for the recipient's associated token account if missing.
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    #[account(mint::token_program = token_program)]
-    pub mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(
-        mut,
-        seeds = [VAULT_SEED, mint.key().as_ref(), vault.genesis_key_id.as_ref()],
-        bump = vault.bump,
-        has_one = mint,
-    )]
-    pub vault: Box<Account<'info, Vault>>,
-
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = vault,
-        associated_token::token_program = token_program,
-    )]
-    pub vault_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    #[account(
-        mut,
-        close = rent_payer,
-        seeds = [PAYOUT_SEED, vault.key().as_ref(), &payout.sequence.to_le_bytes()],
-        bump = payout.bump,
-        has_one = vault,
-        has_one = rent_payer,
-        has_one = destination_owner,
-    )]
-    pub payout: Box<Account<'info, Payout>>,
-
-    /// CHECK: receives the payout account's rent; bound by `has_one`.
-    #[account(mut)]
-    pub rent_payer: UncheckedAccount<'info>,
-
-    /// CHECK: the wallet the signed message names; bound by `has_one`.
-    pub destination_owner: UncheckedAccount<'info>,
-
-    /// CHECK: the canonical associated token account of `destination_owner`;
-    /// checked (and created if missing) in the handler. Ignored when the
-    /// payout is zero.
-    #[account(mut)]
-    pub destination: UncheckedAccount<'info>,
-
-    /// CHECK: SPL Memo, called before the transfer when the destination
-    /// requires memos.
-    #[account(address = MEMO_PROGRAM_ID)]
-    pub memo_program: UncheckedAccount<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct ReleaseTo<'info> {
-    /// The recipient wallet named in the signed message.
-    pub destination_owner: Signer<'info>,
-
-    #[account(mint::token_program = token_program)]
-    pub mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(
-        mut,
-        seeds = [VAULT_SEED, mint.key().as_ref(), vault.genesis_key_id.as_ref()],
-        bump = vault.bump,
-        has_one = mint,
-    )]
-    pub vault: Box<Account<'info, Vault>>,
-
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = vault,
-        associated_token::token_program = token_program,
-    )]
-    pub vault_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    #[account(
-        mut,
-        close = rent_payer,
-        seeds = [PAYOUT_SEED, vault.key().as_ref(), &payout.sequence.to_le_bytes()],
-        bump = payout.bump,
-        has_one = vault,
-        has_one = rent_payer,
-        has_one = destination_owner,
-    )]
-    pub payout: Box<Account<'info, Payout>>,
-
-    /// CHECK: receives the payout account's rent; bound by `has_one`.
-    #[account(mut)]
-    pub rent_payer: UncheckedAccount<'info>,
-
-    /// Any token account of the mint; the recipient chose it by signing.
-    #[account(
-        mut,
-        token::mint = mint,
-        token::token_program = token_program,
-    )]
-    pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// CHECK: SPL Memo, called before the transfer when the destination
-    /// requires memos.
-    #[account(address = MEMO_PROGRAM_ID)]
-    pub memo_program: UncheckedAccount<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-#[event]
+/// Emitted by `open_vault`.
+#[cfg_attr(not(target_os = "solana"), anchor_lang::event)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct VaultOpened {
     pub vault: Pubkey,
     pub mint: Pubkey,
     pub key_id: [u8; 32],
 }
 
-#[event]
+/// Emitted by `withdraw`.
+#[cfg_attr(not(target_os = "solana"), anchor_lang::event)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct VaultWithdrawn {
     pub vault: Pubkey,
     pub mint: Pubkey,
@@ -469,7 +162,9 @@ pub struct VaultWithdrawn {
     pub next_key_id: [u8; 32],
 }
 
-#[event]
+/// Emitted by `release` and `release_to`.
+#[cfg_attr(not(target_os = "solana"), anchor_lang::event)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PayoutReleased {
     pub vault: Pubkey,
     pub payout: Pubkey,
@@ -477,4 +172,108 @@ pub struct PayoutReleased {
     pub destination_owner: Pubkey,
     pub destination: Pubkey,
     pub amount: u64,
+}
+
+/// The `sol_log_data` payloads of the events: discriminator, then the fields
+/// in Borsh (pubkeys and byte arrays raw, integers little-endian).
+pub mod event_data {
+    use super::{discriminator, PayoutReleased, Pubkey, VaultOpened, VaultWithdrawn};
+
+    pub const VAULT_OPENED_LEN: usize = 8 + 32 + 32 + 32;
+    pub const VAULT_WITHDRAWN_LEN: usize = 8 + 32 + 32 + 8 + 32 + 8 + 32 + 32;
+    pub const PAYOUT_RELEASED_LEN: usize = 8 + 32 + 32 + 8 + 32 + 32 + 8;
+
+    /// `VaultOpened { vault, mint, key_id }`.
+    pub fn vault_opened(
+        vault: &Pubkey,
+        mint: &Pubkey,
+        key_id: &[u8; 32],
+    ) -> [u8; VAULT_OPENED_LEN] {
+        let mut d = [0u8; VAULT_OPENED_LEN];
+        d[..8].copy_from_slice(&discriminator::VAULT_OPENED);
+        d[8..40].copy_from_slice(vault.as_ref());
+        d[40..72].copy_from_slice(mint.as_ref());
+        d[72..104].copy_from_slice(key_id);
+        d
+    }
+
+    /// `VaultWithdrawn { vault, mint, sequence, destination_owner, amount,
+    /// payout, next_key_id }`.
+    pub fn vault_withdrawn(
+        vault: &Pubkey,
+        mint: &Pubkey,
+        sequence: u64,
+        destination_owner: &Pubkey,
+        amount: u64,
+        payout: &Pubkey,
+        next_key_id: &[u8; 32],
+    ) -> [u8; VAULT_WITHDRAWN_LEN] {
+        let mut d = [0u8; VAULT_WITHDRAWN_LEN];
+        d[..8].copy_from_slice(&discriminator::VAULT_WITHDRAWN);
+        d[8..40].copy_from_slice(vault.as_ref());
+        d[40..72].copy_from_slice(mint.as_ref());
+        d[72..80].copy_from_slice(&sequence.to_le_bytes());
+        d[80..112].copy_from_slice(destination_owner.as_ref());
+        d[112..120].copy_from_slice(&amount.to_le_bytes());
+        d[120..152].copy_from_slice(payout.as_ref());
+        d[152..184].copy_from_slice(next_key_id);
+        d
+    }
+
+    /// `PayoutReleased { vault, payout, sequence, destination_owner,
+    /// destination, amount }`.
+    pub fn payout_released(
+        vault: &Pubkey,
+        payout: &Pubkey,
+        sequence: u64,
+        destination_owner: &Pubkey,
+        destination: &Pubkey,
+        amount: u64,
+    ) -> [u8; PAYOUT_RELEASED_LEN] {
+        let mut d = [0u8; PAYOUT_RELEASED_LEN];
+        d[..8].copy_from_slice(&discriminator::PAYOUT_RELEASED);
+        d[8..40].copy_from_slice(vault.as_ref());
+        d[40..72].copy_from_slice(payout.as_ref());
+        d[72..80].copy_from_slice(&sequence.to_le_bytes());
+        d[80..112].copy_from_slice(destination_owner.as_ref());
+        d[112..144].copy_from_slice(destination.as_ref());
+        d[144..152].copy_from_slice(&amount.to_le_bytes());
+        d
+    }
+
+    impl VaultOpened {
+        /// The `sol_log_data` payload (Anchor's `Event::data`).
+        pub fn log_data(&self) -> [u8; VAULT_OPENED_LEN] {
+            vault_opened(&self.vault, &self.mint, &self.key_id)
+        }
+    }
+
+    impl VaultWithdrawn {
+        /// The `sol_log_data` payload (Anchor's `Event::data`).
+        pub fn log_data(&self) -> [u8; VAULT_WITHDRAWN_LEN] {
+            vault_withdrawn(
+                &self.vault,
+                &self.mint,
+                self.sequence,
+                &self.destination_owner,
+                self.amount,
+                &self.payout,
+                &self.next_key_id,
+            )
+        }
+    }
+
+    impl PayoutReleased {
+        /// The `sol_log_data` payload (Anchor's `Event::data`).
+        pub fn log_data(&self) -> [u8; PAYOUT_RELEASED_LEN] {
+            payout_released(
+                &self.vault,
+                &self.payout,
+                self.sequence,
+                &self.destination_owner,
+                &self.destination,
+                self.amount,
+            )
+        }
+    }
 }

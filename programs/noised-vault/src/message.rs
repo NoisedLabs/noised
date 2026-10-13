@@ -1,4 +1,4 @@
-use anchor_lang::prelude::Pubkey;
+use crate::Pubkey;
 
 /// Domain tag of every vault message; versioned so formats never collide.
 pub const MESSAGE_TAG: &[u8; 8] = b"PHX-PQV4";

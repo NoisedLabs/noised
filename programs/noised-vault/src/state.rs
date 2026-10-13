@@ -1,5 +1,8 @@
-use anchor_lang::prelude::*;
+#[cfg(not(target_os = "solana"))]
+use anchor_lang::{AnchorDeserialize, AnchorSerialize, Discriminator};
 use noised_lmots::{PublicKey, Sha256, ID_LEN, N};
+
+use crate::{discriminator, Pubkey};
 
 pub const VAULT_SEED: &[u8] = b"vault";
 pub const PAYOUT_SEED: &[u8] = b"payout";
@@ -36,8 +39,10 @@ pub fn next_key_index(sequence: u64) -> Option<u32> {
         .and_then(|next| u32::try_from(next).ok())
 }
 
-/// LM-OTS public key as passed in instructions.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+/// LM-OTS public key as passed in instructions (Borsh: `id`, `q` as `u32`
+/// little-endian, `k`; 52 bytes).
+#[cfg_attr(not(target_os = "solana"), derive(AnchorSerialize, AnchorDeserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VaultKey {
     /// LM-OTS key identifier `I`.
     pub id: [u8; ID_LEN],
@@ -48,6 +53,8 @@ pub struct VaultKey {
 }
 
 impl VaultKey {
+    pub const LEN: usize = ID_LEN + 4 + N;
+
     pub fn public_key(&self) -> PublicKey {
         PublicKey {
             id: self.id,
@@ -55,13 +62,33 @@ impl VaultKey {
             k: self.k,
         }
     }
+
+    /// Borsh decoding from the first [`VaultKey::LEN`] bytes of `data`.
+    pub fn read(data: &[u8; Self::LEN]) -> Self {
+        let mut id = [0u8; ID_LEN];
+        id.copy_from_slice(&data[..ID_LEN]);
+        let mut q = [0u8; 4];
+        q.copy_from_slice(&data[ID_LEN..ID_LEN + 4]);
+        let mut k = [0u8; N];
+        k.copy_from_slice(&data[ID_LEN + 4..]);
+        Self {
+            id,
+            q: u32::from_le_bytes(q),
+            k,
+        }
+    }
 }
 
 /// A vault: one mint, one current LM-OTS key. The address, the token account
 /// and the balance stay put for the vault's lifetime; every withdrawal
 /// replaces the key and increments `sequence`. Never closed.
-#[account]
-#[derive(InitSpace)]
+///
+/// Account data: the 8-byte discriminator `sha256("account:Vault")[..8]`,
+/// then the fields in Borsh, in this order ([`Vault::LEN`] = 174 bytes).
+#[cfg_attr(not(target_os = "solana"), anchor_lang::account)]
+#[cfg_attr(not(target_os = "solana"), derive(anchor_lang::InitSpace))]
+#[cfg_attr(target_os = "solana", derive(Clone))]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Vault {
     pub version: u8,
     pub bump: u8,
@@ -82,8 +109,17 @@ pub struct Vault {
     pub reserved: u64,
 }
 
+/// `L` bytes of `data` at `at`.
+fn array<const L: usize>(data: &[u8], at: usize) -> [u8; L] {
+    let mut out = [0u8; L];
+    out.copy_from_slice(&data[at..at + L]);
+    out
+}
+
 impl Vault {
     pub const VERSION: u8 = 4;
+    /// Account size: discriminator and fields.
+    pub const LEN: usize = 8 + 1 + 1 + 32 + 32 + 8 + 32 + ID_LEN + 4 + N + 8;
 
     pub fn init(&mut self, bump: u8, mint: Pubkey, key_id: [u8; 32], key: &VaultKey) {
         self.version = Self::VERSION;
@@ -109,13 +145,52 @@ impl Vault {
             k: self.key_k,
         }
     }
+
+    /// Decodes the fields from the first [`Vault::LEN`] bytes of account
+    /// data (the discriminator is the caller's to check; bytes after them
+    /// are ignored, as Borsh deserialization from a slice ignores them).
+    pub fn read(data: &[u8; Self::LEN]) -> Self {
+        Self {
+            version: data[8],
+            bump: data[9],
+            mint: Pubkey::new_from_array(array(data, 10)),
+            genesis_key_id: array(data, 42),
+            sequence: u64::from_le_bytes(array(data, 74)),
+            key_id: array(data, 82),
+            key_ident: array(data, 114),
+            key_q: u32::from_le_bytes(array(data, 130)),
+            key_k: array(data, 134),
+            reserved: u64::from_le_bytes(array(data, 166)),
+        }
+    }
+
+    /// Encodes discriminator and fields (the first [`Vault::LEN`] bytes of
+    /// account data).
+    pub fn write(&self, data: &mut [u8; Self::LEN]) {
+        data[..8].copy_from_slice(&discriminator::VAULT);
+        data[8] = self.version;
+        data[9] = self.bump;
+        data[10..42].copy_from_slice(self.mint.as_ref());
+        data[42..74].copy_from_slice(&self.genesis_key_id);
+        data[74..82].copy_from_slice(&self.sequence.to_le_bytes());
+        data[82..114].copy_from_slice(&self.key_id);
+        data[114..130].copy_from_slice(&self.key_ident);
+        data[130..134].copy_from_slice(&self.key_q.to_le_bytes());
+        data[134..166].copy_from_slice(&self.key_k);
+        data[166..174].copy_from_slice(&self.reserved.to_le_bytes());
+    }
 }
 
 /// Tokens a withdrawal set aside for its recipient. They stay in the vault's
 /// token account, counted in `Vault::reserved`, until `release` or
 /// `release_to` delivers them; then this account closes.
-#[account]
-#[derive(InitSpace)]
+///
+/// Account data: the 8-byte discriminator `sha256("account:Payout")[..8]`,
+/// then the fields in Borsh, in this order ([`Payout::LEN`] = 122 bytes).
+#[cfg_attr(not(target_os = "solana"), anchor_lang::account)]
+#[cfg_attr(not(target_os = "solana"), derive(anchor_lang::InitSpace))]
+#[cfg_attr(target_os = "solana", derive(Clone))]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Payout {
     pub version: u8,
     pub bump: u8,
@@ -131,6 +206,35 @@ pub struct Payout {
 
 impl Payout {
     pub const VERSION: u8 = 1;
+    /// Account size: discriminator and fields.
+    pub const LEN: usize = 8 + 1 + 1 + 32 + 8 + 32 + 8 + 32;
+
+    /// Decodes the fields from the first [`Payout::LEN`] bytes of account
+    /// data (the discriminator is the caller's to check).
+    pub fn read(data: &[u8; Self::LEN]) -> Self {
+        Self {
+            version: data[8],
+            bump: data[9],
+            vault: Pubkey::new_from_array(array(data, 10)),
+            sequence: u64::from_le_bytes(array(data, 42)),
+            destination_owner: Pubkey::new_from_array(array(data, 50)),
+            amount: u64::from_le_bytes(array(data, 82)),
+            rent_payer: Pubkey::new_from_array(array(data, 90)),
+        }
+    }
+
+    /// Encodes discriminator and fields (the first [`Payout::LEN`] bytes of
+    /// account data).
+    pub fn write(&self, data: &mut [u8; Self::LEN]) {
+        data[..8].copy_from_slice(&discriminator::PAYOUT);
+        data[8] = self.version;
+        data[9] = self.bump;
+        data[10..42].copy_from_slice(self.vault.as_ref());
+        data[42..50].copy_from_slice(&self.sequence.to_le_bytes());
+        data[50..82].copy_from_slice(self.destination_owner.as_ref());
+        data[82..90].copy_from_slice(&self.amount.to_le_bytes());
+        data[90..122].copy_from_slice(self.rent_payer.as_ref());
+    }
 }
 
 #[cfg(test)]
