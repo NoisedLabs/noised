@@ -820,7 +820,13 @@ fn validation_tlv_matches_spl_type_length_value() {
 fn hook_resolution_checks_the_borrow_state_of_account_views() {
     let program_id = Address::new_from_array([7; 32]);
     let base: Vec<HostAccount> = (1u8..=4)
-        .map(|i| host(Address::new_from_array([i; 32]), TOKEN_2022_PROGRAM_ID, &[i; 8]))
+        .map(|i| {
+            host(
+                Address::new_from_array([i; 32]),
+                TOKEN_2022_PROGRAM_ID,
+                &[i; 8],
+            )
+        })
         .collect();
     let mint = Address::new_from_array([2; 32]);
     let validation_key = hook::extra_account_metas_address(&mint, &program_id);

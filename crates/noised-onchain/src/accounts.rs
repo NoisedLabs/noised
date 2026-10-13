@@ -396,7 +396,11 @@ pub fn check_distinct<P: Program>(fields: &[(&AccountView, &'static str)]) -> Pr
 /// each caused by `name` (anchor-syn wraps the call in
 /// `with_account_name(field)`): it exists, the program owns it (with both
 /// keys), and it holds at least `space` bytes (the fields decode).
-fn check_created<P: Program>(account: &AccountView, space: usize, name: &'static str) -> ProgramResult {
+fn check_created<P: Program>(
+    account: &AccountView,
+    space: usize,
+    name: &'static str,
+) -> ProgramResult {
     if is_missing(account) {
         return Err(fail::<P>(ACCOUNT_NOT_INITIALIZED, Some(name)));
     }

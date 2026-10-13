@@ -765,7 +765,11 @@ fn invoke_refuses_borrowed_instruction_accounts() {
     use noised_onchain::{cpi, pinocchio::instruction::InstructionAccount};
     let _ = take_cpis();
     let from = Acc::new(key(1)).signer().writable().build();
-    let to = Acc::new(key(2)).owner(key(9)).writable().data(&[7; 16]).build();
+    let to = Acc::new(key(2))
+        .owner(key(9))
+        .writable()
+        .data(&[7; 16])
+        .build();
     let other = Acc::new(key(3)).owner(key(9)).data(&[1; 4]).build();
     let (from_v, to_v, other_v) = (from.view(), to.view(), other.view());
 
