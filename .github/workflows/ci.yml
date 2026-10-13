@@ -281,7 +281,7 @@ jobs:
         run: |
           cargo install solana-verify --version 0.5.2 --locked
           for lib in noised_hook noised_vault noised_launchpad noised_shield noised_autopilot; do
-            solana-verify build --library-name "$lib" -- --arch v3
+            solana-verify build --library-name "$lib" --arch v3
           done
           sha256sum target/deploy/*.so | tee verified-hashes.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

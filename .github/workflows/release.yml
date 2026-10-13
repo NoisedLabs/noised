@@ -121,12 +121,18 @@ jobs:
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
           rustup default "$RUST_TOOLCHAIN"
+      # Exactly what `solana-verify verify-from-repo` replays: the repository
+      # root as mount path, the image that [workspace.metadata.cli] solana =
+      # "4.3.0" selects (cargo-build-sbf 4.3.0, platform-tools v1.57), and
+      # solana-verify's own --arch flag, which it passes to cargo build-sbf
+      # (arguments after `--` would go to cargo build, which has no --arch).
       - name: Deterministic SBPF v3 builds with solana-verify (Docker)
         run: |
           cargo install solana-verify --version "$SOLANA_VERIFY_VERSION" --locked
           for lib in noised_hook noised_vault noised_launchpad noised_shield noised_autopilot; do
-            solana-verify build --library-name "$lib" -- --arch v3
+            solana-verify build --library-name "$lib" --arch v3
           done
+          docker images --digests solanafoundation/solana-verifiable-build
       - name: Hashes and release files
         run: |
           mkdir -p release
@@ -285,7 +291,7 @@ jobs:
             echo
             echo "## Program builds"
             echo
-            echo "Built by this workflow with solana-verify $SOLANA_VERIFY_VERSION (Docker), SBPF v3, from the tagged commit."
+            echo "Built by this workflow with solana-verify $SOLANA_VERIFY_VERSION (Docker), SBPF v3, from the tagged commit: \`solana-verify build --library-name <lib> --arch v3\`."
             echo "Each .so has a signed build-provenance attestation: \`gh attestation verify <file> --repo $GITHUB_REPOSITORY\`."
             echo
             echo "| Program | Program ID |"
