@@ -4,14 +4,13 @@ The five Solana programs of Noised, "the quantum security layer for Solana": the
 
 This page describes every instruction, account, seed, error and event of the five programs, as the code in this directory and the IDLs in [`../idls/`](../idls/) define them. The implementation contract is [docs/SPEC.md](../docs/SPEC.md). If this page and the code ever disagree, the code and the IDLs are right and this page is wrong: please open an issue.
 
-> **Status on 2026-10-12. Read this first.**
+> **Status on 2026-10-13. Read this first.**
 >
-> - **Devnet only.** `noised_hook`, `noised_launchpad`, `noised_autopilot` and `noised_vault` are deployed on Solana **devnet** (test SOL only). They were deployed from the verified builds made before the project was renamed from Phalanx (the `phalanx_*.so` files), at the same program ids as today's `noised_*` programs ([docs/DEVNET.md](../docs/DEVNET.md#deployed-before-the-rename-to-noised)).
-> - **The Shield is not deployed**, on any cluster.
-> - **No mainnet deployment** exists.
-> - **All deployed programs are upgradeable.** Their upgrade authority is the devnet deployer key `EeGcnw6yAjVC73QdjdtQDqoQgjxDpm2amLWzdoX1Kxvf`, which can replace their code at any time.
+> - **On mainnet, upgradeable, not finalized.** All five programs are deployed on Solana **mainnet-beta** since 2026-10-13, from the verifiable builds of commit `e673175` (release dry run [38432874027](https://github.com/NoisedLabs/noised/actions/runs/38432874027)), each checked byte for byte against its on-chain dump ([docs/MAINNET.md](../docs/MAINNET.md)). Their upgrade authority is `EXgNtEcJ2Co61EQUHfNFN7z8SC3RpmhYKrqcMVcPpJqz`, a single key, which can replace their code at any time until they are finalized.
+> - **The mainnet protocol is not initialized.** `initialize_protocol` has not run, so no launch can be created on mainnet yet.
+> - **Devnet runs older builds.** `noised_hook`, `noised_launchpad`, `noised_autopilot` and `noised_vault` are deployed on Solana **devnet** (test SOL only) from the Anchor builds made before the project was renamed from Phalanx (the `phalanx_*.so` files), at the same program ids ([docs/DEVNET.md](../docs/DEVNET.md#deployed-before-the-rename-to-noised)), upgradeable by the devnet deployer key `EeGcnw6yAjVC73QdjdtQDqoQgjxDpm2amLWzdoX1Kxvf`. The Shield is not deployed on devnet.
 > - **Not audited by a professional security firm.** Every review so far was internal and carried out by AI agents ([docs/AUDIT.md](../docs/AUDIT.md)). None of them is an independent audit.
-> - **The plan:** professional audit(s), then a mainnet deployment from verifiable builds, then finalization: the upgrade authority is set to None, so the code can never change again ([docs/OPERATIONS.md](../docs/OPERATIONS.md#release-and-finalization)).
+> - **What is left:** `initialize_protocol`, the devnet live flows on the mainnet binaries, the verification records with OtterSec, then finalization: the upgrade authority is set to None, so the code can never change again ([docs/MAINNET.md](../docs/MAINNET.md#what-is-left-in-order), [docs/OPERATIONS.md](../docs/OPERATIONS.md#release-and-finalization)).
 >
 > Do not use these programs with funds you cannot afford to lose.
 
@@ -41,15 +40,15 @@ This page describes every instruction, account, seed, error and event of the fiv
 
 ### 1.1 The five programs
 
-| Crate | Program | Program id | What it does | Devnet | Deployed `.so` |
-|---|---|---|---|---|---:|
-| [`noised-launchpad`](noised-launchpad/) | `noised_launchpad` | `CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc` | Creates and runs token launches on Meteora's Dynamic Bonding Curve (DBC): a fixed safety policy, an on-chain metadata record, optional creator launch rules, an on-chain check of the creator's post-quantum (LMS) signature, a fair-open batch, fee routing and a launch certificate. Also lands the creator identity's post-quantum authorizations that the Autopilot uses. | deployed (pre-rename build) | 846,896 bytes |
-| [`noised-hook`](noised-hook/) | `noised_hook` | `cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia` | Launch Guard: the Token-2022 transfer hook of every launch mint while its bonding curve runs. Snipe shield (only the batch can buy first), max-buy, max-wallet, an optional wallet-to-wallet lock, immutable-owner destinations and the creator's launch rules, all ending at most 72 hours after launch. Sells are never refused. | deployed (pre-rename build) | 214,984 bytes |
-| [`noised-vault`](noised-vault/) | `noised_vault` | `7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb` | PQ vault: token custody that only an LM-OTS (RFC 8554) hash-based signature can move. The protocol treasury must be one, and launch payouts and fee shares can go to one. | deployed (pre-rename build) | 279,608 bytes |
-| [`noised-shield`](noised-shield/) | `noised_shield` | `BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9` | Shield: wraps any supported token 1:1 into a Token-2022 "zToken" with confidential balances, and back. | **not deployed** | not deployed (build: 71,112 bytes; the Anchor build was 288,640) |
-| [`noised-autopilot`](noised-autopilot/) | `noised_autopilot` | `D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx` | Autopilot: runs a launch's treasury by a published graph (PXG1) that the launch's post-quantum identity authorized: buy back and burn, burn, pay declared recipients, with keepers' tips, a slow reference price and a 72-hour timelock on changes. | deployed (pre-rename build) | 402,032 bytes |
+| Crate | Program | Program id | What it does | Mainnet | Devnet |
+|---|---|---|---|---|---|
+| [`noised-launchpad`](noised-launchpad/) | `noised_launchpad` | `CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc` | Creates and runs token launches on Meteora's Dynamic Bonding Curve (DBC): a fixed safety policy, an on-chain metadata record, optional creator launch rules, an on-chain check of the creator's post-quantum (LMS) signature, a fair-open batch, fee routing and a launch certificate. Also lands the creator identity's post-quantum authorizations that the Autopilot uses. | deployed, 189,168 bytes | deployed (pre-rename build, 846,896 bytes) |
+| [`noised-hook`](noised-hook/) | `noised_hook` | `cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia` | Launch Guard: the Token-2022 transfer hook of every launch mint while its bonding curve runs. Snipe shield (only the batch can buy first), max-buy, max-wallet, an optional wallet-to-wallet lock, immutable-owner destinations and the creator's launch rules, all ending at most 72 hours after launch. Sells are never refused. | deployed, 46,952 bytes | deployed (pre-rename build, 214,984 bytes) |
+| [`noised-vault`](noised-vault/) | `noised_vault` | `7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb` | PQ vault: token custody that only an LM-OTS (RFC 8554) hash-based signature can move. The protocol treasury must be one, and launch payouts and fee shares can go to one. | deployed, 62,416 bytes | deployed (pre-rename build, 279,608 bytes) |
+| [`noised-shield`](noised-shield/) | `noised_shield` | `BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9` | Shield: wraps any supported token 1:1 into a Token-2022 "zToken" with confidential balances, and back. | deployed, 71,112 bytes | **not deployed** (the Anchor build was 288,640 bytes) |
+| [`noised-autopilot`](noised-autopilot/) | `noised_autopilot` | `D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx` | Autopilot: runs a launch's treasury by a published graph (PXG1) that the launch's post-quantum identity authorized: buy back and burn, burn, pay declared recipients, with keepers' tips, a slow reference price and a 72-hour timelock on changes. | deployed, 112,168 bytes | deployed (pre-rename build, 402,032 bytes) |
 
-The sizes are those of the deployed `phalanx_*.so` builds ([docs/DEVNET.md](../docs/DEVNET.md#programs-on-devnet)), which equal the final audit-round-4 verification builds of 2026-10-11 ([evidence](../docs/evidence/2026-10-11-audit4-final-verification.md)); the shield's Anchor figure is from that verification, and its build is now the framework-free rewrite (same ABI, [§5.8](#58-shield-source-and-tests)). Their SHA-256 hashes are in [section 9](#9-verifying-a-deployed-program).
+The mainnet sizes are those of the framework-free release builds of commit `e673175`, each deployed with `--max-len` equal to its size ([docs/MAINNET.md](../docs/MAINNET.md#programs)). The devnet sizes are those of the deployed `phalanx_*.so` Anchor builds ([docs/DEVNET.md](../docs/DEVNET.md#programs-on-devnet)), which equal the final audit-round-4 verification builds of 2026-10-11 ([evidence](../docs/evidence/2026-10-11-audit4-final-verification.md)); the shield's Anchor figure is from that verification. The framework-free programs keep the Anchor builds' ABI ([§5.8](#58-shield-source-and-tests) for the shield). The SHA-256 hashes of both are in [section 9](#9-verifying-a-deployed-program).
 
 ### 1.2 How they fit together
 
@@ -225,7 +224,7 @@ Anyone may publish metadata or rules records under any launch, each at the addre
 
 `launch` also has DBC create the pool, its base and quote vaults and the mint, and the hook create the mint's meta list and policy ([§3.3](#33-hook-accounts)). Account layouts are pinned by host tests (for example `pq_account_layouts_are_pinned`, `certificate_v4_appends_the_rules_hash`); the Autopilot reads `Launch` version 2 at offsets 13, 78, 174 and 553 ([§6.10](#610-autopilot-cpis-dependencies-and-costs)).
 
-**On devnet** the protocol is initialized: `Protocol` `BTiVRCENNQB8wnDCbAAoufHX3EgDKG9AioTu3BiDKc5M` holds treasury `8LgGRGoK3SxtV9yosGr5G3S61ibfgrvdHaYoTYnBFgHH` (a wSOL vault of `noised_vault`) and `platform_fee_bps` 1000 ([docs/DEVNET.md](../docs/DEVNET.md#protocol-init-pass)).
+**On devnet** the protocol is initialized: `Protocol` `BTiVRCENNQB8wnDCbAAoufHX3EgDKG9AioTu3BiDKc5M` holds treasury `8LgGRGoK3SxtV9yosGr5G3S61ibfgrvdHaYoTYnBFgHH` (a wSOL vault of `noised_vault`) and `platform_fee_bps` 1000 ([docs/DEVNET.md](../docs/DEVNET.md#protocol-init-pass)). **On mainnet** it is not initialized yet: no account exists at that address, so `create_launch` fails until `initialize_protocol` runs ([docs/MAINNET.md](../docs/MAINNET.md#what-is-left-in-order)).
 
 ### 2.4 Signed messages and hashes
 
@@ -706,7 +705,7 @@ It contains no blockhash or time, so a dropped transaction can be re-broadcast w
 
 ## 5. Shield (`noised_shield`)
 
-Program id `BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9` (**not deployed**) · source [`noised-shield/src/`](noised-shield/src/) · IDL [`idls/noised_shield.json`](../idls/noised_shield.json) · 3 instructions, 1 account type, 3 events, 10 errors · spec [SPEC §2](../docs/SPEC.md#2-shield-program-noised_shield--opt-in-confidential-balances) · background [docs/PRIVACY.md](../docs/PRIVACY.md)
+Program id `BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9` (deployed on mainnet; **not deployed on devnet**) · source [`noised-shield/src/`](noised-shield/src/) · IDL [`idls/noised_shield.json`](../idls/noised_shield.json) · 3 instructions, 1 account type, 3 events, 10 errors · spec [SPEC §2](../docs/SPEC.md#2-shield-program-noised_shield--opt-in-confidential-balances) · background [docs/PRIVACY.md](../docs/PRIVACY.md)
 
 ### 5.1 Purpose
 
@@ -1127,17 +1126,31 @@ The test counts are those of the final verification run of 2026-10-11, where eve
 **1. Who can change it.**
 
 ```bash
-solana program show CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc -u devnet
+solana program show CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc -u mainnet-beta    # or -u devnet
 ```
 
-The `Authority:` line names the key that can replace the program's code. On devnet today it is the deployer, `EeGcnw6yAjVC73QdjdtQDqoQgjxDpm2amLWzdoX1Kxvf`, for all four deployed programs. A finalized program prints `Authority: none`; no Noised program is finalized yet. The data length should equal the `.so` size below (each devnet program was deployed with `--max-len` equal to its `.so` size).
+The `Authority:` line names the key that can replace the program's code. On mainnet today it is `EXgNtEcJ2Co61EQUHfNFN7z8SC3RpmhYKrqcMVcPpJqz` for all five programs; on devnet it is the devnet deployer, `EeGcnw6yAjVC73QdjdtQDqoQgjxDpm2amLWzdoX1Kxvf`, for the four deployed there. A finalized program prints `Authority: none`; no Noised program is finalized yet. The data length should equal the `.so` size below (every program on both clusters was deployed with `--max-len` equal to its `.so` size).
 
 **2. What code it runs.** Dump the program and hash it:
 
 ```bash
-solana program dump -u devnet CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc noised_launchpad.so
+solana program dump -u mainnet-beta CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc noised_launchpad.so
 sha256sum noised_launchpad.so         # PowerShell: Get-FileHash noised_launchpad.so -Algorithm SHA256
 ```
+
+Mainnet (the release builds of commit `e673175`; the ProgramData addresses are the same on every cluster):
+
+| Program | Program id | Deploy slot | Data length | SHA-256 of the deployed build |
+|---|---|---:|---:|---|
+| `noised_launchpad` | `CfbRmsFpevhiXkbYK48orBDugdKznnezDiVekjAAbNgc` | 456,526,204 | 189,168 | `b7823d236d1d0a16d367daf98fb0c6f37643a3dca15690b7d21782640e8b13a7` |
+| `noised_autopilot` | `D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx` | 456,526,320 | 112,168 | `b4ad632f9de89ad9c6eb4e3be8f9c871b423edc83bef95409d2106c5458fced9` |
+| `noised_shield` | `BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9` | 456,526,384 | 71,112 | `cd59daa8ab6fabe3f28d44f4edf12740e306c685c787ce21224586c87bcd8919` |
+| `noised_vault` | `7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb` | 456,526,449 | 62,416 | `fde35f7dfcf8ca096d3d404308a021c3d71dc6000de9a1f98510ce12a165daf8` |
+| `noised_hook` | `cHHLLsEH4eHmqZBT4X5XqzutmkFw3daWSySPtV4csia` | 456,526,515 | 46,952 | `d43da765ef46f9e61e49f8f80bbfc2319285c60ceb912369a7275005f087a7d8` |
+
+Source: [docs/MAINNET.md](../docs/MAINNET.md#programs), which also lists the executable hashes `solana-verify get-program-hash` prints.
+
+Devnet (with `-u devnet`):
 
 | Program | Program id | ProgramData | Data length | SHA-256 of the deployed build |
 |---|---|---|---:|---|
@@ -1147,9 +1160,9 @@ sha256sum noised_launchpad.so         # PowerShell: Get-FileHash noised_launchpa
 | `noised_vault` (`phalanx_vault.so`) | `7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb` | `AXNGGsEypP6ocuiAkm3EMuABGGkFGL4F88cmG8A8dwS7` | 279,608 | `c3be1ece4893576f9bae8c94da5b6d7afa3338144148e90d76a4f7fcd3afb132` |
 | `noised_shield` | `BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9` | not deployed | | build `phalanx_shield.so`: `1104ae12e301dab66729be44ca12ce3490f7993bb27c5fb98ab5263dd58735de` |
 
-Source: [docs/DEVNET.md](../docs/DEVNET.md#programs-on-devnet), where each deploy was checked the same way (authority, data length, and the dump's SHA-256 against the local file). Because `--max-len` equals the `.so` size, a devnet dump is exactly the program file. In general a dump includes the ProgramData account's zero padding, so its hash identifies the dump file, not the executable; compare `solana-verify get-program-hash` instead ([OPERATIONS, Test fixtures](../docs/OPERATIONS.md#test-fixtures)).
+Source: [docs/DEVNET.md](../docs/DEVNET.md#programs-on-devnet), where each deploy was checked the same way (authority, data length, and the dump's SHA-256 against the local file). Because `--max-len` equals the `.so` size, a dump on either cluster is exactly the program file. In general a dump includes the ProgramData account's zero padding, so its hash identifies the dump file, not the executable; compare `solana-verify get-program-hash` instead ([OPERATIONS, Test fixtures](../docs/OPERATIONS.md#test-fixtures)).
 
-**3. That the code is this repository's.** Reproducible builds use `solana-verify` (Docker, so Linux CI). From [OPERATIONS, Verifiable builds](../docs/OPERATIONS.md#verifiable-builds-linux-ci), for a mainnet release:
+**3. That the code is this repository's.** Reproducible builds use `solana-verify` (Docker, so Linux CI). From [OPERATIONS, Verifiable builds](../docs/OPERATIONS.md#verifiable-builds-linux-ci); for the programs on mainnet, `<SHA>` is `e673175979e0cfbdc6979dc9cd98f7fd2a3444d9`:
 
 ```bash
 cargo install solana-verify --locked --version 0.5.2   # pin the version
