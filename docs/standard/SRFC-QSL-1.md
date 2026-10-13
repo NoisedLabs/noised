@@ -62,7 +62,7 @@ No change to Token-2022, to the runtime or to any Meteora program. No new instru
 
 ## Honest status
 
-- Nothing is deployed to mainnet and no Noised program is finalized, so **no token is QSL-1 today**. Levels become reachable when the programs are finalized after audit.
+- The Noised programs are deployed to mainnet (2026-10-13) but none is finalized, and the protocol is not initialized yet, so no Noised launch exists on mainnet and **no token is QSL-1 today**. Levels become reachable only once the programs are finalized (C1.24).
 - The programs have had internal reviews (by AI agents), mutation testing and LiteSVM runs against mainnet program dumps, not an independent audit.
 - Two fixes from the third internal audit round (a re-signable launch window, and immutable-owner destinations during the launch guard) are merged, with regression tests and mutation testing; neither changed an account a verifier reads.
 - Programmable launches (launch rules bound into the attestation and the certificate, version 4; automation authorized by the post-quantum identity) and the fourth review's fixes are merged. The fourth review is why "programmable" is a description with warnings and not a level.

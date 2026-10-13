@@ -22,7 +22,7 @@ Add a syscall that verifies stateful hash-based signatures (LMS and HSS, RFC 855
 
 Every Solana authority is an Ed25519 key. A cryptographically relevant quantum computer could recover any of them from its public key. Solana offers no post-quantum signature verification today: no syscall or precompile exists, and the Falcon precompile proposal (SIMD-0461) was closed on 2026-06-17 with the rationale "sigverify as a library" (as recorded in the Noised research notes, `docs/research/FACTS.md` #59). Applications that want post-quantum authorization therefore verify hash-based signatures in SBF, built on `sol_sha256`.
 
-Noised does this in its programs (not yet deployed to mainnet): every token launch must carry an LMS signature (`LMS_SHA256_M32_H10` over `LMOTS_SHA256_N32_W4`, 2,508-byte signatures) by its creator's post-quantum identity, verified on-chain by the launchpad, and its vault moves tokens only on an LM-OTS signature. Measured costs:
+Noised does this in its programs (deployed to mainnet on 2026-10-13, still upgradeable): every token launch must carry an LMS signature (`LMS_SHA256_M32_H10` over `LMOTS_SHA256_N32_W4`, 2,508-byte signatures) by its creator's post-quantum identity, verified on-chain by the launchpad, and its vault moves tokens only on an LM-OTS signature. Measured costs:
 
 | What | Measured | Source |
 |---|---|---|
