@@ -6,13 +6,15 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
-import { assertAttributeSafe, buildCsp, checkEndpointCluster, parseCluster, parseMockFlag, parseRpcEndpoints, type RpcEndpoint } from "./build/csp.ts";
+import { assertAttributeSafe, buildCsp, checkEndpointCluster, parseCluster, parseMockFlag, parseRpcEndpoints, publicMainnetRpcWarning, type RpcEndpoint } from "./build/csp.ts";
 import { checkCss, checkHtml, checkJs, checkNoMock, stripThirdPartyFonts } from "./build/output-checks.ts";
 
 /**
  * Configuration (environment variables or app/.env*):
  *   VITE_RPC_URL           RPC endpoint: one URL, or comma-separated "label=https://url"
- *                          (default: the public RPC of the cluster, i.e. devnet)
+ *                          (default: the public RPC of the cluster, i.e. devnet; a mainnet
+ *                          build warns when it uses the public mainnet RPC: production needs
+ *                          a dedicated endpoint)
  *   VITE_NOISED_CLUSTER    mainnet | devnet | localnet (default devnet); selects the PQ
  *                          vault key derivation and explorer links; checked against the
  *                          endpoint's genesis hash at runtime
@@ -47,6 +49,8 @@ export default defineConfig(({ mode, command }) => {
   if (mock && command === "build") {
     console.warn("\n  VITE_NOISED_MOCK=1: building the SIMULATED-CHAIN demo. It never talks to Solana; do not deploy it as the real app.\n");
   }
+  const rpcWarning = mock ? null : publicMainnetRpcWarning(endpoints, cluster);
+  if (rpcWarning !== null && command === "build") console.warn(`\n  ${rpcWarning}\n`);
 
   return {
     // Relative asset URLs: the site works from any IPFS gateway path.

@@ -1,6 +1,6 @@
 /**
  * App settings: theme + palette (GLASS_V51: two tones only, "graphite" dark and "paper" light) and the RPC
- * endpoint (PIXEL_V6: one type system, no font setting). The endpoint list is fixed at build time (VITE_NOISED_RPC) because the
+ * endpoint (PIXEL_V6: one type system, no font setting). The endpoint list is fixed at build time (VITE_RPC_URL) because the
  * Content-Security-Policy's connect-src is generated from exactly that list:
  * the page cannot reach any other host, so it cannot offer one.
  *

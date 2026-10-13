@@ -119,6 +119,19 @@ export function checkEndpointCluster(endpoints: readonly RpcEndpoint[], cluster:
 }
 
 /**
+ * The build-time warning for a mainnet build whose endpoint list includes Solana's public mainnet RPC, or null.
+ * That endpoint rate-limits hard and is not meant for production traffic (a busy page or a few wallets can exhaust
+ * it): a production mainnet build should list a dedicated RPC first in VITE_RPC_URL. A warning, not an error, so a
+ * quick preview of a mainnet build still works.
+ */
+export function publicMainnetRpcWarning(endpoints: readonly RpcEndpoint[], cluster: ClusterName): string | null {
+  if (cluster !== "mainnet") return null;
+  const pub = endpoints.filter((e) => PUBLIC_RPC_HOSTS[new URL(e.url).hostname] === "mainnet");
+  if (pub.length === 0) return null;
+  return `This mainnet build uses Solana's public RPC (${pub.map((e) => e.url).join(", ")}). It rate-limits and is not meant for production: for a real deployment, set VITE_RPC_URL to a dedicated mainnet RPC endpoint (one URL, or "label=url,label=url"; the first is the default).`;
+}
+
+/**
  * The WebSocket origin web3.js 1.x opens for subscriptions: https -> wss,
  * http -> ws, and an explicit port is incremented by one
  * (`makeWebsocketUrl` in @solana/web3.js).

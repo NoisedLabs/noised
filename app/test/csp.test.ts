@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCsp, checkEndpointCluster, connectSources, parseCluster, parseMockFlag, parseRpcEndpoints, websocketOrigin } from "../build/csp";
+import { buildCsp, checkEndpointCluster, connectSources, parseCluster, parseMockFlag, parseRpcEndpoints, publicMainnetRpcWarning, websocketOrigin } from "../build/csp";
 import { checkCss, checkHtml, checkJs, checkNoMock, stripThirdPartyFonts } from "../build/output-checks";
 
 describe("backend flag", () => {
@@ -33,6 +33,19 @@ describe("RPC endpoint configuration", () => {
     expect(() => checkEndpointCluster(parseRpcEndpoints("https://api.devnet.solana.com", "devnet"), "devnet")).not.toThrow();
     // Private endpoints are checked at runtime by their genesis hash.
     expect(() => checkEndpointCluster(parseRpcEndpoints("https://rpc.example.com", "mainnet"), "mainnet")).not.toThrow();
+  });
+
+  it("warns when a mainnet build uses Solana's public mainnet RPC (production needs a dedicated one)", () => {
+    // The default endpoint of a mainnet build is the public one: it builds, with a warning.
+    const def = parseRpcEndpoints(undefined, "mainnet");
+    expect(def).toEqual([{ label: "api.mainnet-beta.solana.com", url: "https://api.mainnet-beta.solana.com/" }]);
+    expect(publicMainnetRpcWarning(def, "mainnet")).toMatch(/public RPC .*api\.mainnet-beta\.solana\.com.*VITE_RPC_URL/);
+    // Listed next to a dedicated one, still a warning (it may be picked in the footer).
+    expect(publicMainnetRpcWarning(parseRpcEndpoints("main=https://rpc.example.com,public=https://api.mainnet-beta.solana.com", "mainnet"), "mainnet")).not.toBeNull();
+    // A dedicated endpoint only, or another cluster: no warning.
+    expect(publicMainnetRpcWarning(parseRpcEndpoints("https://rpc.example.com/?api-key=k", "mainnet"), "mainnet")).toBeNull();
+    expect(publicMainnetRpcWarning(parseRpcEndpoints(undefined, "devnet"), "devnet")).toBeNull();
+    expect(publicMainnetRpcWarning(parseRpcEndpoints(undefined, "localnet"), "localnet")).toBeNull();
   });
 
   it("defaults to the cluster's public endpoint (devnet unless chosen)", () => {

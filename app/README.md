@@ -22,6 +22,22 @@ pnpm typecheck && pnpm test && pnpm build
 | `VITE_NOISED_CSP_MWA` | `on` | `off` drops `ws://localhost:*` (Solana Mobile Wallet Adapter). |
 | `NOISED_OUT_DIR` | `./dist` | Build output; must contain "dist". |
 
+## Mainnet build
+
+The programs are on mainnet since 2026-10-13 ([docs/MAINNET.md](../docs/MAINNET.md)), with the same program ids as everywhere. A mainnet build is a live build with the cluster set to mainnet and, for production, a dedicated RPC:
+
+```bash
+# PowerShell: $env:VITE_NOISED_CLUSTER = "mainnet"; $env:VITE_RPC_URL = "main=https://<your-mainnet-rpc>"; pnpm build
+VITE_NOISED_CLUSTER=mainnet VITE_RPC_URL="main=https://<your-mainnet-rpc>" pnpm build
+```
+
+The site lands in `./dist`, or in `NOISED_OUT_DIR` (its name must contain "dist"; it is emptied first). Leave `VITE_NOISED_MOCK` unset.
+
+- **RPC.** Without `VITE_RPC_URL` the build uses Solana's public endpoint `https://api.mainnet-beta.solana.com` and prints a warning: it rate-limits and is not meant for production. Use a dedicated provider; an API key in the URL becomes public, so restrict it to your domain. The CSP's `connect-src` allows exactly the listed endpoints (and their websockets), and the build refuses a public devnet or testnet endpoint in a mainnet build.
+- **The network is checked.** At runtime the app compares the endpoint's genesis hash with mainnet's and refuses every transaction on a mismatch; the SDK's quantum signers check it again before they sign.
+- **What works.** Reads, Verify, the vault and the Shield. Launches stay closed while the launchpad's `Protocol` account does not exist on the cluster (mainnet until `initialize_protocol` runs): the Launch page shows "Launches open soon" and no launch form, and it opens by itself once the protocol exists.
+- **Output.** A static folder (`index.html` with the CSP meta tag, hashed assets, relative paths): host it on any static host or IPFS. The build's own checks (no inline or third-party code, no simulated-chain code in a live bundle) fail the build if they do not hold.
+
 ## Structure
 
 - `src/lib/noised.ts`: the only module the UI uses for chain access. Pure functions and types are the SDK's; chain reads and transactions come from the backend selected at build time through the `#noised-backend` alias:
