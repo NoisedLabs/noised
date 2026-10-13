@@ -296,13 +296,13 @@ Graph leaf predicates (`a` and `arg` not listed must be 0):
 | 0x20 | TREASURY_SOL_GTE | `arg` lamports | treasury wSOL `>= arg` |
 | 0x21 | TREASURY_TOKEN_GTE | `arg` | treasury tokens `>= arg` |
 | 0x22 | GRADUATED | | the pool migrated |
-| 0x23 | PRICE_LTE | `arg` (sqrt price Q64.64) | reference sqrt price `<= arg` |
-| 0x24 | PRICE_GTE | `arg` | reference sqrt price `>= arg` |
+| 0x23 | PRICE_LTE | `arg` (sqrt price Q64.64) | sqrt price `<= arg` (over a range: its highest price) |
+| 0x24 | PRICE_GTE | `arg` | sqrt price `>= arg` (over a range: its lowest price) |
 | 0x25 | TIME_GE | `arg <= i64::MAX` (unix) | `now >= arg` |
 | 0x26 | TIME_LT | `arg <= i64::MAX` | `now < arg` |
 | 0x27 | RUNS_IN_EPOCH_LT | `a` = node index (in range), `arg` | node `a`'s runs in its current epoch `< arg` |
 
-The price in `GraphCtx` must be the autopilot's slow reference price, never the spot price (a caller can move spot within its own transaction).
+`Graph::condition` / `Graph::runnable` read one price, `GraphCtx::sqrt_price`, which must be the autopilot's slow reference price, never the spot price (a caller can move spot within its own transaction). The autopilot decides with `Graph::condition_over` / `Graph::runnable_over` instead: a condition holds only if it holds for **every** price of a `PriceRange { low, high }` (from the lower of the reference and the lowest observed price to the higher of the reference and the highest). The evaluation is three-valued (Kleene): each price leaf is "true at every price of the range" or "true at some", AND and OR combine both, NOT swaps them, and the answer is the first. So `PRICE_GTE` is judged on `low`, `PRICE_LTE` on `high`, and under NOT the other end; a wider range can only turn a condition false, and a single price (`PriceRange::at(p)`) gives exactly `condition`. It is conservative, never permissive: a condition that holds at every single price but needs different leaves at different prices (`PRICE_GTE x OR NOT PRICE_GTE x`) is false over a range that straddles `x`.
 
 `graph_hash = SHA256("PHX-GRAPH-V1" || bytes)`.
 

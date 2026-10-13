@@ -8,7 +8,7 @@ use common::*;
 use noised_rules::graph::{self, action, trigger, MAX_LEN, MAX_PREMIUM_BPS};
 use noised_rules::{
     after_acyclic, current_epoch, graph_hash, op, Epoch, Error, GNode, Graph, GraphCtx,
-    GraphProgram, Node, NodeState, NotDue, Recipient, Sha2,
+    GraphProgram, Node, NodeState, NotDue, PriceRange, Recipient, Sha2,
 };
 
 fn verify(p: &GraphProgram) -> Result<(), Error> {
@@ -777,4 +777,175 @@ fn not_due_names_round_trip() {
         assert_eq!(NotDue::from_name(n.name()), Some(*n));
     }
     assert_eq!(NotDue::ALL.len(), 9);
+}
+
+// ------------------------------- conditions over a price range (review F1)
+
+/// Whether `cond` holds over `prices` (as the condition of a WHEN node).
+fn holds_over(cond: &[Node], c: &GraphCtx, prices: PriceRange) -> bool {
+    let p = graph_prog(
+        None,
+        &[],
+        &[(gnode(trigger::WHEN, 0, action::BURN, 1, 0), cond.to_vec())],
+    );
+    let bytes = genc(&p);
+    let g = Graph::verify(&bytes).expect("valid");
+    g.condition_over(0, c, prices).expect("verified")
+}
+
+/// A price condition over a range holds only if it holds at every price of
+/// it: "at least" on the lowest, "at most" on the highest, and under NOT the
+/// other end. Other leaves are as at one price.
+#[test]
+fn price_leaves_over_a_range() {
+    let c = gctx();
+    let r = |low: u128, high: u128| PriceRange { low, high };
+    let gte = [leaf(op::graph::PRICE_GTE, 0, 500)];
+    let lte = [leaf(op::graph::PRICE_LTE, 0, 500)];
+    let not = leaf(op::NOT, 0, 0);
+    // PRICE_GTE: the lowest price decides.
+    assert!(holds_over(&gte, &c, r(500, 900)));
+    assert!(!holds_over(&gte, &c, r(499, 900)));
+    // PRICE_LTE: the highest.
+    assert!(holds_over(&lte, &c, r(100, 500)));
+    assert!(!holds_over(&lte, &c, r(100, 501)));
+    // NOT PRICE_GTE ("below"): the highest must be below.
+    assert!(holds_over(&[gte[0], not], &c, r(100, 499)));
+    assert!(!holds_over(&[gte[0], not], &c, r(100, 500)));
+    // NOT PRICE_LTE ("above"): the lowest must be above.
+    assert!(holds_over(&[lte[0], not], &c, r(501, 900)));
+    assert!(!holds_over(&[lte[0], not], &c, r(500, 900)));
+    // Double negation is the leaf again.
+    assert!(holds_over(&[gte[0], not, not], &c, r(500, 900)));
+    assert!(!holds_over(&[gte[0], not, not], &c, r(499, 900)));
+    // AND of both ends: inside [400, 600] means both hold.
+    let inside = [
+        leaf(op::graph::PRICE_GTE, 0, 400),
+        leaf(op::graph::PRICE_LTE, 0, 600),
+        leaf(op::AND, 0, 0),
+    ];
+    assert!(holds_over(&inside, &c, r(400, 600)));
+    assert!(!holds_over(&inside, &c, r(399, 600)));
+    assert!(!holds_over(&inside, &c, r(400, 601)));
+    // Conservative, never permissive: "at least 500 or below 500" holds at
+    // every single price, but not over a range that straddles 500.
+    let either = [gte[0], gte[0], not, leaf(op::OR, 0, 0)];
+    assert!(holds_over(&either, &c, PriceRange::at(499)));
+    assert!(holds_over(&either, &c, PriceRange::at(500)));
+    assert!(!holds_over(&either, &c, r(499, 500)));
+    // Other leaves do not depend on the range.
+    let rich = [leaf(op::graph::TREASURY_SOL_GTE, 0, c.treasury_sol)];
+    assert!(holds_over(&rich, &c, r(0, u128::MAX)));
+    assert!(holds_over(
+        &[rich[0], gte[0], leaf(op::OR, 0, 0)],
+        &c,
+        r(0, 1)
+    ));
+    // Prices above u64 compare as such.
+    let top = [leaf(op::graph::PRICE_LTE, 0, u64::MAX)];
+    assert!(!holds_over(&top, &c, r(0, 1 << 64)));
+    assert!(holds_over(&top, &c, r(0, u64::MAX as u128)));
+}
+
+/// The leaf-wise rule review F1 asks for, as a reference: PRICE_GTE on the
+/// low end of the range, PRICE_LTE on the high end, every other leaf as at
+/// one price (exact for conditions without NOT).
+fn leafwise(c: &GraphCtx, prices: PriceRange, n: &Node) -> Option<bool> {
+    match n.op {
+        op::graph::PRICE_GTE => Some(prices.low >= u128::from(n.arg)),
+        op::graph::PRICE_LTE => Some(prices.high <= u128::from(n.arg)),
+        _ => ref_graph_leaf(c, n),
+    }
+}
+
+/// On random graphs, contexts and ranges: a condition over a range holds
+/// only if it holds at every price of the range (both ends, the middle and
+/// a random price in it), widening the range never makes it hold, a single
+/// price is `condition` at that price, and without NOT it is the leaf-wise
+/// rule. `runnable_over` is `due` then `condition_over`.
+#[test]
+fn conditions_over_a_range_are_sound_monotone_and_exact_at_one_price() {
+    let mut rng = Rng::new(0x00F1_00F1);
+    let (mut held, mut refused, mut differs) = (0usize, 0usize, 0usize);
+    for _ in 0..20_000 {
+        let p = gen_graph(&mut rng);
+        let bytes = genc(&p);
+        let g = Graph::verify(&bytes).expect("valid by construction");
+        let c = gen_gctx(&mut rng, &p);
+        let args: Vec<u128> = p.cond.iter().map(|n| u128::from(n.arg)).collect();
+        let price = |rng: &mut Rng| -> u128 {
+            if !args.is_empty() && !rng.one_in(4) {
+                rng.pick(&args)
+                    .saturating_add(u128::from(rng.below(3)))
+                    .saturating_sub(1)
+            } else {
+                u128::from(rng.wide())
+            }
+        };
+        let (a, b) = (price(&mut rng), price(&mut rng));
+        let range = PriceRange {
+            low: a.min(b),
+            high: a.max(b),
+        };
+        let states = gen_states(&mut rng, p.nodes.len());
+        for i in 0..p.nodes.len() {
+            let over = g.condition_over(i, &c, range).expect("verified");
+            // One price: `condition`.
+            assert_eq!(
+                g.condition_over(i, &c, PriceRange::at(c.sqrt_price)),
+                g.condition(i, &c)
+            );
+            // Sound: it holds at every price of the range.
+            if over {
+                held += 1;
+                let span = range.high - range.low;
+                let inside = range.low
+                    + if span == 0 {
+                        0
+                    } else {
+                        u128::from(rng.wide()) % span
+                    };
+                for q in [range.low, range.high, range.low + span / 2, inside] {
+                    let at = GraphCtx { sqrt_price: q, ..c };
+                    assert_eq!(g.condition(i, &at), Some(true), "node {i} at {q}");
+                }
+            } else {
+                refused += 1;
+            }
+            // Monotone: a wider range never holds where this one does not.
+            let wider = PriceRange {
+                low: range.low.saturating_sub(u128::from(rng.below(1_000))),
+                high: range.high.saturating_add(u128::from(rng.below(1_000))),
+            };
+            if g.condition_over(i, &c, wider).expect("verified") {
+                assert!(over, "node {i}: a wider range holds, the narrower does not");
+            }
+            // Without NOT: the leaf-wise rule, exactly.
+            let n = p.nodes[i];
+            let start = n.cond_off as usize;
+            let cond = &p.cond[start..start + n.cond_len as usize];
+            if !cond.iter().any(|x| x.op == op::NOT) {
+                let want = if cond.is_empty() {
+                    Some(true)
+                } else {
+                    ref_eval(cond, &|x| leafwise(&c, range, x))
+                };
+                assert_eq!(Some(over), want, "node {i}");
+            }
+            if Some(over) != g.condition(i, &c) {
+                differs += 1;
+            }
+            // runnable_over = due, then condition_over.
+            let want = g.due(i, &states, c.now, c.graduated).and(if over {
+                Ok(())
+            } else {
+                Err(NotDue::ConditionFalse)
+            });
+            assert_eq!(g.runnable_over(i, &states, &c, range), want);
+        }
+    }
+    assert!(
+        held > 1_000 && refused > 1_000 && differs > 1_000,
+        "{held} {refused} {differs}"
+    );
 }

@@ -12,6 +12,9 @@
 //! the stack effect: no underflow, never more than [`MAX_STACK`] values,
 //! and exactly one value at the end. Evaluation is one pass over the nodes
 //! with the stack held in the bits of a `u32`: no allocation, no recursion.
+//! A second evaluator takes leaves that are uncertain (an autopilot price
+//! that lies in a range) as two such stacks, "holds for every value" and
+//! "holds for some", and answers the first (three-valued logic).
 
 use crate::Error;
 
@@ -210,6 +213,69 @@ pub(crate) fn eval<L: LeafEval>(nodes: &[[u8; NODE_LEN]], leaves: &L) -> Option<
     }
     if depth == 1 {
         Some(stack & 1 == 1)
+    } else {
+        None
+    }
+}
+
+/// Evaluation of a context's leaves whose inputs are uncertain (a range of
+/// values): each leaf as `(must, may)`, whether it holds for every value its
+/// inputs may take and whether it holds for some; `None` for an unknown
+/// operation.
+pub(crate) trait LeafBounds {
+    fn eval_leaf_bounds(&self, node: &Node) -> Option<(bool, bool)>;
+}
+
+/// Evaluate one condition whose leaves may be uncertain, in one pass, as
+/// three-valued (Kleene) logic: AND and OR combine the `must` halves and
+/// the `may` halves separately, NOT swaps them (`not may`, `not must`). The
+/// result is the root's `must`: true only if the condition holds whatever
+/// values the uncertain inputs take, so widening their range can only turn
+/// it from true to false. With certain leaves (`must == may`) it is
+/// [`eval`]. `None` exactly where [`eval`] gives `None`.
+pub(crate) fn eval_bounded<L: LeafBounds>(nodes: &[[u8; NODE_LEN]], leaves: &L) -> Option<bool> {
+    // Bit 0 is the top of each stack.
+    let mut must: u32 = 0;
+    let mut may: u32 = 0;
+    let mut depth: u8 = 0;
+    for raw in nodes {
+        let node = Node::from_bytes(raw);
+        let (m, y): (u32, u32) = match node.op {
+            op::TRUE => (1, 1),
+            op::FALSE => (0, 0),
+            op::AND | op::OR => {
+                depth = depth.checked_sub(2)?;
+                let (m1, m2) = (must & 1, (must >> 1) & 1);
+                let (y1, y2) = (may & 1, (may >> 1) & 1);
+                must >>= 2;
+                may >>= 2;
+                if node.op == op::AND {
+                    (m1 & m2, y1 & y2)
+                } else {
+                    (m1 | m2, y1 | y2)
+                }
+            }
+            op::NOT => {
+                depth = depth.checked_sub(1)?;
+                let (m1, y1) = (must & 1, may & 1);
+                must >>= 1;
+                may >>= 1;
+                (y1 ^ 1, m1 ^ 1)
+            }
+            _ => {
+                let (m, y) = leaves.eval_leaf_bounds(&node)?;
+                (u32::from(m), u32::from(y))
+            }
+        };
+        if depth >= MAX_STACK {
+            return None;
+        }
+        must = (must << 1) | m;
+        may = (may << 1) | y;
+        depth = depth.saturating_add(1);
+    }
+    if depth == 1 {
+        Some(must & 1 == 1)
     } else {
         None
     }

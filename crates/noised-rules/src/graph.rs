@@ -29,7 +29,7 @@
 //! condition ended (an empty one has `cond_off = 0`) and the last ends at
 //! `n_cond`; AFTER references form no cycle; unused fields are zero.
 
-use crate::vm::{self, op, LeafCheck, LeafEval, Node, NODE_LEN};
+use crate::vm::{self, op, LeafBounds, LeafCheck, LeafEval, Node, NODE_LEN};
 use crate::{named_enum, take, time_lt, Error, Reader, Sha256, BPS_DENOMINATOR};
 
 /// Magic bytes.
@@ -232,10 +232,30 @@ pub struct GraphCtx {
     pub graduated: bool,
     /// The autopilot's reference sqrt price (Q64.64): the slow average
     /// updated by runs, never the spot price, which a caller can move
-    /// within its own transaction.
+    /// within its own transaction. [`Graph::condition`] reads it;
+    /// [`Graph::condition_over`] (what the autopilot decides with) reads a
+    /// [`PriceRange`] instead.
     pub sqrt_price: u128,
     /// Each graph node's runs in its current epoch (see [`current_epoch`]).
     pub runs_in_epoch: [u16; MAX_GRAPH_NODES as usize],
+}
+
+/// The sqrt prices (Q64.64) a graph's price conditions must hold at: every
+/// price from `low` to `high` (`low <= high`). See [`Graph::condition_over`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PriceRange {
+    /// The lowest sqrt price.
+    pub low: u128,
+    /// The highest sqrt price.
+    pub high: u128,
+}
+
+impl PriceRange {
+    /// The single price `p`: [`Graph::condition_over`] is then
+    /// [`Graph::condition`] with `sqrt_price = p`.
+    pub const fn at(p: u128) -> Self {
+        Self { low: p, high: p }
+    }
 }
 
 /// A graph node's run state, kept by the autopilot program.
@@ -684,6 +704,47 @@ impl<'a> Graph<'a> {
         }
     }
 
+    /// Whether node `i`'s condition holds for **every** sqrt price in
+    /// `prices` (`ctx.sqrt_price` is not read): `PRICE_GTE x` needs
+    /// `prices.low >= x`, `PRICE_LTE x` needs `prices.high <= x`, and under
+    /// NOT the other end decides (three-valued evaluation: a leaf "holds for
+    /// every price" or "for some", and NOT swaps the two). A wider range can
+    /// therefore only turn a condition false. This is what the autopilot
+    /// decides with (review F1): the range spans the reference and every
+    /// price observed in its window, so one pumped or dumped observation can
+    /// hold a node back but never make its condition true. With a single
+    /// price ([`PriceRange::at`]) it is [`Graph::condition`]. True without a
+    /// condition; `None` as [`Graph::condition`].
+    pub fn condition_over(&self, i: usize, ctx: &GraphCtx, prices: PriceRange) -> Option<bool> {
+        let node = self.node(i)?;
+        if node.cond_len == 0 {
+            return Some(true);
+        }
+        let start = usize::from(node.cond_off);
+        let cond = self
+            .cond
+            .get(start..start.saturating_add(usize::from(node.cond_len)))?;
+        vm::eval_bounded(cond, &GraphBounds { ctx, prices })
+    }
+
+    /// [`Graph::due`], then the condition over `prices`
+    /// ([`Graph::condition_over`]; `ConditionFalse`, `Malformed` never for a
+    /// verified graph).
+    pub fn runnable_over(
+        &self,
+        i: usize,
+        states: &[NodeState],
+        ctx: &GraphCtx,
+        prices: PriceRange,
+    ) -> Result<(), NotDue> {
+        self.due(i, states, ctx.now, ctx.graduated)?;
+        match self.condition_over(i, ctx, prices) {
+            Some(true) => Ok(()),
+            Some(false) => Err(NotDue::ConditionFalse),
+            None => Err(NotDue::Malformed),
+        }
+    }
+
     /// What node `i` may still spend this epoch: `budget_per_epoch` minus
     /// what it spent, at most `p1` (the per-run cap).
     pub fn run_cap(&self, i: usize, state: &NodeState, now: i64) -> u64 {
@@ -756,6 +817,28 @@ impl LeafCheck for GraphCheck {
 
 struct GraphEval<'c> {
     ctx: &'c GraphCtx,
+}
+
+/// Graph leaves over a range of prices: the price leaves as (holds at every
+/// price of the range, holds at some), every other leaf certain.
+struct GraphBounds<'c> {
+    ctx: &'c GraphCtx,
+    prices: PriceRange,
+}
+
+impl LeafBounds for GraphBounds<'_> {
+    fn eval_leaf_bounds(&self, node: &Node) -> Option<(bool, bool)> {
+        let arg = u128::from(node.arg);
+        let PriceRange { low, high } = self.prices;
+        Some(match node.op {
+            op::graph::PRICE_LTE => (high <= arg, low <= arg),
+            op::graph::PRICE_GTE => (low >= arg, high >= arg),
+            _ => {
+                let v = GraphEval { ctx: self.ctx }.eval_leaf(node)?;
+                (v, v)
+            }
+        })
+    }
 }
 
 impl LeafEval for GraphEval<'_> {

@@ -65,7 +65,7 @@ pub use owned::{CountOverflow, GraphProgram, RulesProgram};
 
 pub use graph::{
     after_acyclic, current_epoch, graph_hash, Epoch, GNode, Graph, GraphCtx, NodeState, NotDue,
-    Recipient,
+    PriceRange, Recipient,
 };
 pub use rules::{rules_hash, Rule, RuleSet, TransferCtx, Violation};
 pub use vm::{op, Node};
