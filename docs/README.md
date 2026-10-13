@@ -1,6 +1,6 @@
 # Noised documentation
 
-Everything written about Noised, the quantum security layer for Solana, in one list. Start with the [repository README](../README.md) for the overview and the project's status: the programs run on **Solana devnet only**, are **upgradeable**, and have **not been audited by a professional firm** (the reviews in [AUDIT.md](AUDIT.md) are internal).
+Everything written about Noised, the quantum security layer for Solana, in one list. Start with the [repository README](../README.md) for the overview and the project's status: the five programs are **deployed on Solana mainnet** since 2026-10-13 ([MAINNET.md](MAINNET.md)), but they are **upgradeable, not finalized**, the **protocol is not initialized yet** (so no launch can be created on mainnet yet), and they have **not been audited by a professional firm** (the reviews in [AUDIT.md](AUDIT.md) are internal). Devnet runs older builds of four of them ([DEVNET.md](DEVNET.md)).
 
 Where a document and the code disagree, the code wins and the document is wrong: please report it ([SECURITY.md](../SECURITY.md) treats a misleading safety claim as in scope).
 
@@ -14,7 +14,7 @@ Where a document and the code disagree, the code wins and the document is wrong:
 | Running an AI agent or a keeper | [packages/noised-mcp/README.md](../packages/noised-mcp/README.md), [OPERATIONS.md, Keepers](OPERATIONS.md#keepers) |
 | A wallet, explorer or indexer | [standard/QSL-1.md](standard/QSL-1.md) (the verification algorithm and badge wording), [standard/SRFC-QSL-1.md](standard/SRFC-QSL-1.md) |
 | An auditor or security researcher | [SPEC §7, invariants](SPEC.md#7-invariants-audit-checklist), [THREAT_MODEL.md](THREAT_MODEL.md), [AUDIT.md](AUDIT.md) (especially §6, the residual risks), [SECURITY_GUARANTEES.md](SECURITY_GUARANTEES.md), [SECURITY.md](../SECURITY.md) |
-| A maintainer or contributor | [CONTRIBUTING.md](../CONTRIBUTING.md), [OPERATIONS.md](OPERATIONS.md), [DEVNET.md](DEVNET.md) |
+| A maintainer or contributor | [CONTRIBUTING.md](../CONTRIBUTING.md), [OPERATIONS.md](OPERATIONS.md), [MAINNET.md](MAINNET.md), [DEVNET.md](DEVNET.md) |
 
 ## Design and specification
 
@@ -40,6 +40,7 @@ Where a document and the code disagree, the code wins and the document is wrong:
 | Document | One line |
 |---|---|
 | [OPERATIONS.md](OPERATIONS.md) | Build, test, rehearse, deploy, initialize, finalize, verify, release, monitor, run keepers and respond to incidents. |
+| [MAINNET.md](MAINNET.md) | The mainnet deployment of 2026-10-13: program IDs, sizes, SHA-256 and executable hashes, the verifiable build it came from, how to re-verify it, the current status (upgradeable, protocol not initialized) and the remaining steps in order. |
 | [DEVNET.md](DEVNET.md) | The devnet deployment of 2026-10-12: program IDs and hashes, the protocol initialization, both end-to-end flows with every transaction, the Surfpool rehearsal, costs and next steps. |
 | [evidence/2026-10-09-lms-cost-measurements.md](evidence/2026-10-09-lms-cost-measurements.md) | Measured compute cost of LMS verification on-chain and of `attest_launch`, and host timings. |
 | [evidence/2026-10-09-metadata-final-verification.md](evidence/2026-10-09-metadata-final-verification.md) | The final verification run of the on-chain metadata stage. |
