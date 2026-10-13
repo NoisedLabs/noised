@@ -197,3 +197,4 @@ await sendAndConfirm(conn, await wallet.signTransaction(tx));
 - [ ] The record is finalized before the identity signs, and the document bytes are the ones you reviewed.
 - [ ] The window opens far enough ahead for the attestation to land with at least 60 seconds of it left.
 - [ ] Someone will send `launch` in the window, and a keeper will execute the batch.
+- [ ] If the Autopilot has price conditions, their limits sit well away from the going price, and no payout that must arrive on time depends on the price alone: someone willing to pay trading fees can delay a step that waits on the price (never trigger it).
