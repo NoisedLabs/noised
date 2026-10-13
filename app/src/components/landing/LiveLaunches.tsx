@@ -7,7 +7,9 @@ import { ArrowRight } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
+import { LAUNCHES_SOON } from "../../app/brand";
 import type { AsyncState } from "../../app/hooks";
+import { useLaunchesState } from "../../app/network";
 import type { LaunchAccount, LaunchPhase } from "../../lib/noised";
 import { LaunchCard, LaunchCardSkeleton } from "../launch";
 import { Alert, Button } from "../ui";
@@ -32,6 +34,7 @@ export function LiveLaunches({ launches, rows }: { launches: AsyncState<LaunchAc
     return a.launch.launchTs === b.launch.launchTs ? 0 : a.launch.launchTs > b.launch.launchTs ? -1 : 1;
   });
   const visible = all ? sorted : sorted.slice(0, SHOWN);
+  const soon = useLaunchesState() === "soon";
   const more = sorted.length > SHOWN;
 
   return (
@@ -70,13 +73,23 @@ export function LiveLaunches({ launches, rows }: { launches: AsyncState<LaunchAc
       </ul>
 
       {loaded && sorted.length === 0 && !launches.error ? (
-        <div className="glass hm-live-empty">
-          <h3 className="t-card-title hm-card-title">No launches yet.</h3>
-          <p className="hm-card-text">The first one could be yours.</p>
-          <Link to="/create" className="btn btn-primary btn-noglyph">
-            Launch a token
-          </Link>
-        </div>
+        soon ? (
+          <div className="glass hm-live-empty">
+            <h3 className="t-card-title hm-card-title">{LAUNCHES_SOON.title}.</h3>
+            <p className="hm-card-text">{LAUNCHES_SOON.meanwhile}</p>
+            <Link to="/vault" className="btn btn-primary btn-noglyph">
+              Open your vault
+            </Link>
+          </div>
+        ) : (
+          <div className="glass hm-live-empty">
+            <h3 className="t-card-title hm-card-title">No launches yet.</h3>
+            <p className="hm-card-text">The first one could be yours.</p>
+            <Link to="/create" className="btn btn-primary btn-noglyph">
+              Launch a token
+            </Link>
+          </div>
+        )
       ) : null}
     </section>
   );

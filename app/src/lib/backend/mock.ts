@@ -184,6 +184,8 @@ export const backend: ChainBackend = {
       upgradeAuthority: null,
       lastDeploySlot: null,
     })),
+  // The simulated deployment's protocol is initialized (lib/mock/fixtures.ts): launches are open in the demo.
+  protocolInitialized: async () => true,
   chainUnixTime: async () => nowSecs(),
   subscribeToChainChanges: (onChange) => {
     const handler = (): void => onChange();

@@ -20,6 +20,7 @@ import { Link, useNavigate } from "react-router";
 
 import { HERO_SUB, HERO_TITLE } from "../../app/brand";
 import { useAsync } from "../../app/hooks";
+import { launchCtaLabel, useLaunchesState } from "../../app/network";
 import { usePrefersReducedMotion } from "../../fx/motion";
 import { sfx } from "../../fx/sfx";
 import "../../fx/wall/hero.css";
@@ -57,6 +58,7 @@ export function Hero({
   const own = useAsync(() => listLaunches(connection), [connection], { enabled: launches === undefined });
   const data = launches ? launches.data : own.data;
   const error = launches ? launches.error : own.error;
+  const launchesState = useLaunchesState();
 
   const ambient = useAmbientMotion();
   const reducedOs = usePrefersReducedMotion();
@@ -122,7 +124,7 @@ export function Hero({
           </p>
           <div ref={ctas} className="hx-ctas">
             <Link to="/create" className="btn btn-primary btn-lg btn-noglyph hx-cta" onClick={() => sfx.play("click")}>
-              Launch a token
+              {launchCtaLabel(launchesState)}
               <span className="btn-arrow" data-dir="right" aria-hidden="true">
                 →
               </span>

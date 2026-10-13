@@ -248,6 +248,40 @@ describe("program status", () => {
   });
 });
 
+describe("launches open only once the protocol is initialized", () => {
+  const protocol = new PublicKey("BTiVRCENNQB8wnDCbAAoufHX3EgDKG9AioTu3BiDKc5M");
+  const reads: { key: string; cfg: unknown }[] = [];
+  const conn = (account: { owner: PublicKey; data: Buffer } | null): Connection =>
+    stub({
+      getAccountInfo: async (key: PublicKey, cfg: unknown) => {
+        reads.push({ key: key.toBase58(), cfg });
+        return account === null ? null : { ...account, executable: false, lamports: 1, rentEpoch: 0 };
+      },
+    });
+
+  it("reads the launchpad's Protocol account: missing means not open (mainnet before initialize_protocol)", async () => {
+    reads.length = 0;
+    expect(await live.protocolInitialized(conn(null))).toBe(false);
+    // One 8-byte read of the Protocol PDA, nothing else.
+    expect(reads).toEqual([{ key: protocol.toBase58(), cfg: { commitment: "confirmed", dataSlice: { offset: 0, length: 8 } } }]);
+  });
+
+  it("is open only for an account the launchpad owns there (lamports sent to the address do not count)", async () => {
+    expect(await live.protocolInitialized(conn({ owner: PROGRAM_IDS.launchpad, data: Buffer.alloc(8, 1) }))).toBe(true);
+    expect(await live.protocolInitialized(conn({ owner: SystemProgram.programId, data: Buffer.alloc(0) }))).toBe(false);
+    expect(await live.protocolInitialized(conn({ owner: PROGRAM_IDS.launchpad, data: Buffer.alloc(0) }))).toBe(false);
+  });
+
+  it("throws when the RPC cannot answer (the app then offers a retry, never the forms)", async () => {
+    const down = stub({
+      getAccountInfo: async () => {
+        throw new Error("fetch failed");
+      },
+    });
+    await expect(live.protocolInitialized(down)).rejects.toThrow(/fetch failed/);
+  });
+});
+
 describe("mint info", () => {
   const base = (supply: bigint, decimals: number): Buffer => {
     const b = Buffer.alloc(82);

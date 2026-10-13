@@ -209,6 +209,12 @@ export interface ChainBackend {
   readonly checkCluster: (conn: Connection, expected: Sdk.Cluster) => Promise<ClusterCheck>;
   /** Deployment status of the Noised programs and the third-party programs they depend on. */
   readonly programStatuses: (conn: Connection) => Promise<ProgramStatus[]>;
+  /**
+   * Whether the launchpad's one-time setup has run on this cluster: its `Protocol` account exists (owned by the
+   * launchpad, at `["protocol"]`). Until then `create_launch` fails, so the app offers no launch. Throws when the
+   * account cannot be read.
+   */
+  readonly protocolInitialized: (conn: Connection) => Promise<boolean>;
   /** The cluster's Clock sysvar time (what the programs compare windows against); null if unknown. */
   readonly chainUnixTime: (conn: Connection) => Promise<number | null>;
   /** Calls `onChange` whenever chain state the app shows may have changed. Returns an unsubscribe function. */

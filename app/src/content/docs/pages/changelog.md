@@ -3,6 +3,13 @@ title: Changelog
 summary: What changed in the programs, the SDK and the app, newest first.
 ---
 
+## On Solana mainnet (2026-10-13)
+
+- **The five programs are live on mainnet**, from the verifiable builds of one commit, and still upgradeable: they are not finalized, and no independent audit has been completed.
+- **Launches open soon.** The launchpad's one-time setup has not run on mainnet yet, so no launch can be created there. Until it does, the Launch page says "Launches open soon" instead of showing the forms, and the launch buttons say so too. It opens by itself, without a reload, once the setup lands.
+- **Your vault, the Shield and Verify already work** on mainnet: they do not need that setup.
+- **For developers:** a mainnet build is `VITE_NOISED_CLUSTER=mainnet` with a dedicated RPC in `VITE_RPC_URL`; the build warns when it uses Solana's public mainnet endpoint, which rate-limits.
+
 ## Renamed to Noised
 
 The project is now **Noised**, at **noised.fun**. Older entries below keep the name of their time (Phalanx).

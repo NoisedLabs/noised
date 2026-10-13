@@ -531,6 +531,9 @@ const now = (): number => Date.now();
  * for anyone who needs it). Anything else is shown as it is.
  */
 const PLAIN: readonly [RegExp, string][] = [
+  // The SDK's create_launch builder, before the launchpad's one-time setup ran on this network (the Launch page then shows
+  // "Launches open soon" instead of its forms; this covers a launch started just before).
+  [/launchpad protocol account is not initialized/, "Launches open soon on this network: Noised is not taking new launches here yet. Nothing was signed."],
   [/created by \S+, not by this wallet/, "This launch was created by another wallet. Nothing was signed."],
   [/names another post-quantum identity/, "This launch names another quantum key. Nothing was signed."],
   [/params_hash differs/, "The launch's rules on Solana are not the ones you reviewed, so your quantum key did not sign. Nothing was signed."],

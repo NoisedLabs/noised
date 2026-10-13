@@ -335,6 +335,7 @@ export const {
   getMintInfo,
   notifyChainChanged,
   programStatuses,
+  protocolInitialized,
   resetDemoState,
   subscribeToChainChanges,
 } = backend;

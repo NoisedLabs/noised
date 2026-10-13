@@ -408,6 +408,16 @@ async function programStatuses(conn: Connection): Promise<ProgramStatus[]> {
   });
 }
 
+/**
+ * Whether `initialize_protocol` has run on this cluster: an account owned by the launchpad sits at its `Protocol`
+ * address. Only the launchpad can create an account it owns there, so lamports someone sent to the address (a
+ * system-owned account) do not count. Reads 8 bytes; throws when the RPC cannot answer.
+ */
+async function protocolInitialized(conn: Connection): Promise<boolean> {
+  const info = await conn.getAccountInfo(sdk.protocolAddress(), { commitment: "confirmed", dataSlice: { offset: 0, length: 8 } });
+  return info !== null && info.owner.equals(sdk.PROGRAM_IDS.launchpad) && info.data.length > 0;
+}
+
 /** `Clock::unix_timestamp` (i64 LE at offset 32 of the Clock sysvar): the time the programs check windows against. */
 async function chainUnixTime(conn: Connection): Promise<number | null> {
   try {
@@ -532,6 +542,7 @@ export const backend: ChainBackend = {
   getMintInfo,
   checkCluster,
   programStatuses,
+  protocolInitialized,
   chainUnixTime,
   subscribeToChainChanges,
   notifyChainChanged: emit,

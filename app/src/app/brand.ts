@@ -29,6 +29,17 @@ export const BRAND_MARK = {
 /** The footer's one line about Noised. */
 export const TAGLINE = "The quantum security layer for Solana. Launch, store, shield and verify tokens, with every rule checked on-chain.";
 
+/**
+ * What the app says while no launch can be created on its network yet (the launchpad's one-time setup has not run):
+ * plain words, no protocol or account names. The Launch page shows it instead of the forms, and the launch buttons read
+ * `title`.
+ */
+export const LAUNCHES_SOON = {
+  title: "Launches open soon",
+  text: "Noised is live on Solana, and token launches are almost ready. Come back soon to launch yours.",
+  meanwhile: "Your vault, the Shield and Verify already work.",
+} as const;
+
 /** The home hero's headline (two lines) and the sentence under it: what the layer is, then its products in plain words. */
 export const HERO_TITLE = ["Quantum security ", "for Solana."] as const;
 export const HERO_SUB =

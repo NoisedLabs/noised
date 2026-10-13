@@ -3,6 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import { createContext, lazy, Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 
+import { useNetwork } from "../../app/network";
 import { CLUSTER } from "../../app/settings";
 import { sfx } from "../../fx/sfx";
 import { useOwner } from "../../app/wallet";
@@ -82,6 +83,7 @@ import { buildDraft, draftProblems, EMPTY_RULES, hasRules, refreshPresets, type 
 import { autopilotBuild, autopilotDraft, graphRecipients, type AutopilotDraft } from "./autopilotDraft";
 import { ModeChooser, type LaunchMode } from "./ModeChooser";
 import { isTreasuryMark, launchTreasury, resolveTreasury, sendsFeesToTreasury, treasuryShareOf, withTreasuryShare } from "./quick";
+import { LaunchGate } from "./LaunchesSoon";
 import { QuickLaunch } from "./QuickLaunch";
 import type { JobContext } from "../autopilot/simple";
 import "./create.css";
@@ -192,6 +194,8 @@ export function CreatePage(): ReactNode {
   const mode: LaunchMode = params.get("mode") === "custom" ? "custom" : "quick";
   // The launch this page started (its tracker shows in place; other unfinished ones show at the top).
   const [started, setStarted] = useState<string | null>(null);
+  // No form until launches are open on this network: before the launchpad's one-time setup, every launch would fail.
+  const { launches, recheck } = useNetwork();
   return (
     <div className="pg cr">
       <PageHead
@@ -204,27 +208,37 @@ export function CreatePage(): ReactNode {
         }
         lede={
           <>
-            Pick how you want to launch. <strong>Every launch</strong> is signed with your quantum key, its liquidity is locked forever, and selling is never blocked. No admin
+            {launches === "open" ? "Pick how you want to launch. " : null}
+            <strong>Every launch</strong> is signed with your quantum key, its liquidity is locked forever, and selling is never blocked. No admin
             key: every launch role is held by a program, not a person.
           </>
         }
       />
-      <ModeChooser
-        mode={mode}
-        onPick={(m) =>
-          setParams(
-            (p) => {
-              const next = new URLSearchParams(p);
-              if (m === "custom") next.set("mode", "custom");
-              else next.delete("mode");
-              return next;
-            },
-            { replace: true },
-          )
-        }
-      />
-      <InProgress except={started} />
-      {mode === "quick" ? <QuickLaunch started={started} onStarted={setStarted} /> : <CustomLaunch started={started} onStarted={setStarted} />}
+      {launches === "open" ? (
+        <>
+          <ModeChooser
+            mode={mode}
+            onPick={(m) =>
+              setParams(
+                (p) => {
+                  const next = new URLSearchParams(p);
+                  if (m === "custom") next.set("mode", "custom");
+                  else next.delete("mode");
+                  return next;
+                },
+                { replace: true },
+              )
+            }
+          />
+          <InProgress except={started} />
+          {mode === "quick" ? <QuickLaunch started={started} onStarted={setStarted} /> : <CustomLaunch started={started} onStarted={setStarted} />}
+        </>
+      ) : (
+        <>
+          <LaunchGate state={launches} onRetry={recheck} />
+          <InProgress except={started} />
+        </>
+      )}
     </div>
   );
 }

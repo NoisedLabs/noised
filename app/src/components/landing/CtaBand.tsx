@@ -7,6 +7,7 @@
 import { useMemo, useRef, type ReactNode } from "react";
 import { Link } from "react-router";
 
+import { launchCtaLabel, useLaunchesState } from "../../app/network";
 import { NoiseArt, NoiseReveal, ResolveText, useNoiseReveal } from "../../fx/noise";
 import { sfx } from "../../fx/sfx";
 import { SectionField, useReveal } from "./glass";
@@ -17,6 +18,7 @@ export function CtaBand(): ReactNode {
   const slab = useRef<HTMLDivElement>(null);
   useNoiseReveal(slab, { duration: 820 });
   const scene = useMemo(() => ctaScene(), []);
+  const launches = useLaunchesState();
   return (
     <section ref={ref} id="start" className="hm-section hm-end" aria-labelledby="cta-title" data-in={shown ? "" : undefined}>
       <SectionField fade="radial" seed={29} />
@@ -47,7 +49,7 @@ export function CtaBand(): ReactNode {
           </NoiseReveal>
           <div className="hm-cta-actions">
             <Link to="/create" className="btn btn-primary btn-lg btn-noglyph" onClick={() => sfx.play("click")}>
-              Launch a token
+              {launchCtaLabel(launches)}
               <span className="btn-arrow" data-dir="right" aria-hidden="true">
                 →
               </span>
