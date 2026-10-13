@@ -1,266 +1,279 @@
-use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::Token,
-    token_2022::Token2022,
-    token_interface::{Mint, TokenAccount},
+//! `claim_fees()` and `claim_surplus()`.
+
+use noised_onchain::{
+    accounts::check_distinct,
+    ids::{
+        ASSOCIATED_TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID,
+    },
+    sysvar::Rent,
+    token::{init_associated_token_account, AssociatedToken},
+    ProgramResult, Seed, Signer,
 };
 
 use crate::{
     checks,
     constants::*,
-    dynamic_bonding_curve::{self, types::TransferHookAccountsInfo},
-    error::LaunchpadError,
+    error::{raise, LaunchpadError},
     events::FeesClaimed,
-    state::{Launch, LaunchStatus},
+    external::dbc,
+    processor::{
+        check_address_mismatch, check_program_address, check_status, check_writable,
+        launch_has_one, log_instruction, math_overflow, Accounts, ASSOCIATED_TOKEN_PROGRAM,
+        BASE_MINT, BASE_VAULT, DBC_CONFIG, DBC_EVENT_AUTHORITY_FIELD, DBC_POOL_AUTHORITY_FIELD,
+        DBC_PROGRAM, LAUNCH_AUTHORITY, P, PAYER, POOL, QUOTE_MINT, QUOTE_VAULT, SYSTEM_PROGRAM,
+        TOKEN_2022_PROGRAM, TOKEN_PROGRAM,
+    },
+    state::{launch_offsets as at, LaunchStatus},
+    token_util,
 };
+
+const AUTHORITY_BASE_ATA: &str = "authority_base_ata";
+const AUTHORITY_QUOTE_ATA: &str = "authority_quote_ata";
 
 /// Permissionless: claim the partner trading fees (wSOL only, the config
 /// collects fees in quote) into the launch authority's wSOL account.
-pub fn handle_claim_fees(ctx: Context<ClaimFees>) -> Result<()> {
-    let before = ctx.accounts.authority_quote_ata.amount;
-    let launch_key = ctx.accounts.launch.key();
-    let bump = [ctx.accounts.launch.authority_bump];
-    let seeds: &[&[u8]] = &[AUTHORITY_SEED, launch_key.as_ref(), &bump];
-    let a = &ctx.accounts;
-    dynamic_bonding_curve::cpi::claim_trading_fee2(
-        CpiContext::new_with_signer(
-            DBC_PROGRAM_ID,
-            dynamic_bonding_curve::cpi::accounts::ClaimTradingFee2 {
-                pool_authority: a.dbc_pool_authority.to_account_info(),
-                config: a.dbc_config.to_account_info(),
-                pool: a.pool.to_account_info(),
-                token_a_account: a.authority_base_ata.to_account_info(),
-                token_b_account: a.authority_quote_ata.to_account_info(),
-                base_vault: a.base_vault.to_account_info(),
-                quote_vault: a.quote_vault.to_account_info(),
-                base_mint: a.base_mint.to_account_info(),
-                quote_mint: a.quote_mint.to_account_info(),
-                fee_claimer: a.launch_authority.to_account_info(),
-                token_base_program: a.token_2022_program.to_account_info(),
-                token_quote_program: a.token_program.to_account_info(),
-                event_authority: a.dbc_event_authority.to_account_info(),
-                program: a.dbc_program.to_account_info(),
-            },
-            &[seeds],
-        ),
+///
+/// Accounts: payer (signer, writable), launch, launch_authority, dbc_config,
+/// pool, base_vault, quote_vault (writable), base_mint, quote_mint,
+/// authority_base_ata, authority_quote_ata (the launch authority's ATAs,
+/// created if needed), dbc_pool_authority, dbc_program, dbc_event_authority,
+/// token_program, token_2022_program, associated_token_program,
+/// system_program.
+pub fn process_claim_fees(mut accounts: Accounts) -> ProgramResult {
+    log_instruction("Instruction: ClaimFees");
+    let payer = accounts.signer(PAYER)?;
+    let (launch, launch_state) = accounts.launch()?;
+    let launch_authority = accounts.unchecked(LAUNCH_AUTHORITY)?;
+    let dbc_config = accounts.unchecked(DBC_CONFIG)?;
+    let pool = accounts.unchecked(POOL)?;
+    let base_vault = accounts.unchecked(BASE_VAULT)?;
+    let quote_vault = accounts.unchecked(QUOTE_VAULT)?;
+    let (base_mint, _) = accounts.mint(BASE_MINT)?;
+    let (quote_mint, _) = accounts.mint(QUOTE_MINT)?;
+    let authority_base_ata = accounts.init()?;
+    let authority_quote_ata = accounts.init()?;
+    let dbc_pool_authority = accounts.unchecked(DBC_POOL_AUTHORITY_FIELD)?;
+    let dbc_program = accounts.unchecked(DBC_PROGRAM)?;
+    let dbc_event_authority = accounts.unchecked(DBC_EVENT_AUTHORITY_FIELD)?;
+    let token_program = accounts.program(&TOKEN_PROGRAM_ID, TOKEN_PROGRAM)?;
+    let token_2022_program = accounts.program(&TOKEN_2022_PROGRAM_ID, TOKEN_2022_PROGRAM)?;
+    accounts.program(&ASSOCIATED_TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM)?;
+    let system_program = accounts.program(&SYSTEM_PROGRAM_ID, SYSTEM_PROGRAM)?;
+
+    // [A] authority_base_ata: init_if_needed, associated_token::mint =
+    // base_mint, authority = launch_authority, token_program =
+    // token_2022_program. authority_quote_ata: init_if_needed,
+    // associated_token::mint = quote_mint, authority = launch_authority,
+    // token_program = token_program.
+    let rent = Rent::get()?;
+    init_associated_token_account::<P, true>(
+        &AssociatedToken {
+            payer,
+            account: authority_base_ata,
+            authority: launch_authority,
+            mint: base_mint,
+            token_program: token_2022_program,
+            system_program,
+        },
+        &rent,
+        AUTHORITY_BASE_ATA,
+    )?;
+    let quote_ata = init_associated_token_account::<P, true>(
+        &AssociatedToken {
+            payer,
+            account: authority_quote_ata,
+            authority: launch_authority,
+            mint: quote_mint,
+            token_program,
+            system_program,
+        },
+        &rent,
+        AUTHORITY_QUOTE_ATA,
+    )?;
+
+    // [A] duplicate mutable accounts: the two ATAs. payer: mut. launch:
+    // has_one = pool, base_mint, dbc_config, launch_authority (@
+    // AccountMismatch), constraint = status == Live @ WrongLaunchState. pool,
+    // base_vault, quote_vault: mut. quote_mint, dbc_pool_authority,
+    // dbc_event_authority: address @ AccountMismatch. dbc_program: address @
+    // AccountMismatch, executable.
+    check_distinct::<P>(&[
+        (authority_base_ata, AUTHORITY_BASE_ATA),
+        (authority_quote_ata, AUTHORITY_QUOTE_ATA),
+    ])?;
+    check_writable(payer, PAYER)?;
+    launch_has_one(&launch_state, at::POOL, pool)?;
+    launch_has_one(&launch_state, at::BASE_MINT, base_mint)?;
+    launch_has_one(&launch_state, at::DBC_CONFIG, dbc_config)?;
+    launch_has_one(&launch_state, at::LAUNCH_AUTHORITY, launch_authority)?;
+    check_status(&launch_state, LaunchStatus::Live)?;
+    check_writable(pool, POOL)?;
+    check_writable(base_vault, BASE_VAULT)?;
+    check_writable(quote_vault, QUOTE_VAULT)?;
+    check_address_mismatch(quote_mint, &WSOL_MINT, QUOTE_MINT)?;
+    check_address_mismatch(
+        dbc_pool_authority,
+        &DBC_POOL_AUTHORITY,
+        DBC_POOL_AUTHORITY_FIELD,
+    )?;
+    check_program_address(dbc_program, &DBC_PROGRAM_ID, DBC_PROGRAM)?;
+    check_address_mismatch(
+        dbc_event_authority,
+        &DBC_EVENT_AUTHORITY,
+        DBC_EVENT_AUTHORITY_FIELD,
+    )?;
+
+    // Handler.
+    let before = quote_ata.amount;
+    let launch_key = *launch.address();
+    let bump = [launch_state.byte(at::AUTHORITY_BUMP)];
+    dbc::claim_trading_fee2(
+        &dbc::ClaimTradingFee2 {
+            pool_authority: dbc_pool_authority,
+            config: dbc_config,
+            pool,
+            token_a_account: authority_base_ata,
+            token_b_account: authority_quote_ata,
+            base_vault,
+            quote_vault,
+            base_mint,
+            quote_mint,
+            fee_claimer: launch_authority,
+            token_base_program: token_2022_program,
+            token_quote_program: token_program,
+            event_authority: dbc_event_authority,
+            program: dbc_program,
+        },
         // Base fees are never collected by this config; never move base here.
         0,
         u64::MAX,
-        TransferHookAccountsInfo { slices: vec![] },
+        &[Signer::from(&[
+            Seed::from(AUTHORITY_SEED),
+            Seed::from(launch_key.as_ref()),
+            Seed::from(&bump),
+        ])],
     )?;
-    ctx.accounts.authority_quote_ata.reload()?;
-    let claimed = ctx
-        .accounts
-        .authority_quote_ata
-        .amount
+    let claimed = token_util::reload_amount(authority_quote_ata)?
         .checked_sub(before)
-        .ok_or(LaunchpadError::MathOverflow)?;
-    require!(claimed > 0, LaunchpadError::NothingToDo);
-    emit!(FeesClaimed {
-        launch: launch_key,
-        quote_amount: claimed,
-        surplus: false,
-    });
+        .ok_or_else(math_overflow)?;
+    if claimed == 0 {
+        return Err(raise(LaunchpadError::NothingToDo));
+    }
+    FeesClaimed::log(&launch_key, claimed, false);
     Ok(())
 }
 
 /// Permissionless, after the curve completes: withdraw the partner and
 /// creator surplus (both roles are the launch authority) into its wSOL account.
-pub fn handle_claim_surplus(ctx: Context<ClaimSurplus>) -> Result<()> {
-    let (partner_done, creator_done) = {
-        let pool = checks::read_dbc_pool(&ctx.accounts.pool)?;
-        (
-            pool.pool_state.is_partner_withdraw_surplus != 0,
-            pool.pool_state.is_creator_withdraw_surplus != 0,
-        )
-    };
-    require!(!(partner_done && creator_done), LaunchpadError::NothingToDo);
+///
+/// Accounts: payer (signer, writable), launch, launch_authority, dbc_config,
+/// pool, quote_vault (writable), quote_mint, authority_quote_ata (the launch
+/// authority's wSOL ATA, created if needed), dbc_pool_authority,
+/// dbc_program, dbc_event_authority, token_program,
+/// associated_token_program, system_program.
+pub fn process_claim_surplus(mut accounts: Accounts) -> ProgramResult {
+    log_instruction("Instruction: ClaimSurplus");
+    let payer = accounts.signer(PAYER)?;
+    let (launch, launch_state) = accounts.launch()?;
+    let launch_authority = accounts.unchecked(LAUNCH_AUTHORITY)?;
+    let dbc_config = accounts.unchecked(DBC_CONFIG)?;
+    let pool = accounts.unchecked(POOL)?;
+    let quote_vault = accounts.unchecked(QUOTE_VAULT)?;
+    let (quote_mint, _) = accounts.mint(QUOTE_MINT)?;
+    let authority_quote_ata = accounts.init()?;
+    let dbc_pool_authority = accounts.unchecked(DBC_POOL_AUTHORITY_FIELD)?;
+    let dbc_program = accounts.unchecked(DBC_PROGRAM)?;
+    let dbc_event_authority = accounts.unchecked(DBC_EVENT_AUTHORITY_FIELD)?;
+    let token_program = accounts.program(&TOKEN_PROGRAM_ID, TOKEN_PROGRAM)?;
+    accounts.program(&ASSOCIATED_TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM)?;
+    let system_program = accounts.program(&SYSTEM_PROGRAM_ID, SYSTEM_PROGRAM)?;
 
-    let before = ctx.accounts.authority_quote_ata.amount;
-    let launch_key = ctx.accounts.launch.key();
-    let bump = [ctx.accounts.launch.authority_bump];
-    let seeds: &[&[u8]] = &[AUTHORITY_SEED, launch_key.as_ref(), &bump];
-    let a = &ctx.accounts;
+    // [A] authority_quote_ata: init_if_needed, associated_token::mint =
+    // quote_mint, authority = launch_authority, token_program =
+    // token_program.
+    let rent = Rent::get()?;
+    let quote_ata = init_associated_token_account::<P, true>(
+        &AssociatedToken {
+            payer,
+            account: authority_quote_ata,
+            authority: launch_authority,
+            mint: quote_mint,
+            token_program,
+            system_program,
+        },
+        &rent,
+        AUTHORITY_QUOTE_ATA,
+    )?;
+
+    // [A] duplicate mutable accounts: authority_quote_ata only. payer: mut.
+    // launch: has_one = pool, dbc_config, launch_authority (@
+    // AccountMismatch), constraint = status == Live @ WrongLaunchState. pool,
+    // quote_vault: mut. quote_mint, dbc_pool_authority, dbc_event_authority:
+    // address @ AccountMismatch. dbc_program: address @ AccountMismatch,
+    // executable.
+    check_writable(payer, PAYER)?;
+    launch_has_one(&launch_state, at::POOL, pool)?;
+    launch_has_one(&launch_state, at::DBC_CONFIG, dbc_config)?;
+    launch_has_one(&launch_state, at::LAUNCH_AUTHORITY, launch_authority)?;
+    check_status(&launch_state, LaunchStatus::Live)?;
+    check_writable(pool, POOL)?;
+    check_writable(quote_vault, QUOTE_VAULT)?;
+    check_address_mismatch(quote_mint, &WSOL_MINT, QUOTE_MINT)?;
+    check_address_mismatch(
+        dbc_pool_authority,
+        &DBC_POOL_AUTHORITY,
+        DBC_POOL_AUTHORITY_FIELD,
+    )?;
+    check_program_address(dbc_program, &DBC_PROGRAM_ID, DBC_PROGRAM)?;
+    check_address_mismatch(
+        dbc_event_authority,
+        &DBC_EVENT_AUTHORITY,
+        DBC_EVENT_AUTHORITY_FIELD,
+    )?;
+
+    // Handler.
+    let (partner_done, creator_done) = checks::dbc_pool_surplus_withdrawn(pool)?;
+    if partner_done && creator_done {
+        return Err(raise(LaunchpadError::NothingToDo));
+    }
+
+    let before = quote_ata.amount;
+    let launch_key = *launch.address();
+    let bump = [launch_state.byte(at::AUTHORITY_BUMP)];
+    let seeds = [
+        Seed::from(AUTHORITY_SEED),
+        Seed::from(launch_key.as_ref()),
+        Seed::from(&bump),
+    ];
+    let accounts = dbc::WithdrawSurplus {
+        pool_authority: dbc_pool_authority,
+        config: dbc_config,
+        virtual_pool: pool,
+        token_quote_account: authority_quote_ata,
+        quote_vault,
+        quote_mint,
+        claimer: launch_authority,
+        token_quote_program: token_program,
+        event_authority: dbc_event_authority,
+        program: dbc_program,
+    };
     if !partner_done {
-        dynamic_bonding_curve::cpi::partner_withdraw_surplus(CpiContext::new_with_signer(
-            DBC_PROGRAM_ID,
-            dynamic_bonding_curve::cpi::accounts::PartnerWithdrawSurplus {
-                pool_authority: a.dbc_pool_authority.to_account_info(),
-                config: a.dbc_config.to_account_info(),
-                virtual_pool: a.pool.to_account_info(),
-                token_quote_account: a.authority_quote_ata.to_account_info(),
-                quote_vault: a.quote_vault.to_account_info(),
-                quote_mint: a.quote_mint.to_account_info(),
-                fee_claimer: a.launch_authority.to_account_info(),
-                token_quote_program: a.token_program.to_account_info(),
-                event_authority: a.dbc_event_authority.to_account_info(),
-                program: a.dbc_program.to_account_info(),
-            },
-            &[seeds],
-        ))?;
+        dbc::withdraw_surplus(
+            &accounts,
+            &dbc::PARTNER_WITHDRAW_SURPLUS,
+            &[Signer::from(&seeds)],
+        )?;
     }
     if !creator_done {
-        dynamic_bonding_curve::cpi::creator_withdraw_surplus(CpiContext::new_with_signer(
-            DBC_PROGRAM_ID,
-            dynamic_bonding_curve::cpi::accounts::CreatorWithdrawSurplus {
-                pool_authority: a.dbc_pool_authority.to_account_info(),
-                config: a.dbc_config.to_account_info(),
-                virtual_pool: a.pool.to_account_info(),
-                token_quote_account: a.authority_quote_ata.to_account_info(),
-                quote_vault: a.quote_vault.to_account_info(),
-                quote_mint: a.quote_mint.to_account_info(),
-                creator: a.launch_authority.to_account_info(),
-                token_quote_program: a.token_program.to_account_info(),
-                event_authority: a.dbc_event_authority.to_account_info(),
-                program: a.dbc_program.to_account_info(),
-            },
-            &[seeds],
-        ))?;
+        dbc::withdraw_surplus(
+            &accounts,
+            &dbc::CREATOR_WITHDRAW_SURPLUS,
+            &[Signer::from(&seeds)],
+        )?;
     }
-    ctx.accounts.authority_quote_ata.reload()?;
-    let claimed = ctx
-        .accounts
-        .authority_quote_ata
-        .amount
+    let claimed = token_util::reload_amount(authority_quote_ata)?
         .checked_sub(before)
-        .ok_or(LaunchpadError::MathOverflow)?;
-    emit!(FeesClaimed {
-        launch: launch_key,
-        quote_amount: claimed,
-        surplus: true,
-    });
+        .ok_or_else(math_overflow)?;
+    FeesClaimed::log(&launch_key, claimed, true);
     Ok(())
-}
-
-#[derive(Accounts)]
-pub struct ClaimFees<'info> {
-    /// Anyone; pays for the launch authority's token accounts if missing.
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    #[account(
-        has_one = pool @ LaunchpadError::AccountMismatch,
-        has_one = base_mint @ LaunchpadError::AccountMismatch,
-        has_one = dbc_config @ LaunchpadError::AccountMismatch,
-        has_one = launch_authority @ LaunchpadError::AccountMismatch,
-        constraint = launch.status == LaunchStatus::Live @ LaunchpadError::WrongLaunchState,
-    )]
-    pub launch: Box<Account<'info, Launch>>,
-
-    /// CHECK: launch authority PDA bound to `launch`; signs as fee claimer.
-    pub launch_authority: UncheckedAccount<'info>,
-
-    /// CHECK: this launch's DBC config (DBC checks it against the pool).
-    pub dbc_config: UncheckedAccount<'info>,
-
-    /// CHECK: this launch's DBC pool.
-    #[account(mut)]
-    pub pool: UncheckedAccount<'info>,
-
-    /// CHECK: DBC checks it equals the pool's base vault.
-    #[account(mut)]
-    pub base_vault: UncheckedAccount<'info>,
-
-    /// CHECK: DBC checks it equals the pool's quote vault.
-    #[account(mut)]
-    pub quote_vault: UncheckedAccount<'info>,
-
-    pub base_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(address = WSOL_MINT @ LaunchpadError::AccountMismatch)]
-    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = base_mint,
-        associated_token::authority = launch_authority,
-        associated_token::token_program = token_2022_program,
-    )]
-    pub authority_base_ata: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = quote_mint,
-        associated_token::authority = launch_authority,
-        associated_token::token_program = token_program,
-    )]
-    pub authority_quote_ata: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// CHECK: DBC pool authority.
-    #[account(address = DBC_POOL_AUTHORITY @ LaunchpadError::AccountMismatch)]
-    pub dbc_pool_authority: UncheckedAccount<'info>,
-
-    /// CHECK: Meteora DBC.
-    #[account(address = DBC_PROGRAM_ID @ LaunchpadError::AccountMismatch, executable)]
-    pub dbc_program: UncheckedAccount<'info>,
-
-    /// CHECK: DBC event authority PDA.
-    #[account(address = DBC_EVENT_AUTHORITY @ LaunchpadError::AccountMismatch)]
-    pub dbc_event_authority: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
-    pub token_2022_program: Program<'info, Token2022>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct ClaimSurplus<'info> {
-    /// Anyone; pays for the launch authority's wSOL account if missing.
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    #[account(
-        has_one = pool @ LaunchpadError::AccountMismatch,
-        has_one = dbc_config @ LaunchpadError::AccountMismatch,
-        has_one = launch_authority @ LaunchpadError::AccountMismatch,
-        constraint = launch.status == LaunchStatus::Live @ LaunchpadError::WrongLaunchState,
-    )]
-    pub launch: Box<Account<'info, Launch>>,
-
-    /// CHECK: launch authority PDA bound to `launch`; signs as partner and creator.
-    pub launch_authority: UncheckedAccount<'info>,
-
-    /// CHECK: this launch's DBC config (DBC checks it against the pool).
-    pub dbc_config: UncheckedAccount<'info>,
-
-    /// CHECK: this launch's DBC pool (bound by `has_one`; owner and type
-    /// checked when its surplus flags are read).
-    #[account(mut)]
-    pub pool: UncheckedAccount<'info>,
-
-    /// CHECK: DBC checks it equals the pool's quote vault.
-    #[account(mut)]
-    pub quote_vault: UncheckedAccount<'info>,
-
-    #[account(address = WSOL_MINT @ LaunchpadError::AccountMismatch)]
-    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = quote_mint,
-        associated_token::authority = launch_authority,
-        associated_token::token_program = token_program,
-    )]
-    pub authority_quote_ata: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// CHECK: DBC pool authority.
-    #[account(address = DBC_POOL_AUTHORITY @ LaunchpadError::AccountMismatch)]
-    pub dbc_pool_authority: UncheckedAccount<'info>,
-
-    /// CHECK: Meteora DBC.
-    #[account(address = DBC_PROGRAM_ID @ LaunchpadError::AccountMismatch, executable)]
-    pub dbc_program: UncheckedAccount<'info>,
-
-    /// CHECK: DBC event authority PDA.
-    #[account(address = DBC_EVENT_AUTHORITY @ LaunchpadError::AccountMismatch)]
-    pub dbc_event_authority: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
 }

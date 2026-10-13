@@ -6,12 +6,14 @@
 //! depend on curve math (migration price reachable, base amounts non-zero) are
 //! left to DBC: a failure there aborts `create_launch` atomically.
 
-use anchor_lang::prelude::*;
+use alloc::{string::String, vec::Vec};
 
 use crate::{
     constants::{dbc, *},
-    error::LaunchpadError,
+    error::{require, LaunchpadError, Result},
+    math::div_wide,
     state::{BaseFeeParams, CurvePoint, DynamicFeeParams, FeeRecipient, LaunchParams},
+    Pubkey,
 };
 
 /// Values derived while validating.
@@ -199,7 +201,7 @@ pub fn min_base_fee_numerator(fee: &BaseFeeParams) -> Option<u64> {
 /// from least significant), so the result is bit-identical.
 pub fn exponential_fee(cliff: u64, reduction: u64, periods: u16) -> Option<u64> {
     const ONE: u128 = 1 << 64;
-    let step = (u128::from(reduction) << 64) / u128::from(BPS_DENOMINATOR);
+    let step = div_wide(u128::from(reduction) << 64, BPS_DENOMINATOR);
     let base = ONE.checked_sub(step)?;
     let mut result = ONE;
     let mut square = base;
@@ -232,18 +234,20 @@ pub fn validate_dynamic_fee(d: &DynamicFeeParams) -> Result<u64> {
             && d.max_volatility_accumulator <= dbc::U24_MAX,
         LaunchpadError::InvalidDynamicFee
     );
-    max_variable_fee_numerator(d).ok_or_else(|| error!(LaunchpadError::InvalidDynamicFee))
+    Ok(max_variable_fee_numerator(d).ok_or(LaunchpadError::InvalidDynamicFee)?)
 }
 
 /// DBC's variable fee at the volatility cap:
 /// `ceil((max_volatility_accumulator * bin_step)^2 * variable_fee_control / 1e11)`.
 pub fn max_variable_fee_numerator(d: &DynamicFeeParams) -> Option<u64> {
     let scaled = u128::from(d.max_volatility_accumulator).checked_mul(u128::from(d.bin_step))?;
-    let fee = scaled
-        .checked_mul(scaled)?
-        .checked_mul(u128::from(d.variable_fee_control))?
-        .checked_add(dbc::VARIABLE_FEE_SCALE - 1)?
-        / dbc::VARIABLE_FEE_SCALE;
+    let fee = div_wide(
+        scaled
+            .checked_mul(scaled)?
+            .checked_mul(u128::from(d.variable_fee_control))?
+            .checked_add(dbc::VARIABLE_FEE_SCALE - 1)?,
+        dbc::VARIABLE_FEE_SCALE as u64,
+    );
     u64::try_from(fee).ok()
 }
 
@@ -264,16 +268,16 @@ pub fn validate_recipients(
     );
     let mut out = [FeeRecipient::default(); MAX_RECIPIENTS];
     let mut total: u64 = 0;
-    for (i, r) in recipients.iter().enumerate() {
+    for (i, (r, slot)) in recipients.iter().zip(out.iter_mut()).enumerate() {
         require!(
             r.wallet != Pubkey::default()
                 && r.bps > 0
                 && !forbidden.contains(&r.wallet)
-                && !recipients[..i].iter().any(|p| p.wallet == r.wallet),
+                && !recipients.iter().take(i).any(|p| p.wallet == r.wallet),
             LaunchpadError::InvalidRecipients
         );
         total += u64::from(r.bps);
-        out[i] = *r;
+        *slot = *r;
     }
     require!(total == BPS_DENOMINATOR, LaunchpadError::InvalidRecipients);
     Ok((out, recipients.len() as u8))
@@ -375,6 +379,6 @@ pub fn cap_from_bps(supply: u64, bps: u16) -> Option<u64> {
     if bps == 0 {
         return Some(0);
     }
-    let cap = u128::from(supply) * u128::from(bps) / u128::from(BPS_DENOMINATOR);
+    let cap = div_wide(u128::from(supply) * u128::from(bps), BPS_DENOMINATOR);
     u64::try_from(cap).ok().filter(|c| *c > 0)
 }

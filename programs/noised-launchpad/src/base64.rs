@@ -18,8 +18,11 @@ fn symbol(bits: u32, shift: u32) -> u8 {
 pub fn encode_into(input: &[u8], out: &mut Vec<u8>) {
     let start = out.len();
     out.resize(start + encoded_len(input.len()), 0);
+    let Some(encoded) = out.get_mut(start..) else {
+        return;
+    };
     // One 4-character chunk per started group of 3 bytes.
-    let (chars, _) = out[start..].as_chunks_mut::<4>();
+    let (chars, _) = encoded.as_chunks_mut::<4>();
     let (groups, rest) = input.as_chunks::<3>();
     for (&[b0, b1, b2], dst) in groups.iter().zip(chars.iter_mut()) {
         let bits = (u32::from(b0) << 16) | (u32::from(b1) << 8) | u32::from(b2);

@@ -1,6 +1,6 @@
 //! Seeds, external program ids and the safety-policy bounds (SPEC §1.1-1.2).
 
-use anchor_lang::prelude::*;
+use crate::{pubkey::pubkey, Pubkey};
 
 pub const PROTOCOL_SEED: &[u8] = b"protocol";
 pub const LAUNCH_SEED: &[u8] = b"launch";
@@ -53,7 +53,7 @@ pub const WSOL_MINT: Pubkey = pubkey!("So111111111111111111111111111111111111111
 /// recognized by these bytes alone (pinned against the vault crate in
 /// tests), so the launchpad does not link the vault program.
 pub mod pq_vault {
-    use anchor_lang::prelude::*;
+    use crate::{pubkey::pubkey, Pubkey};
 
     pub const PROGRAM_ID: Pubkey = pubkey!("7BQ6FQomidBkd5z7fQfwr9Zt87oahMvMV5dFnw6Dz7nb");
     /// `sha256("account:Vault")[..8]`.

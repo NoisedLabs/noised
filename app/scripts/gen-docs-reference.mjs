@@ -4,8 +4,9 @@
  *
  *   src/content/docs/generated/sdk.ts       every export of ../sdk/src/index.ts: kind, module, signature, JSDoc,
  *                                           and the integrator notes of sdk/README.md (TypeScript compiler API)
- *   src/content/docs/generated/programs.ts  the five programs under ../programs (the vault from the Anchor
- *                                           reference it implements, programs/noised-vault/anchor): program IDs, every
+ *   src/content/docs/generated/programs.ts  the five programs under ../programs (the launchpad and the vault from
+ *                                           the Anchor references they implement, programs/noised-launchpad/anchor
+ *                                           and programs/noised-vault/anchor): program IDs, every
  *                                           instruction (docs, arguments, accounts in order with their
  *                                           constraints), account layouts with their sizes, errors with their
  *                                           codes, events, PDAs and constants (a tolerant Rust item scanner)
@@ -264,9 +265,10 @@ function generateSdk() {
 // ================================================================== programs ===
 
 const PROGRAMS = [
-  { dir: "noised-launchpad", crate: "noised_launchpad", title: "Launchpad", slug: "launchpad" },
+  // The launchpad and the vault are written without Anchor; their Anchor references (same ABI and checks, not
+  // compiled) document them.
+  { dir: "noised-launchpad", crate: "noised_launchpad", title: "Launchpad", slug: "launchpad", src: "anchor" },
   { dir: "noised-hook", crate: "noised_hook", title: "Launch Guard (transfer hook)", slug: "hook" },
-  // Written without Anchor; its Anchor reference (same ABI and checks, not compiled) documents it.
   { dir: "noised-vault", crate: "noised_vault", title: "PQ vault", slug: "vault", src: "anchor" },
   { dir: "noised-shield", crate: "noised_shield", title: "Shield", slug: "shield" },
   { dir: "noised-autopilot", crate: "noised_autopilot", title: "Autopilot", slug: "autopilot" },
@@ -956,7 +958,7 @@ const sdk = generateSdk();
 const programs = generatePrograms();
 
 const sdkText = `${header("sdk/src (exports of index.ts) and sdk/README.md")}import type { SdkReference } from "../types";\n\nexport const SDK_REFERENCE: SdkReference = ${JSON.stringify(sdk, null, 1)};\n`;
-const programsText = `${header("programs/*/src (Anchor sources; the vault's Anchor reference, programs/noised-vault/anchor) and crates/noised-lmots")}import type { ProgramDoc } from "../types";\n\nexport const PROGRAMS: readonly ProgramDoc[] = ${JSON.stringify(programs, null, 1)};\n`;
+const programsText = `${header("programs/*/src (Anchor sources; the Anchor references of the launchpad and the vault, programs/noised-launchpad/anchor and programs/noised-vault/anchor) and crates/noised-lmots")}import type { ProgramDoc } from "../types";\n\nexport const PROGRAMS: readonly ProgramDoc[] = ${JSON.stringify(programs, null, 1)};\n`;
 
 let stale = false;
 stale = emit("sdk.ts", sdkText) || stale;

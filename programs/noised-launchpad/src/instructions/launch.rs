@@ -1,22 +1,67 @@
-use anchor_lang::{
-    prelude::*,
-    solana_program::{instruction::Instruction, program::invoke_signed},
+//! `launch()`.
+
+use noised_onchain::{
+    ids::{SYSTEM_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID},
+    sysvar::{Clock, Rent},
+    AccountView, ProgramError, ProgramResult, Seed, Signer,
 };
-use anchor_spl::{token::Token, token_2022::Token2022, token_interface::Mint};
-use noised_hook::state::{HookPolicy, PolicyParams, MAX_EXEMPT};
 use noised_rules::rules::NO_RULES_HASH;
 
 use crate::{
     checks::{self, ExpectedConfig},
     constants::*,
-    dbc_params, dynamic_bonding_curve,
-    error::LaunchpadError,
-    events::Launched,
-    policy, pq,
-    state::{
-        checks as flags, Attestation, Certificate, Launch, LaunchRules, LaunchStatus, TokenMeta,
+    dbc_params, discriminator,
+    error::{
+        anchor::{
+            ACCOUNT_DID_NOT_DESERIALIZE, ACCOUNT_DISCRIMINATOR_MISMATCH,
+            ACCOUNT_DISCRIMINATOR_NOT_FOUND,
+        },
+        fail, fail_keys, raise, raise_error, LaunchpadError,
     },
+    events::Launched,
+    external::{
+        dbc,
+        hook::{self, Policy, PolicyError, PolicyParams, MAX_EXEMPT},
+    },
+    instructions::attest_launch::attestation_decodes,
+    policy, pq,
+    processor::{
+        check_account, check_address_mismatch, check_program_address, check_seeds,
+        check_seeds_with_bump, check_status, check_writable, init, launch_has_one, log_instruction,
+        math_overflow, require, write_back_launch, write_back_parts, Accounts, BASE_MINT,
+        BASE_VAULT, DBC_CONFIG, DBC_EVENT_AUTHORITY_FIELD, DBC_POOL_AUTHORITY_FIELD, DBC_PROGRAM,
+        HOOK_AUTHORITY, HOOK_PROGRAM, LAUNCH, LAUNCH_AUTHORITY, PAYER, POOL, QUOTE_MINT,
+        QUOTE_VAULT, SYSTEM_PROGRAM, TOKEN_2022_PROGRAM, TOKEN_PROGRAM,
+    },
+    state::{
+        checks as flags, launch_offsets as at, Certificate, LaunchRulesRef, LaunchStatus,
+        TokenMeta, TokenMetaRef,
+    },
+    Pubkey,
 };
+
+const EXTRA_ACCOUNT_META_LIST: &str = "extra_account_meta_list";
+const POLICY: &str = "policy";
+const CERTIFICATE: &str = "certificate";
+const ATTESTATION: &str = "attestation";
+const TOKEN_META: &str = "token_meta";
+const RULES: &str = "rules";
+
+fn token_meta_decodes(data: &[u8]) -> bool {
+    TokenMetaRef::read(data).is_some()
+}
+
+fn rules_decodes(data: &[u8]) -> bool {
+    LaunchRulesRef::read(data).is_some()
+}
+
+/// `L` bytes of `data` at `at` (zero when short; the account decoded).
+fn field<const L: usize>(data: &[u8], at: usize) -> [u8; L] {
+    data.get(at..)
+        .and_then(|rest| rest.first_chunk::<L>())
+        .copied()
+        .unwrap_or([0; L])
+}
 
 /// Launch the pool, install the Launch Guard policy and certify the result.
 /// Atomic: if any post-condition fails, nothing of the launch exists.
@@ -31,392 +76,484 @@ use crate::{
 /// launches or when. There are no arguments: the mint's name and symbol are
 /// the attested record's, and its uri is derived from the record
 /// (`policy::write_token_uri`); the mint is checked to hold exactly those.
-pub fn handle_launch(ctx: Context<LaunchToken>) -> Result<()> {
+///
+/// Accounts: payer (signer, writable), launch (writable), launch_authority,
+/// dbc_config, base_mint (signer, writable), pool, base_vault, quote_vault
+/// (writable), quote_mint, dbc_pool_authority, hook_authority,
+/// extra_account_meta_list, policy (writable), certificate (writable, PDA
+/// `["certificate", base_mint]`, created), hook_program, dbc_program,
+/// dbc_event_authority, token_2022_program, token_program, system_program,
+/// attestation, token_meta, rules (or the program id for none).
+pub fn process(mut accounts: Accounts) -> ProgramResult {
+    log_instruction("Instruction: Launch");
+    let payer = accounts.signer(PAYER)?;
+    let (launch, mut launch_state) = accounts.launch()?;
+    let launch_authority = accounts.unchecked(LAUNCH_AUTHORITY)?;
+    let dbc_config = accounts.unchecked(DBC_CONFIG)?;
+    let base_mint = accounts.signer(BASE_MINT)?;
+    let pool = accounts.unchecked(POOL)?;
+    let base_vault = accounts.unchecked(BASE_VAULT)?;
+    let quote_vault = accounts.unchecked(QUOTE_VAULT)?;
+    let (quote_mint, _) = accounts.mint(QUOTE_MINT)?;
+    let dbc_pool_authority = accounts.unchecked(DBC_POOL_AUTHORITY_FIELD)?;
+    let hook_authority = accounts.unchecked(HOOK_AUTHORITY)?;
+    let extra_account_meta_list = accounts.unchecked(EXTRA_ACCOUNT_META_LIST)?;
+    let policy_account = accounts.unchecked(POLICY)?;
+    let certificate = accounts.init()?;
+    let hook_program = accounts.unchecked(HOOK_PROGRAM)?;
+    let dbc_program = accounts.unchecked(DBC_PROGRAM)?;
+    let dbc_event_authority = accounts.unchecked(DBC_EVENT_AUTHORITY_FIELD)?;
+    let token_2022_program = accounts.program(&TOKEN_2022_PROGRAM_ID, TOKEN_2022_PROGRAM)?;
+    let token_program = accounts.program(&TOKEN_PROGRAM_ID, TOKEN_PROGRAM)?;
+    let system_program = accounts.program(&SYSTEM_PROGRAM_ID, SYSTEM_PROGRAM)?;
+    let attestation = accounts.account(
+        &discriminator::ATTESTATION,
+        attestation_decodes,
+        ATTESTATION,
+    )?;
+    let token_meta =
+        accounts.account(&discriminator::TOKEN_META, token_meta_decodes, TOKEN_META)?;
+    let rules = accounts.optional(Some(RULES))?;
+    if let Some(rules) = rules {
+        check_account(
+            rules,
+            &discriminator::LAUNCH_RULES,
+            rules_decodes,
+            Some(RULES),
+        )?;
+    }
+    // The attestation's fields (`Attestation`'s layout).
+    let att: [u8; 196] = field(&attestation.try_borrow()?, 0);
+    let att_bump = att[9];
+    let att_launch: [u8; 32] = field(&att, 10);
+    let att_pq_identity: [u8; 32] = field(&att, 42);
+    let att_leaf = u16::from_le_bytes(field(&att, 74));
+    let att_metadata_hash: [u8; 32] = field(&att, 76);
+    let att_rules_hash: [u8; 32] = field(&att, 108);
+    let att_slot = u64::from_le_bytes(field(&att, 172));
+    let att_not_before = i64::from_le_bytes(field(&att, 180));
+    let att_not_after = i64::from_le_bytes(field(&att, 188));
+
+    // [A] certificate: init, payer = payer, space = 8 +
+    // Certificate::INIT_SPACE, seeds = [CERTIFICATE_SEED, base_mint], bump;
+    // then mut and rent exemption.
+    let rent = Rent::get()?;
+    let mint_key = *base_mint.address();
+    let certificate_bump = check_seeds(
+        certificate,
+        &[CERTIFICATE_SEED, mint_key.as_ref()],
+        CERTIFICATE,
+    )?;
+    let certificate_bump_seed = [certificate_bump];
+    init(
+        payer,
+        certificate,
+        Certificate::LEN,
+        &rent,
+        &[
+            Seed::from(CERTIFICATE_SEED),
+            Seed::from(mint_key.as_ref()),
+            Seed::from(&certificate_bump_seed),
+        ],
+        CERTIFICATE,
+    )?;
+
+    // [A] duplicate mutable accounts: launch only (certificate is a plain
+    // init). payer: mut. launch: mut, has_one = dbc_config @
+    // AccountMismatch, has_one = launch_authority @ AccountMismatch,
+    // constraint = status == Configured @ WrongLaunchState. base_mint, pool,
+    // base_vault, quote_vault: mut. quote_mint: address = WSOL_MINT @
+    // AccountMismatch. dbc_pool_authority: address = DBC_POOL_AUTHORITY @
+    // AccountMismatch. hook_authority: seeds = [HOOK_AUTHORITY_SEED], bump.
+    // extra_account_meta_list, policy: mut. hook_program, dbc_program:
+    // address @ AccountMismatch, executable. dbc_event_authority: address @
+    // AccountMismatch. attestation: seeds = [ATTESTATION_SEED, launch], bump
+    // = attestation.bump. token_meta: seeds = [METADATA_SEED, launch,
+    // attestation.metadata_hash], bump = token_meta.bump. rules (if any):
+    // seeds = [RULES_SEED, launch, attestation.rules_hash], bump = rules.bump.
+    check_writable(payer, PAYER)?;
+    check_writable(launch, LAUNCH)?;
+    launch_has_one(&launch_state, at::DBC_CONFIG, dbc_config)?;
+    launch_has_one(&launch_state, at::LAUNCH_AUTHORITY, launch_authority)?;
+    check_status(&launch_state, LaunchStatus::Configured)?;
+    check_writable(base_mint, BASE_MINT)?;
+    check_writable(pool, POOL)?;
+    check_writable(base_vault, BASE_VAULT)?;
+    check_writable(quote_vault, QUOTE_VAULT)?;
+    check_address_mismatch(quote_mint, &WSOL_MINT, QUOTE_MINT)?;
+    check_address_mismatch(
+        dbc_pool_authority,
+        &DBC_POOL_AUTHORITY,
+        DBC_POOL_AUTHORITY_FIELD,
+    )?;
+    let hook_bump = check_seeds(hook_authority, &[HOOK_AUTHORITY_SEED], HOOK_AUTHORITY)?;
+    check_writable(extra_account_meta_list, EXTRA_ACCOUNT_META_LIST)?;
+    check_writable(policy_account, POLICY)?;
+    check_program_address(hook_program, &hook::ID, HOOK_PROGRAM)?;
+    check_program_address(dbc_program, &DBC_PROGRAM_ID, DBC_PROGRAM)?;
+    check_address_mismatch(
+        dbc_event_authority,
+        &DBC_EVENT_AUTHORITY,
+        DBC_EVENT_AUTHORITY_FIELD,
+    )?;
+    let launch_key = *launch.address();
+    check_seeds_with_bump(
+        attestation,
+        &[ATTESTATION_SEED, launch_key.as_ref(), &[att_bump]],
+        ATTESTATION,
+    )?;
+    let token_meta_bump = token_meta
+        .try_borrow()?
+        .get(TokenMeta::BUMP_OFFSET)
+        .copied()
+        .unwrap_or(0);
+    check_seeds_with_bump(
+        token_meta,
+        &[
+            METADATA_SEED,
+            launch_key.as_ref(),
+            &att_metadata_hash,
+            &[token_meta_bump],
+        ],
+        TOKEN_META,
+    )?;
+    if let Some(rules) = rules {
+        let rules_bump = rules.try_borrow()?.get(9).copied().unwrap_or(0);
+        check_seeds_with_bump(
+            rules,
+            &[
+                RULES_SEED,
+                launch_key.as_ref(),
+                &att_rules_hash,
+                &[rules_bump],
+            ],
+            RULES,
+        )?;
+    }
+
+    // Handler.
     let now = Clock::get()?.unix_timestamp;
-    let launch_key = ctx.accounts.launch.key();
-    let (pq_identity, pq_leaf, attested_slot) = {
-        let attestation = &ctx.accounts.attestation;
-        let token_meta = &ctx.accounts.token_meta;
+    let (data, uri_at, name_len, symbol_len) = {
+        let token_meta_data = token_meta.try_borrow()?;
+        let tm = TokenMetaRef::read(&token_meta_data).ok_or(ProgramError::InvalidAccountData)?;
         // The record's address already follows from the attestation's hash
         // (account seeds); its fields are checked here too.
-        require!(
-            attestation.launch == launch_key
-                && attestation.pq_identity == ctx.accounts.launch.pq_identity
-                && token_meta.version == TokenMeta::VERSION
-                && token_meta.launch == launch_key
-                && token_meta.metadata_hash == attestation.metadata_hash,
-            LaunchpadError::AttestationMismatch
-        );
-        // The rules record the attestation names (its address follows from
-        // the attested hash: account seeds), and none for the zero hash.
-        require!(
-            ctx.accounts.rules.is_some() == (attestation.rules_hash != NO_RULES_HASH),
-            LaunchpadError::AttestationMismatch
-        );
-        // Its bytes are the attested ones (review 4, R6a): hashed here
-        // again, so the binding does not rest on `publish_rules` being the
-        // only writer of a record.
-        require!(
-            ctx.accounts
-                .rules
-                .as_ref()
-                .is_none_or(|r| pq::rules_hash(&r.bytes) == attestation.rules_hash),
-            LaunchpadError::AttestationMismatch
-        );
-        require!(
-            pq::in_launch_window(now, attestation.not_before, attestation.not_after),
-            LaunchpadError::NotLaunchWindow
-        );
-        (attestation.pq_identity, attestation.leaf, attestation.slot)
+        require(
+            att_launch == launch_key.to_bytes()
+                && att_pq_identity == launch_state.array32(at::PQ_IDENTITY)
+                && tm.version == TokenMeta::VERSION
+                && tm.launch == launch_key
+                && tm.metadata_hash == att_metadata_hash,
+            LaunchpadError::AttestationMismatch,
+        )?;
+        // 1. (below) The mint's name and symbol are the record's, and its uri
+        //    is derived from the record straight into the instruction's data
+        //    (`InitializePoolParameters { name, symbol, uri }`).
+        let (data, uri_at) =
+            dbc_params::initialize_pool_data(tm.name, tm.symbol, tm.flags, tm.uri, tm.doc);
+        (data, uri_at, tm.name.len(), tm.symbol.len())
     };
-    let mint_key = ctx.accounts.base_mint.key();
-    let pool_key = ctx.accounts.pool.key();
-    let metadata_key = ctx.accounts.token_meta.key();
-    let launch_authority = ctx.accounts.launch.launch_authority;
-    let batch_authority = ctx.accounts.launch.batch_authority;
+    // The rules record the attestation names (its address follows from
+    // the attested hash: account seeds), and none for the zero hash.
+    require(
+        rules.is_some() == (att_rules_hash != NO_RULES_HASH),
+        LaunchpadError::AttestationMismatch,
+    )?;
+    // Its bytes are the attested ones (review 4, R6a): hashed here
+    // again, so the binding does not rest on `publish_rules` being the
+    // only writer of a record.
+    let mut rules_bytes = alloc::vec::Vec::new();
+    if let Some(rules) = rules {
+        let rules_data = rules.try_borrow()?;
+        let record = LaunchRulesRef::read(&rules_data).ok_or(ProgramError::InvalidAccountData)?;
+        require(
+            pq::rules_hash(record.bytes) == att_rules_hash,
+            LaunchpadError::AttestationMismatch,
+        )?;
+        rules_bytes.extend_from_slice(record.bytes);
+    }
+    require(
+        pq::in_launch_window(now, att_not_before, att_not_after),
+        LaunchpadError::NotLaunchWindow,
+    )?;
+    let pool_key = *pool.address();
+    let metadata_key = *token_meta.address();
+    let launch_authority_key = launch_state.key(at::LAUNCH_AUTHORITY);
+    let batch_authority = launch_state.key(at::BATCH_AUTHORITY);
 
-    // 1. DBC pool: the launch authority PDA signs as pool creator. The
-    //    mint's name and symbol are the record's, and its uri is derived
-    //    from the record straight into the instruction's data
-    //    (`InitializePoolParameters { name, symbol, uri }`).
-    let authority_bump = [ctx.accounts.launch.authority_bump];
-    let authority_seeds: &[&[u8]] = &[AUTHORITY_SEED, launch_key.as_ref(), &authority_bump];
-    let a = &ctx.accounts;
-    let tm = &a.token_meta;
-    let (data, uri_at) =
-        dbc_params::initialize_pool_data(&tm.name, &tm.symbol, tm.flags, &tm.uri, &tm.doc);
-    let pool_accounts =
-        dynamic_bonding_curve::cpi::accounts::InitializeVirtualPoolWithToken2022TransferHook {
-            config: a.dbc_config.to_account_info(),
-            pool_authority: a.dbc_pool_authority.to_account_info(),
-            creator: a.launch_authority.to_account_info(),
-            base_mint: a.base_mint.to_account_info(),
-            quote_mint: a.quote_mint.to_account_info(),
-            pool: a.pool.to_account_info(),
-            base_vault: a.base_vault.to_account_info(),
-            quote_vault: a.quote_vault.to_account_info(),
-            transfer_hook_program: a.hook_program.to_account_info(),
-            payer: a.payer.to_account_info(),
-            token_quote_program: a.token_program.to_account_info(),
-            token_program: a.token_2022_program.to_account_info(),
-            system_program: a.system_program.to_account_info(),
-            event_authority: a.dbc_event_authority.to_account_info(),
-            program: a.dbc_program.to_account_info(),
-        };
-    let pool_ix = Instruction {
-        program_id: DBC_PROGRAM_ID,
-        accounts: pool_accounts.to_account_metas(None),
-        data,
-    };
-    invoke_signed(
-        &pool_ix,
-        &pool_accounts.to_account_infos(),
-        &[authority_seeds],
+    // 1. DBC pool: the launch authority PDA signs as pool creator.
+    let authority_bump = [launch_state.byte(at::AUTHORITY_BUMP)];
+    dbc::initialize_virtual_pool_with_token2022_transfer_hook(
+        &dbc::InitializePool {
+            config: dbc_config,
+            pool_authority: dbc_pool_authority,
+            creator: launch_authority,
+            base_mint,
+            quote_mint,
+            pool,
+            base_vault,
+            quote_vault,
+            transfer_hook_program: hook_program,
+            payer,
+            token_quote_program: token_program,
+            token_program: token_2022_program,
+            system_program,
+            event_authority: dbc_event_authority,
+            program: dbc_program,
+        },
+        &data,
+        &[Signer::from(&[
+            Seed::from(AUTHORITY_SEED),
+            Seed::from(launch_key.as_ref()),
+            Seed::from(&authority_bump),
+        ])],
     )?;
 
     // 2. Post-conditions on the mint (its metadata included), the DBC
     //    config and the pool.
-    let token_decimal = ctx.accounts.launch.token_decimal;
+    let token_decimal = launch_state.byte(at::TOKEN_DECIMAL);
     let (mint_facts, metadata_flag) = {
-        let info = ctx.accounts.base_mint.to_account_info();
-        let data = info.try_borrow_data()?;
+        let mint_data = base_mint.try_borrow()?;
         let facts = checks::inspect_mint(
             &mint_key,
-            info.owner,
-            &data,
+            base_mint.owner(),
+            &mint_data,
             token_decimal,
-            &noised_hook::ID,
+            &hook::ID,
             &DBC_POOL_AUTHORITY,
-        )?;
-        // The record's name and symbol, and the uri sent to DBC.
-        let tm = &ctx.accounts.token_meta;
-        let metadata_flag = checks::verify_token_metadata(
-            &data,
-            &tm.name,
-            &tm.symbol,
-            pool_ix.data.get(uri_at..).unwrap_or_default(),
-        )?;
+        )
+        .map_err(raise_error)?;
+        // The record's name and symbol (sent to DBC: in `data` after the
+        // discriminator and their lengths), and the uri sent to DBC.
+        let name = data.get(12..12 + name_len).unwrap_or_default();
+        let symbol = data
+            .get(16 + name_len..16 + name_len + symbol_len)
+            .unwrap_or_default();
+        let metadata_flag = checks::verify_token_metadata_bytes(
+            &mint_data,
+            name,
+            symbol,
+            data.get(uri_at..).unwrap_or_default(),
+        )
+        .map_err(raise_error)?;
         (facts, metadata_flag)
     };
     let config_flags = checks::verify_dbc_config(
-        &ctx.accounts.dbc_config,
+        dbc_config,
         &ExpectedConfig {
-            launch_authority: &launch_authority,
-            hook_program: &noised_hook::ID,
+            launch_authority: &launch_authority_key,
+            hook_program: &hook::ID,
             token_decimal,
-            migration_quote_threshold: ctx.accounts.launch.migration_quote_threshold,
-            migration_fee_option: ctx.accounts.launch.migration_fee_option,
+            migration_quote_threshold: launch_state.u64(at::MIGRATION_QUOTE_THRESHOLD),
+            migration_fee_option: launch_state.byte(at::MIGRATION_FEE_OPTION),
         },
     )?;
-    {
-        let pool = checks::read_dbc_pool(&ctx.accounts.pool.to_account_info())?;
-        checks::inspect_pool(
-            &pool,
-            &ctx.accounts.dbc_config.key(),
-            &launch_authority,
-            &mint_key,
-            &ctx.accounts.base_vault.key(),
-            &ctx.accounts.quote_vault.key(),
-        )?;
-    }
+    checks::inspect_pool(
+        &checks::read_dbc_pool(pool)?,
+        dbc_config.address(),
+        &launch_authority_key,
+        &mint_key,
+        base_vault.address(),
+        quote_vault.address(),
+    )?;
     // PQ_ATTESTED: the attestation was checked above, before any CPI.
     let checks_all = mint_facts.checks | metadata_flag | config_flags | flags::PQ_ATTESTED;
-    require!(checks_all == flags::ALL, LaunchpadError::UnsafeMint);
+    require(checks_all == flags::ALL, LaunchpadError::UnsafeMint)?;
     let supply = mint_facts.supply;
 
     // 3. Launch Guard: meta list (permissionless) and the policy, which only
     //    the hook-authority PDA can sign for.
-    let a = &ctx.accounts;
-    noised_hook::cpi::initialize_extra_account_meta_list(CpiContext::new(
-        noised_hook::ID,
-        noised_hook::cpi::accounts::InitializeExtraAccountMetaList {
-            payer: a.payer.to_account_info(),
-            extra_account_meta_list: a.extra_account_meta_list.to_account_info(),
-            mint: a.base_mint.to_account_info(),
-            system_program: a.system_program.to_account_info(),
-        },
-    ))?;
-    let launch = &ctx.accounts.launch;
-    let max_wallet = policy::cap_from_bps(supply, launch.max_wallet_bps)
-        .ok_or(LaunchpadError::InvalidMaxWallet)?;
-    let max_buy =
-        policy::cap_from_bps(supply, launch.max_buy_bps).ok_or(LaunchpadError::InvalidMaxBuy)?;
-    let shield_secs = launch
-        .open_delay_secs
+    hook::initialize_extra_account_meta_list(
+        payer,
+        extra_account_meta_list,
+        base_mint,
+        system_program,
+    )?;
+    let max_wallet = policy::cap_from_bps(supply, launch_state.u16(at::MAX_WALLET_BPS))
+        .ok_or_else(|| raise(LaunchpadError::InvalidMaxWallet))?;
+    let max_buy = policy::cap_from_bps(supply, launch_state.u16(at::MAX_BUY_BPS))
+        .ok_or_else(|| raise(LaunchpadError::InvalidMaxBuy))?;
+    let open_delay_secs = launch_state.u32(at::OPEN_DELAY_SECS);
+    let guard_secs = launch_state.u32(at::GUARD_SECS);
+    let p2p_locked = launch_state.flag(at::P2P_LOCKED);
+    let shield_secs = open_delay_secs
         .checked_add(EXECUTION_GRACE_SECS)
-        .ok_or(LaunchpadError::MathOverflow)?;
+        .ok_or_else(math_overflow)?;
     let mut exempt = [Pubkey::default(); MAX_EXEMPT];
     exempt[0] = batch_authority;
-    exempt[1] = launch_authority;
-    let rules: &[u8] = ctx.accounts.rules.as_ref().map_or(&[], |r| &r.bytes);
-    let policy_params = PolicyParams {
-        pool: pool_key,
-        snipe_shield_secs: shield_secs,
-        guard_secs: launch.guard_secs,
-        max_wallet,
-        max_buy,
-        p2p_locked: launch.p2p_locked,
-        exempt,
-        rules: rules.to_vec(),
-    };
-    let hook_bump = [ctx.bumps.hook_authority];
-    let hook_seeds: &[&[u8]] = &[HOOK_AUTHORITY_SEED, &hook_bump];
-    noised_hook::cpi::create_policy(
-        CpiContext::new_with_signer(
-            noised_hook::ID,
-            noised_hook::cpi::accounts::CreatePolicy {
-                payer: a.payer.to_account_info(),
-                launchpad_authority: a.hook_authority.to_account_info(),
-                mint: a.base_mint.to_account_info(),
-                pool: a.pool.to_account_info(),
-                policy: a.policy.to_account_info(),
-                system_program: a.system_program.to_account_info(),
-            },
-            &[hook_seeds],
-        ),
-        policy_params,
+    exempt[1] = launch_authority_key;
+    let hook_bump_seed = [hook_bump];
+    hook::create_policy(
+        payer,
+        hook_authority,
+        base_mint,
+        pool,
+        policy_account,
+        system_program,
+        &PolicyParams {
+            pool: pool_key,
+            snipe_shield_secs: shield_secs,
+            guard_secs,
+            max_wallet,
+            max_buy,
+            p2p_locked,
+            exempt,
+            rules: &rules_bytes,
+        }
+        .data(),
+        &[Signer::from(&[
+            Seed::from(HOOK_AUTHORITY_SEED),
+            Seed::from(&hook_bump_seed),
+        ])],
     )?;
 
     // 4. The written policy must be exactly what was asked for; it holds
     //    the creator rules (`RULES_BOUND`) if any.
     let commit_end_ts = now
-        .checked_add(i64::from(launch.open_delay_secs))
-        .ok_or(LaunchpadError::MathOverflow)?;
+        .checked_add(i64::from(open_delay_secs))
+        .ok_or_else(math_overflow)?;
     let execute_end_ts = commit_end_ts
         .checked_add(i64::from(EXECUTION_GRACE_SECS))
-        .ok_or(LaunchpadError::MathOverflow)?;
+        .ok_or_else(math_overflow)?;
     let guard_end_ts = now
-        .checked_add(i64::from(launch.guard_secs))
-        .ok_or(LaunchpadError::MathOverflow)?;
-    let mut rules_bound = 0;
-    {
-        let info = ctx.accounts.policy.to_account_info();
-        require_keys_eq!(*info.owner, noised_hook::ID, LaunchpadError::UnsafePolicy);
-        let data = info.try_borrow_data()?;
-        let written = HookPolicy::try_deserialize(&mut &data[..])?;
-        require!(
-            written.mint == mint_key
-                && written.pool == pool_key
-                && written.base_vault == ctx.accounts.base_vault.key()
-                && written.launch_ts == now
-                && written.snipe_shield_end_ts == execute_end_ts
-                && written.guard_end_ts == guard_end_ts
-                && written.max_wallet == max_wallet
-                && written.max_buy == max_buy
-                && written.p2p_locked == launch.p2p_locked
-                && written.exempt == exempt
-                && written.rules == rules,
-            LaunchpadError::UnsafePolicy
-        );
-        if !written.rules.is_empty() {
-            rules_bound = flags::RULES_BOUND;
-        }
-    }
+        .checked_add(i64::from(guard_secs))
+        .ok_or_else(math_overflow)?;
+    let rules_bound = verify_policy(
+        policy_account,
+        &Expected {
+            mint: &mint_key,
+            pool: &pool_key,
+            base_vault: base_vault.address(),
+            launch_ts: now,
+            execute_end_ts,
+            guard_end_ts,
+            max_wallet,
+            max_buy,
+            p2p_locked,
+            exempt: &exempt,
+            rules: &rules_bytes,
+        },
+    )?;
 
-    // 5. Certificate and launch state.
-    let rules_hash = ctx.accounts.attestation.rules_hash;
-    let certificate_key = ctx.accounts.certificate.key();
-    let cert = &mut ctx.accounts.certificate;
-    let launch = &ctx.accounts.launch;
-    cert.version = Certificate::VERSION;
-    cert.bump = ctx.bumps.certificate;
-    cert.launch = launch_key;
-    cert.base_mint = mint_key;
-    cert.pool = pool_key;
-    cert.dbc_config = launch.dbc_config;
-    cert.creator = launch.creator;
-    cert.launched_at = now;
-    cert.token_decimal = token_decimal;
-    cert.initial_supply = supply;
-    cert.checks = checks_all | rules_bound;
-    cert.migration_quote_threshold = launch.migration_quote_threshold;
-    cert.migration_fee_option = launch.migration_fee_option;
-    cert.snipe_shield_end_ts = execute_end_ts;
-    cert.execute_end_ts = execute_end_ts;
-    cert.guard_end_ts = guard_end_ts;
-    cert.max_wallet = max_wallet;
-    cert.max_buy = max_buy;
-    cert.p2p_locked = launch.p2p_locked;
-    cert.platform_fee_bps = launch.platform_fee_bps;
-    cert.recipients = launch.recipients;
-    cert.params_hash = launch.params_hash;
-    cert.policy_version = SAFETY_POLICY_VERSION;
-    cert.pq_identity = pq_identity;
-    cert.pq_leaf = pq_leaf;
-    cert.attested_slot = attested_slot;
-    cert.metadata = metadata_key;
-    cert.rules_hash = rules_hash;
+    // 5. Launch state, then the certificate (`Certificate`'s fields in
+    //    order; the launch's own fields among them are not changed here).
+    launch_state.set(at::BASE_MINT, mint_key.as_ref());
+    launch_state.set(at::POOL, pool_key.as_ref());
+    launch_state.set(at::LAUNCH_TS, &now.to_le_bytes());
+    launch_state.set(at::COMMIT_END_TS, &commit_end_ts.to_le_bytes());
+    launch_state.set(at::EXECUTE_END_TS, &execute_end_ts.to_le_bytes());
+    launch_state.set(at::GUARD_END_TS, &guard_end_ts.to_le_bytes());
+    launch_state.set(at::STATUS, &[LaunchStatus::Live as u8]);
 
-    let launch = &mut ctx.accounts.launch;
-    launch.base_mint = mint_key;
-    launch.pool = pool_key;
-    launch.launch_ts = now;
-    launch.commit_end_ts = commit_end_ts;
-    launch.execute_end_ts = execute_end_ts;
-    launch.guard_end_ts = guard_end_ts;
-    launch.status = LaunchStatus::Live;
-
-    emit!(Launched {
-        launch: launch_key,
-        base_mint: mint_key,
-        pool: pool_key,
-        certificate: certificate_key,
-        initial_supply: supply,
-        launch_ts: now,
+    Launched::log(
+        &launch_key,
+        &mint_key,
+        &pool_key,
+        certificate.address(),
+        supply,
+        now,
         commit_end_ts,
         execute_end_ts,
         guard_end_ts,
-        pq_identity,
-        pq_leaf,
-    });
-    Ok(())
+        &att_pq_identity,
+        att_leaf,
+    );
+
+    // Exit: launch, then certificate.
+    write_back_launch(launch, &launch_state)?;
+    let stored = |from: usize, len: usize| launch_state.0.get(from..from + len).unwrap_or_default();
+    write_back_parts(
+        certificate,
+        CERTIFICATE,
+        &[
+            &discriminator::CERTIFICATE,
+            &[Certificate::VERSION, certificate_bump],
+            launch_key.as_ref(),
+            mint_key.as_ref(),
+            pool_key.as_ref(),
+            stored(at::DBC_CONFIG, 32),
+            stored(at::CREATOR, 32),
+            &now.to_le_bytes(),
+            &[token_decimal],
+            &supply.to_le_bytes(),
+            &(checks_all | rules_bound).to_le_bytes(),
+            stored(at::MIGRATION_QUOTE_THRESHOLD, 8),
+            stored(at::MIGRATION_FEE_OPTION, 1),
+            // snipe_shield_end_ts, execute_end_ts.
+            &execute_end_ts.to_le_bytes(),
+            &execute_end_ts.to_le_bytes(),
+            &guard_end_ts.to_le_bytes(),
+            &max_wallet.to_le_bytes(),
+            &max_buy.to_le_bytes(),
+            stored(at::P2P_LOCKED, 1),
+            stored(at::PLATFORM_FEE_BPS, 2),
+            stored(at::RECIPIENTS, at::RECIPIENT_COUNT - at::RECIPIENTS),
+            stored(at::PARAMS_HASH, 32),
+            &SAFETY_POLICY_VERSION.to_le_bytes(),
+            &att_pq_identity,
+            &att_leaf.to_le_bytes(),
+            &att_slot.to_le_bytes(),
+            metadata_key.as_ref(),
+            &att_rules_hash,
+        ],
+    )
 }
 
-#[derive(Accounts)]
-pub struct LaunchToken<'info> {
-    /// Anyone, inside the attested window: pays the rent of the pool, mint,
-    /// policy and certificate.
-    #[account(mut)]
-    pub payer: Signer<'info>,
+/// What the written policy must hold.
+struct Expected<'a> {
+    mint: &'a Pubkey,
+    pool: &'a Pubkey,
+    base_vault: &'a Pubkey,
+    launch_ts: i64,
+    execute_end_ts: i64,
+    guard_end_ts: i64,
+    max_wallet: u64,
+    max_buy: u64,
+    p2p_locked: bool,
+    exempt: &'a [Pubkey; MAX_EXEMPT],
+    rules: &'a [u8],
+}
 
-    #[account(
-        mut,
-        has_one = dbc_config @ LaunchpadError::AccountMismatch,
-        has_one = launch_authority @ LaunchpadError::AccountMismatch,
-        constraint = launch.status == LaunchStatus::Configured @ LaunchpadError::WrongLaunchState,
-    )]
-    pub launch: Box<Account<'info, Launch>>,
-
-    /// CHECK: PDA bound to `launch`; signs as DBC pool creator.
-    pub launch_authority: UncheckedAccount<'info>,
-
-    /// CHECK: the DBC config created by `create_launch` (bound by `has_one`);
-    /// owner, type and every fixed value are re-checked after the pool CPI.
-    pub dbc_config: UncheckedAccount<'info>,
-
-    /// Fresh mint keypair (the payer's choice); DBC creates the mint.
-    #[account(mut)]
-    pub base_mint: Signer<'info>,
-
-    /// CHECK: created by DBC, which enforces its PDA address; re-read after.
-    #[account(mut)]
-    pub pool: UncheckedAccount<'info>,
-
-    /// CHECK: created by DBC at its PDA address.
-    #[account(mut)]
-    pub base_vault: UncheckedAccount<'info>,
-
-    /// CHECK: created by DBC at its PDA address.
-    #[account(mut)]
-    pub quote_vault: UncheckedAccount<'info>,
-
-    #[account(address = WSOL_MINT @ LaunchpadError::AccountMismatch)]
-    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    /// CHECK: DBC pool authority.
-    #[account(address = DBC_POOL_AUTHORITY @ LaunchpadError::AccountMismatch)]
-    pub dbc_pool_authority: UncheckedAccount<'info>,
-
-    /// CHECK: the only signer `noised_hook::create_policy` accepts.
-    #[account(seeds = [HOOK_AUTHORITY_SEED], bump)]
-    pub hook_authority: UncheckedAccount<'info>,
-
-    /// CHECK: created by the hook at its PDA address.
-    #[account(mut)]
-    pub extra_account_meta_list: UncheckedAccount<'info>,
-
-    /// CHECK: created by the hook at its PDA address; re-read after.
-    #[account(mut)]
-    pub policy: UncheckedAccount<'info>,
-
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + Certificate::INIT_SPACE,
-        seeds = [CERTIFICATE_SEED, base_mint.key().as_ref()],
-        bump,
-    )]
-    pub certificate: Box<Account<'info, Certificate>>,
-
-    /// CHECK: the Noised Launch Guard hook program.
-    #[account(address = noised_hook::ID @ LaunchpadError::AccountMismatch, executable)]
-    pub hook_program: UncheckedAccount<'info>,
-
-    /// CHECK: Meteora DBC.
-    #[account(address = DBC_PROGRAM_ID @ LaunchpadError::AccountMismatch, executable)]
-    pub dbc_program: UncheckedAccount<'info>,
-
-    /// CHECK: DBC event authority PDA.
-    #[account(address = DBC_EVENT_AUTHORITY @ LaunchpadError::AccountMismatch)]
-    pub dbc_event_authority: UncheckedAccount<'info>,
-
-    pub token_2022_program: Program<'info, Token2022>,
-    pub token_program: Program<'info, Token>,
-    pub system_program: Program<'info, System>,
-
-    /// This launch's post-quantum attestation (`attest_launch`); its fields
-    /// are checked against the launch, the metadata record and the clock in
-    /// the handler.
-    #[account(
-        seeds = [ATTESTATION_SEED, launch.key().as_ref()],
-        bump = attestation.bump,
-    )]
-    pub attestation: Box<Account<'info, Attestation>>,
-
-    /// The metadata record the attestation names (`publish_metadata`): the
-    /// mint's name, symbol and uri come from it.
-    #[account(
-        seeds = [METADATA_SEED, launch.key().as_ref(), attestation.metadata_hash.as_ref()],
-        bump = token_meta.bump,
-    )]
-    pub token_meta: Box<Account<'info, TokenMeta>>,
-
-    /// The rules record the attestation names (`publish_rules`), whose bytes
-    /// the hook policy gets; none (the program id) when the attested rules
-    /// hash is zero.
-    #[account(
-        seeds = [RULES_SEED, launch.key().as_ref(), attestation.rules_hash.as_ref()],
-        bump = rules.bump,
-    )]
-    pub rules: Option<Box<Account<'info, LaunchRules>>>,
+/// The written policy is exactly the one asked for: owned by the hook
+/// (`UnsafePolicy`, with both keys), a `HookPolicy` (Anchor's decoding
+/// errors), with these fields (`UnsafePolicy`). Returns `RULES_BOUND` when
+/// it holds creator rules.
+#[inline(never)]
+fn verify_policy(policy: &AccountView, want: &Expected) -> Result<u32, ProgramError> {
+    if policy.owner() != &hook::ID {
+        return Err(fail_keys(
+            LaunchpadError::UnsafePolicy.code(),
+            None,
+            policy.owner(),
+            &hook::ID,
+        ));
+    }
+    let data = policy.try_borrow()?;
+    let written = Policy::read(&data).map_err(|e| match e {
+        PolicyError::DiscriminatorNotFound => fail(ACCOUNT_DISCRIMINATOR_NOT_FOUND, None),
+        // Anchor's `#[account]` names the type here.
+        PolicyError::DiscriminatorMismatch => {
+            fail(ACCOUNT_DISCRIMINATOR_MISMATCH, Some("HookPolicy"))
+        }
+        PolicyError::DidNotDeserialize => fail(ACCOUNT_DID_NOT_DESERIALIZE, None),
+    })?;
+    require(
+        written.mint == *want.mint
+            && written.pool == *want.pool
+            && written.base_vault == *want.base_vault
+            && written.launch_ts == want.launch_ts
+            && written.snipe_shield_end_ts == want.execute_end_ts
+            && written.guard_end_ts == want.guard_end_ts
+            && written.max_wallet == want.max_wallet
+            && written.max_buy == want.max_buy
+            && written.p2p_locked == want.p2p_locked
+            && written.exempt == *want.exempt
+            && written.rules == want.rules,
+        LaunchpadError::UnsafePolicy,
+    )?;
+    Ok(if written.rules.is_empty() {
+        0
+    } else {
+        flags::RULES_BOUND
+    })
 }

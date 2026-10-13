@@ -4,13 +4,36 @@
 use crate::constants::{BPS_DENOMINATOR, MAX_RECIPIENTS};
 use crate::state::FeeRecipient;
 
+/// `n / d` (rounded down) for a 128-bit `n` and a non-zero 64-bit `d`: the
+/// high word by the CPU's 64-bit division, then the low word bit by bit
+/// (restoring long division). Exactly `n / u128::from(d)`, without the
+/// general 128-bit division routine (about 5 KB of program).
+#[inline(never)]
+pub fn div_wide(n: u128, d: u64) -> u128 {
+    let (hi, lo) = ((n >> 64) as u64, n as u64);
+    let divisor = u128::from(d);
+    let mut rem = u128::from(hi % d);
+    let mut q_lo = 0u64;
+    let mut bit = 64;
+    while bit > 0 {
+        bit -= 1;
+        // rem < d, so rem * 2 + 1 < 2^65: no overflow.
+        rem = (rem << 1) | u128::from((lo >> bit) & 1);
+        if rem >= divisor {
+            rem -= divisor;
+            q_lo |= 1 << bit;
+        }
+    }
+    (u128::from(hi / d) << 64) | u128::from(q_lo)
+}
+
 /// `amount * part / total`, rounded down. `None` if `total` is zero or
 /// `part > total` (a share can never exceed the whole).
 pub fn pro_rata(amount: u64, part: u64, total: u64) -> Option<u64> {
     if total == 0 || part > total {
         return None;
     }
-    u64::try_from(u128::from(amount) * u128::from(part) / u128::from(total)).ok()
+    u64::try_from(div_wide(u128::from(amount) * u128::from(part), total)).ok()
 }
 
 /// What one commit receives from an executed batch.

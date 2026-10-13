@@ -534,8 +534,8 @@ python3 -I scripts/pq/lms_reference.py attest-vectors tests/integration/vectors/
 python3 -I scripts/pq/lms_reference.py metadata-vectors tests/integration/vectors/metadata.json
 python3 -I scripts/pq/lms_reference.py programmable-vectors tests/integration/vectors/programmable.json
 
-# 6. IDLs (only when an interface changes; anchor-cli 1.2.1)
-anchor idl build -p noised_launchpad -o idls/noised_launchpad.json
+# 6. IDLs (only when an interface changes; anchor-cli 1.2.1; the launchpad's and the vault's are hand-maintained)
+anchor idl build -p noised_hook -o idls/noised_hook.json
 ```
 
 ### Windows

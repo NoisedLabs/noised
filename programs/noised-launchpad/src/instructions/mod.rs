@@ -1,3 +1,6 @@
+//! One module per instruction: the accounts in order with every constraint
+//! of the Anchor build (in its evaluation order), the handler, the exit.
+
 pub mod attest_launch;
 pub mod claim;
 pub mod claim_fees;
@@ -11,17 +14,3 @@ pub mod launch;
 pub mod pq_authorize;
 pub mod publish_metadata;
 pub mod publish_rules;
-
-pub use attest_launch::*;
-pub use claim::*;
-pub use claim_fees::*;
-pub use claim_lp_fees::*;
-pub use commit::*;
-pub use create_launch::*;
-pub use distribute::*;
-pub use execute_batch::*;
-pub use initialize_protocol::*;
-pub use launch::*;
-pub use pq_authorize::*;
-pub use publish_metadata::*;
-pub use publish_rules::*;

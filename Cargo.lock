@@ -881,8 +881,13 @@ dependencies = [
  "bytemuck",
  "noised-hook",
  "noised-lmots",
+ "noised-onchain",
  "noised-rules",
  "noised-vault",
+ "pinocchio",
+ "serde_json",
+ "solana-instruction 3.5.1",
+ "solana-program-error",
  "solana-sha256-hasher",
  "spl-transfer-hook-interface",
 ]

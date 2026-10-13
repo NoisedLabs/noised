@@ -1851,13 +1851,12 @@ name = "noised-launchpad"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
- "anchor-spl",
  "bytemuck",
- "noised-hook",
  "noised-lmots",
+ "noised-onchain",
  "noised-rules",
+ "pinocchio",
  "solana-sha256-hasher",
- "spl-transfer-hook-interface",
 ]
 
 [[package]]
