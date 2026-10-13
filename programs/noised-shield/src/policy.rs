@@ -1,23 +1,26 @@
 //! Which base mints can be shielded, decided from the raw mint data.
 //!
 //! Pure functions over account bytes, so the whole policy is exercised by
-//! host unit tests.
+//! host tests (`tests/abi.rs` checks [`inspect_token_2022_mint`] against
+//! the Anchor build's version over spl-token-2022-interface, on random and
+//! malformed mints). Token-2022 parsing is `noised_onchain::token`, written
+//! from and tested against spl-token-2022-interface 2.1.0.
 
-use anchor_lang::prelude::Pubkey;
-use anchor_spl::token_2022::spl_token_2022::{
-    extension::{
-        metadata_pointer::MetadataPointer, BaseStateWithExtensions, ExtensionType,
-        StateWithExtensions,
-    },
-    state::Mint,
+use noised_onchain::token::{
+    get_extension, get_extension_bytes, optional_key, unpack_mint, ExtensionTypes,
+    EXT_METADATA_POINTER, EXT_TOKEN_METADATA, EXT_TRANSFER_FEE_CONFIG, EXT_TRANSFER_HOOK,
+    METADATA_POINTER_LEN,
 };
-use anchor_spl::token_2022_extensions::spl_token_metadata_interface::state::TokenMetadata;
 
-use crate::metadata::{derive, read_base_metadata, ZMetadata};
+use crate::{
+    metadata::{derive, read_base_metadata, ZMetadata},
+    Pubkey,
+};
 
-/// The only Token-2022 mint extensions a base mint may have. None of them can
-/// move tokens out of the escrow, block every transfer at once, change what a
-/// unit is worth, or make the mint disappear:
+/// The only Token-2022 mint extensions (their `ExtensionType` numbers) a
+/// base mint may have. None of them can move tokens out of the escrow,
+/// block every transfer at once, change what a unit is worth, or make the
+/// mint disappear:
 ///
 /// * `MetadataPointer`, `TokenMetadata`: descriptive only.
 /// * `TransferHook`: Noised launch tokens carry the Launch Guard hook
@@ -33,50 +36,55 @@ use crate::metadata::{derive, read_base_metadata, ZMetadata};
 /// amounts (`InterestBearingConfig`, `ScaledUiAmount`). Extension types this
 /// program does not know (e.g. `PermissionedBurn` and anything newer) fail
 /// to parse and are refused too: the check fails closed.
-pub const ALLOWED_BASE_EXTENSIONS: [ExtensionType; 4] = [
-    ExtensionType::MetadataPointer,
-    ExtensionType::TokenMetadata,
-    ExtensionType::TransferHook,
-    ExtensionType::TransferFeeConfig,
+pub const ALLOWED_BASE_EXTENSIONS: [u16; 4] = [
+    EXT_METADATA_POINTER,
+    EXT_TOKEN_METADATA,
+    EXT_TRANSFER_HOOK,
+    EXT_TRANSFER_FEE_CONFIG,
 ];
 
 /// Why a base mint is refused.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rejection {
     /// The account is not a valid initialized Token-2022 mint.
     Malformed,
-    /// An extension outside the allowlist.
-    Unsupported(ExtensionType),
+    /// An extension outside the allowlist (its `ExtensionType` number).
+    Unsupported(u16),
     /// Extension data this program cannot parse (an unknown, newer type).
     Unknown,
 }
 
+/// Whether `extension_type` is in [`ALLOWED_BASE_EXTENSIONS`].
+pub fn is_allowed(extension_type: u16) -> bool {
+    ALLOWED_BASE_EXTENSIONS.contains(&extension_type)
+}
+
 /// The first extension outside [`ALLOWED_BASE_EXTENSIONS`], if any.
-pub fn first_unsupported(extensions: &[ExtensionType]) -> Option<ExtensionType> {
-    extensions
-        .iter()
-        .copied()
-        .find(|e| !ALLOWED_BASE_EXTENSIONS.contains(e))
+pub fn first_unsupported(extensions: &[u16]) -> Option<u16> {
+    extensions.iter().copied().find(|e| !is_allowed(*e))
 }
 
 /// Check a Token-2022 base mint against the allowlist and derive the zToken
 /// metadata from its embedded metadata, which is used only when canonical:
 /// the mint's metadata pointer must point at the mint itself.
 pub fn inspect_token_2022_mint(data: &[u8], mint: &Pubkey) -> Result<ZMetadata, Rejection> {
-    let state = StateWithExtensions::<Mint>::unpack(data).map_err(|_| Rejection::Malformed)?;
-    let extensions = state
-        .get_extension_types()
-        .map_err(|_| Rejection::Unknown)?;
-    if let Some(ext) = first_unsupported(&extensions) {
-        return Err(Rejection::Unsupported(ext));
+    let state = unpack_mint(data).map_err(|_| Rejection::Malformed)?;
+    // `get_extension_types()`: every entry parses before any is judged.
+    let mut types = ExtensionTypes::new(state.tlv);
+    while types.next_type().map_err(|_| Rejection::Unknown)?.is_some() {}
+    let mut types = ExtensionTypes::new(state.tlv);
+    while let Ok(Some(extension_type)) = types.next_type() {
+        if !is_allowed(extension_type) {
+            return Err(Rejection::Unsupported(extension_type));
+        }
     }
-    let points_to_self = state
-        .get_extension::<MetadataPointer>()
+    // MetadataPointer: authority (32) | metadata_address (32).
+    let points_to_self = get_extension(state.tlv, EXT_METADATA_POINTER, METADATA_POINTER_LEN)
         .ok()
-        .and_then(|p| Option::<Pubkey>::from(p.metadata_address))
+        .and_then(|pointer| optional_key(pointer, 32))
         == Some(*mint);
     let embedded = if points_to_self {
-        state.get_extension_bytes::<TokenMetadata>().ok()
+        get_extension_bytes(state.tlv, EXT_TOKEN_METADATA).ok()
     } else {
         None
     };
@@ -86,14 +94,58 @@ pub fn inspect_token_2022_mint(data: &[u8], mint: &Pubkey) -> Result<ZMetadata, 
     ))
 }
 
+/// `ExtensionType`'s `Debug` names (spl-token-2022-interface 2.1.0), in
+/// type-number order, separated by spaces.
+const EXTENSION_NAMES: &[u8] = b"Uninitialized TransferFeeConfig TransferFeeAmount \
+    MintCloseAuthority ConfidentialTransferMint ConfidentialTransferAccount \
+    DefaultAccountState ImmutableOwner MemoTransfer NonTransferable \
+    InterestBearingConfig CpiGuard PermanentDelegate NonTransferableAccount \
+    TransferHook TransferHookAccount ConfidentialTransferFeeConfig \
+    ConfidentialTransferFeeAmount MetadataPointer TokenMetadata GroupPointer \
+    TokenGroup GroupMemberPointer TokenGroupMember ConfidentialMintBurn \
+    ScaledUiAmount Pausable PausableAccount";
+
+/// Where each name of [`EXTENSION_NAMES`] starts and ends, computed at
+/// compile time (a table of 28 string slices would cost more than the
+/// names).
+const EXTENSION_NAME_BOUNDS: [(u16, u16); 28] = {
+    let mut bounds = [(0u16, 0u16); 28];
+    let (mut i, mut k, mut start) = (0, 0, 0);
+    while i <= EXTENSION_NAMES.len() {
+        if i == EXTENSION_NAMES.len() || EXTENSION_NAMES[i] == b' ' {
+            bounds[k] = (start as u16, i as u16);
+            k += 1;
+            start = i + 1;
+        }
+        i += 1;
+    }
+    assert!(k == 28);
+    bounds
+};
+
+/// `ExtensionType`'s `Debug` name (spl-token-2022-interface 2.1.0) of a
+/// known extension type number, as the Anchor build logged a refused one
+/// (empty for any other number).
+pub fn extension_name(extension_type: u16) -> &'static [u8] {
+    match EXTENSION_NAME_BOUNDS.get(usize::from(extension_type)) {
+        Some(&(start, end)) => EXTENSION_NAMES
+            .get(usize::from(start)..usize::from(end))
+            .unwrap_or(&[]),
+        None => &[],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anchor_spl::token_2022::spl_token_2022::extension::{
-        metadata_pointer::MetadataPointer as Mp, mint_close_authority::MintCloseAuthority,
-        non_transferable::NonTransferable, pausable::PausableConfig,
-        permanent_delegate::PermanentDelegate, transfer_hook::TransferHook,
-        BaseStateWithExtensionsMut, ExtensionType as E, StateWithExtensionsMut,
+    use anchor_spl::token_2022::spl_token_2022::{
+        extension::{
+            metadata_pointer::MetadataPointer as Mp, mint_close_authority::MintCloseAuthority,
+            non_transferable::NonTransferable, pausable::PausableConfig,
+            permanent_delegate::PermanentDelegate, transfer_hook::TransferHook,
+            BaseStateWithExtensionsMut, ExtensionType as E, StateWithExtensionsMut,
+        },
+        state::Mint,
     };
     use anchor_spl::token_2022_extensions::spl_pod::optional_keys::OptionalNonZeroPubkey;
 
@@ -133,7 +185,7 @@ mod tests {
         let allowed: Vec<E> = ALL_KNOWN
             .iter()
             .copied()
-            .filter(|e| first_unsupported(&[*e]).is_none())
+            .filter(|e| first_unsupported(&[u16::from(*e)]).is_none())
             .collect();
         assert_eq!(
             allowed,
@@ -144,6 +196,15 @@ mod tests {
                 E::TokenMetadata
             ]
         );
+    }
+
+    #[test]
+    fn extension_names_are_the_debug_names() {
+        for (i, e) in ALL_KNOWN.iter().enumerate() {
+            assert_eq!(u16::from(*e), i as u16);
+            assert_eq!(extension_name(i as u16), format!("{e:?}").as_bytes());
+        }
+        assert_eq!(extension_name(28), b"");
     }
 
     #[test]
@@ -162,8 +223,8 @@ mod tests {
             E::TokenGroup,
         ] {
             assert_eq!(
-                first_unsupported(&[E::MetadataPointer, e]),
-                Some(e),
+                first_unsupported(&[u16::from(E::MetadataPointer), u16::from(e)]),
+                Some(u16::from(e)),
                 "{e:?}"
             );
         }
@@ -224,7 +285,7 @@ mod tests {
             let data = mint_bytes(&[E::TransferHook, e]);
             assert_eq!(
                 inspect_token_2022_mint(&data, &mint),
-                Err(Rejection::Unsupported(e))
+                Err(Rejection::Unsupported(u16::from(e)))
             );
         }
     }

@@ -4,8 +4,13 @@
 //! without allocating (only the three leading strings, never the unbounded
 //! additional-metadata list), stripped of invisible characters that could
 //! disguise a name in wallets, and cut at UTF-8 character boundaries.
+//!
+//! The results are fixed-capacity [`Text`] buffers (no allocation, no
+//! formatting code on-chain); `tests/abi.rs` checks [`derive`] and
+//! [`read_base_metadata`] against the Anchor build's `String` version
+//! (`anchor/metadata.rs`) on random inputs.
 
-use anchor_lang::prelude::Pubkey;
+use crate::Pubkey;
 
 pub const MAX_NAME_LEN: usize = 32;
 pub const MAX_SYMBOL_LEN: usize = 10;
@@ -20,6 +25,95 @@ pub const GENERIC_SYMBOL_CHARS: usize = 4;
 /// Bytes of a base name or symbol that are ever looked at (bounds compute).
 const SCAN_LIMIT: usize = 128;
 
+/// UTF-8 text of at most `N` bytes, held inline. Only whole characters are
+/// ever written into it, so its bytes are always valid UTF-8.
+#[derive(Clone, Copy)]
+pub struct Text<const N: usize> {
+    bytes: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> Default for Text<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize> Text<N> {
+    /// The empty text.
+    pub const fn new() -> Self {
+        Self {
+            bytes: [0; N],
+            len: 0,
+        }
+    }
+
+    /// `s` if it fits in `N` bytes.
+    pub fn try_new(s: &str) -> Option<Self> {
+        let mut text = Self::new();
+        (s.len() <= N).then(|| {
+            text.len = copy_str(s, &mut text.bytes);
+            text
+        })
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.bytes.get(..self.len).unwrap_or(&[])
+    }
+
+    pub fn as_str(&self) -> &str {
+        core::str::from_utf8(self.as_bytes()).unwrap_or("")
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+impl<const N: usize> PartialEq for Text<N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_bytes() == other.as_bytes()
+    }
+}
+
+impl<const N: usize> Eq for Text<N> {}
+
+impl<const N: usize> core::fmt::Debug for Text<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl<const N: usize> core::fmt::Display for Text<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<const N: usize> PartialEq<&str> for Text<N> {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_bytes() == other.as_bytes()
+    }
+}
+
+impl<const N: usize> PartialEq<str> for Text<N> {
+    fn eq(&self, other: &str) -> bool {
+        self.as_bytes() == other.as_bytes()
+    }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl<const N: usize> PartialEq<String> for Text<N> {
+    fn eq(&self, other: &String) -> bool {
+        self.as_bytes() == other.as_bytes()
+    }
+}
+
 /// Strings read from a base mint's Token-2022 `TokenMetadata`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BaseMetadata<'a> {
@@ -29,34 +123,50 @@ pub struct BaseMetadata<'a> {
     pub uri: &'a str,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// The zToken's name, symbol and uri.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ZMetadata {
-    pub name: String,
-    pub symbol: String,
-    pub uri: String,
+    pub name: Text<MAX_NAME_LEN>,
+    pub symbol: Text<MAX_SYMBOL_LEN>,
+    pub uri: Text<MAX_URI_LEN>,
 }
 
 /// Derive the zToken metadata. `base` is `None` when the base mint has no
 /// canonical Token-2022 metadata; each field falls back separately.
 pub fn derive(base: Option<BaseMetadata<'_>>, base_mint: &Pubkey) -> ZMetadata {
-    let fallback = |chars: usize| -> String { base_mint.to_string().chars().take(chars).collect() };
-    let name = base
-        .map(|b| clean(b.name, MAX_NAME_LEN))
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| fallback(GENERIC_NAME_CHARS));
-    let symbol = base
-        .map(|b| clean(b.symbol, MAX_SYMBOL_LEN))
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| fallback(GENERIC_SYMBOL_CHARS));
-    let uri = base
-        .map(|b| b.uri)
-        .filter(|u| u.len() <= MAX_URI_LEN && !u.chars().any(is_hidden))
-        .unwrap_or_default();
-    ZMetadata {
-        name: prefixed(NAME_PREFIX, &name, MAX_NAME_LEN),
-        symbol: prefixed(SYMBOL_PREFIX, &symbol, MAX_SYMBOL_LEN),
-        uri: uri.to_string(),
+    let mut z = ZMetadata {
+        name: Text::new(),
+        symbol: Text::new(),
+        uri: Text::new(),
+    };
+    // Visible characters of the base name and symbol, trimmed, at most the
+    // field's length (which then also bounds the prefixed result).
+    let mut name = Text::<MAX_NAME_LEN>::new();
+    let mut symbol = Text::<MAX_SYMBOL_LEN>::new();
+    if let Some(b) = base {
+        name.len = clean(b.name, &mut name.bytes);
+        symbol.len = clean(b.symbol, &mut symbol.bytes);
+        // The uri, whole or not at all.
+        if b.uri.len() <= MAX_URI_LEN && !b.uri.chars().any(is_hidden) {
+            z.uri.len = copy_str(b.uri, &mut z.uri.bytes);
+        }
     }
+    // Empty fields fall back to the base mint address, field by field.
+    if name.is_empty() || symbol.is_empty() {
+        let address = base58(base_mint);
+        let address = address.as_str();
+        if name.is_empty() {
+            let generic = address.get(..GENERIC_NAME_CHARS).unwrap_or("");
+            name.len = copy_str(generic, &mut name.bytes);
+        }
+        if symbol.is_empty() {
+            let generic = address.get(..GENERIC_SYMBOL_CHARS).unwrap_or("");
+            symbol.len = copy_str(generic, &mut symbol.bytes);
+        }
+    }
+    z.name.len = prefixed(NAME_PREFIX, name.as_str(), &mut z.name.bytes);
+    z.symbol.len = prefixed(SYMBOL_PREFIX, symbol.as_str(), &mut z.symbol.bytes);
+    z
 }
 
 /// Read name, symbol and uri from a `TokenMetadata` TLV value (borsh:
@@ -93,10 +203,10 @@ fn read_borsh_bytes<'a>(data: &'a [u8], offset: &mut usize) -> Option<&'a [u8]> 
 
 /// Longest valid UTF-8 prefix of at most `max` bytes.
 fn utf8_prefix(bytes: &[u8], max: usize) -> &str {
-    let bytes = &bytes[..bytes.len().min(max)];
+    let bytes = bytes.get(..bytes.len().min(max)).unwrap_or(&[]);
     match core::str::from_utf8(bytes) {
         Ok(s) => s,
-        Err(e) => core::str::from_utf8(&bytes[..e.valid_up_to()]).unwrap_or(""),
+        Err(e) => core::str::from_utf8(bytes.get(..e.valid_up_to()).unwrap_or(&[])).unwrap_or(""),
     }
 }
 
@@ -115,29 +225,123 @@ pub fn is_hidden(c: char) -> bool {
         )
 }
 
-/// Visible characters of `s`, trimmed, at most `max` bytes.
-fn clean(s: &str, max: usize) -> String {
-    let mut out = String::new();
-    for c in s.chars().filter(|c| !is_hidden(*c)) {
-        if out.len() + c.len_utf8() > max {
-            break;
+/// `s` into `out` if it fits (else nothing); the length.
+#[inline(never)]
+fn copy_str(s: &str, out: &mut [u8]) -> usize {
+    match out.get_mut(..s.len()) {
+        Some(dst) => {
+            dst.copy_from_slice(s.as_bytes());
+            s.len()
         }
-        out.push(c);
+        None => 0,
     }
-    out.trim().to_string()
 }
 
-/// `prefix + body`, cut to at most `max` bytes on a character boundary.
-fn prefixed(prefix: &str, body: &str, max: usize) -> String {
-    let mut out = String::with_capacity(max);
-    out.push_str(prefix);
-    for c in body.chars() {
-        if out.len() + c.len_utf8() > max {
-            break;
+/// Writes the characters of `parts` into `out` from the start, whole
+/// characters only and while they fit (the hidden ones dropped when
+/// `visible_only`); returns the byte offset of the first non-whitespace
+/// character written (`usize::MAX` if none) and the end of the last one.
+/// One non-generic routine for every field, so the program carries it once.
+#[inline(never)]
+fn write_chars(out: &mut [u8], parts: &[&str], visible_only: bool) -> (usize, usize) {
+    let (mut first, mut last, mut len) = (usize::MAX, 0, 0);
+    for part in parts {
+        for c in part.chars() {
+            if visible_only && is_hidden(c) {
+                continue;
+            }
+            // Encoded into a 4-byte buffer first: `encode_utf8` into a
+            // slice it cannot prove large enough would link a formatted
+            // panic.
+            let mut utf8 = [0u8; 4];
+            let encoded = c.encode_utf8(&mut utf8).as_bytes();
+            let n = encoded.len();
+            let Some(dst) = out.get_mut(len..len + n) else {
+                return (first, last);
+            };
+            dst.copy_from_slice(encoded);
+            if !c.is_whitespace() {
+                first = first.min(len);
+                last = len + n;
+            }
+            len += n;
         }
-        out.push(c);
     }
-    out.truncate(out.trim_end().len());
+    (first, last)
+}
+
+/// Visible characters of `s`, trimmed, at most `out.len()` bytes, into
+/// `out`; the length.
+#[inline(never)]
+fn clean(s: &str, out: &mut [u8]) -> usize {
+    match write_chars(out, &[s], true) {
+        (usize::MAX, _) => 0,
+        (first, last) => {
+            // out.copy_within(first..last, 0), without its panic paths.
+            for (to, from) in (first..last).enumerate() {
+                if let Some(byte) = out.get(from).copied() {
+                    if let Some(slot) = out.get_mut(to) {
+                        *slot = byte;
+                    }
+                }
+            }
+            last - first
+        }
+    }
+}
+
+/// `prefix + body`, cut to at most `out.len()` bytes on a character
+/// boundary, with no trailing whitespace, into `out`; the length.
+#[inline(never)]
+fn prefixed(prefix: &str, body: &str, out: &mut [u8]) -> usize {
+    write_chars(out, &[prefix, body], false).1
+}
+
+/// The base58 alphabet (Bitcoin's, as Solana prints addresses).
+const BASE58_ALPHABET: &[u8; 58] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+/// Longest base58 text of 32 bytes.
+pub const BASE58_MAX_LEN: usize = 44;
+
+/// `address.to_string()`: the address in base58 (each leading zero byte is
+/// a `1`), without formatting code.
+#[inline(never)]
+pub fn base58(address: &Pubkey) -> Text<BASE58_MAX_LEN> {
+    // The address as a slice whose length the optimizer does not see, so
+    // the loops below stay loops (unrolled for 32 bytes they are kilobytes).
+    let bytes: &[u8] = core::hint::black_box(address.as_ref());
+    // Base-58 digits of the number, least significant first.
+    let mut digits = [0u8; BASE58_MAX_LEN];
+    let mut count = 0usize;
+    for byte in bytes {
+        let mut carry = u32::from(*byte);
+        for digit in digits.iter_mut().take(count) {
+            carry += u32::from(*digit) << 8;
+            *digit = (carry % 58) as u8;
+            carry /= 58;
+        }
+        while carry > 0 {
+            match digits.get_mut(count) {
+                Some(digit) => *digit = (carry % 58) as u8,
+                None => break,
+            }
+            count += 1;
+            carry /= 58;
+        }
+    }
+    let zeros = bytes.iter().take_while(|b| **b == 0).count();
+    let mut out = Text::<BASE58_MAX_LEN>::new();
+    let text = core::iter::repeat_n(b'1', zeros).chain(
+        digits
+            .iter()
+            .take(count)
+            .rev()
+            .map(|digit| BASE58_ALPHABET[usize::from(*digit) % 58]),
+    );
+    for (slot, c) in out.bytes.iter_mut().zip(text) {
+        *slot = c;
+        out.len += 1;
+    }
     out
 }
 
@@ -207,7 +411,10 @@ mod tests {
             for symbol in ["ééééééé", "🛡🛡🛡", "a🛡🛡"] {
                 let z = derive(base(name, symbol, ""), &mint());
                 assert!(z.name.len() <= MAX_NAME_LEN && z.symbol.len() <= MAX_SYMBOL_LEN);
-                assert!(z.name.starts_with(NAME_PREFIX) && z.symbol.starts_with(SYMBOL_PREFIX));
+                assert!(
+                    z.name.as_str().starts_with(NAME_PREFIX)
+                        && z.symbol.as_str().starts_with(SYMBOL_PREFIX)
+                );
                 // Nothing that fits was dropped.
                 let next = name[z.name.len() - NAME_PREFIX.len()..]
                     .chars()
@@ -301,5 +508,22 @@ mod tests {
         let mut bad = data;
         bad[70] = 0xFF; // third byte of "Name"
         assert_eq!(read_base_metadata(&bad, &m).unwrap().name, "Na");
+    }
+
+    #[test]
+    fn base58_is_the_address_text() {
+        for key in [
+            mint(),
+            Pubkey::new_from_array([0; 32]),
+            Pubkey::new_from_array([255; 32]),
+            Pubkey::new_from_array({
+                let mut k = [0u8; 32];
+                k[3] = 1;
+                k
+            }),
+            Pubkey::new_unique(),
+        ] {
+            assert_eq!(base58(&key), key.to_string());
+        }
     }
 }

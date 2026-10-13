@@ -57,7 +57,7 @@ const OUR_PROGRAMS: &[OurProgram] = &[
     },
     OurProgram {
         so_name: "noised_shield",
-        sources: &["programs/noised-shield"],
+        sources: &["programs/noised-shield", "crates/noised-onchain"],
     },
 ];
 

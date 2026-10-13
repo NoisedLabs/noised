@@ -41,7 +41,7 @@ python -c "import struct,sys; print(struct.unpack_from('<I', open(sys.argv[1],'r
 
 # IDLs (anchor-cli 1.2.1), into both idls\ and sdk\src\idl\ (verified for all five on 2026-10-11:
 # regenerated IDLs identical to idls\)
-anchor idl build -p noised_launchpad -o idls/noised_launchpad.json   # repeat for the hook, shield and autopilot (the vault's IDL is hand-maintained)
+anchor idl build -p noised_launchpad -o idls/noised_launchpad.json   # repeat for the hook and autopilot (the vault's and the shield's IDLs are hand-maintained)
 ```
 
 The five Noised IDLs in `idls/` and `sdk/src/idl/` must be identical and regenerated from the sources that are deployed. The Meteora IDLs next to them come from Meteora's MIT-licensed SDKs (`idls/LICENSE-meteora`).

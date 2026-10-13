@@ -4,8 +4,8 @@
  *
  *   src/content/docs/generated/sdk.ts       every export of ../sdk/src/index.ts: kind, module, signature, JSDoc,
  *                                           and the integrator notes of sdk/README.md (TypeScript compiler API)
- *   src/content/docs/generated/programs.ts  the five programs under ../programs (the vault from the Anchor
- *                                           reference it implements, programs/noised-vault/anchor): program IDs, every
+ *   src/content/docs/generated/programs.ts  the five programs under ../programs (the vault and the shield from
+ *                                           the Anchor reference each implements, programs/<name>/anchor): program IDs, every
  *                                           instruction (docs, arguments, accounts in order with their
  *                                           constraints), account layouts with their sizes, errors with their
  *                                           codes, events, PDAs and constants (a tolerant Rust item scanner)
@@ -268,7 +268,8 @@ const PROGRAMS = [
   { dir: "noised-hook", crate: "noised_hook", title: "Launch Guard (transfer hook)", slug: "hook" },
   // Written without Anchor; its Anchor reference (same ABI and checks, not compiled) documents it.
   { dir: "noised-vault", crate: "noised_vault", title: "PQ vault", slug: "vault", src: "anchor" },
-  { dir: "noised-shield", crate: "noised_shield", title: "Shield", slug: "shield" },
+  // Likewise written without Anchor, documented from its Anchor reference.
+  { dir: "noised-shield", crate: "noised_shield", title: "Shield", slug: "shield", src: "anchor" },
   { dir: "noised-autopilot", crate: "noised_autopilot", title: "Autopilot", slug: "autopilot" },
 ];
 
@@ -956,7 +957,7 @@ const sdk = generateSdk();
 const programs = generatePrograms();
 
 const sdkText = `${header("sdk/src (exports of index.ts) and sdk/README.md")}import type { SdkReference } from "../types";\n\nexport const SDK_REFERENCE: SdkReference = ${JSON.stringify(sdk, null, 1)};\n`;
-const programsText = `${header("programs/*/src (Anchor sources; the vault's Anchor reference, programs/noised-vault/anchor) and crates/noised-lmots")}import type { ProgramDoc } from "../types";\n\nexport const PROGRAMS: readonly ProgramDoc[] = ${JSON.stringify(programs, null, 1)};\n`;
+const programsText = `${header("programs/*/src (Anchor sources; the vault's and the shield's Anchor references, programs/noised-vault/anchor and programs/noised-shield/anchor) and crates/noised-lmots")}import type { ProgramDoc } from "../types";\n\nexport const PROGRAMS: readonly ProgramDoc[] = ${JSON.stringify(programs, null, 1)};\n`;
 
 let stale = false;
 stale = emit("sdk.ts", sdkText) || stale;

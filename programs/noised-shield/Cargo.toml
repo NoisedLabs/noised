@@ -14,20 +14,37 @@ name = "noised_shield"
 
 [features]
 default = []
-cpi = ["no-entrypoint"]
+# Use as a library: no program entrypoint, global allocator or panic handler.
 no-entrypoint = []
-no-idl = []
+cpi = ["no-entrypoint"]
+# Skip the `Instruction: <Name>` log line each instruction starts with.
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
-custom-heap = []
-custom-panic = []
-anchor-debug = []
 
+# Written without a framework (no Anchor): the on-chain binary links only
+# pinocchio (entrypoint, account views, CPI, syscalls) and noised-onchain
+# (the shared Anchor-compatible account checks, errors, Token-2022 parsing
+# and CPIs, built on pinocchio and the sol_sha256 wrapper). The ABI
+# (instruction, account and event layouts, discriminators, error numbers)
+# is the Anchor 1.2.1 build's, byte for byte; `idls/noised_shield.json`
+# describes it and `anchor/` keeps the Anchor source it implements.
 [dependencies]
-anchor-lang = { workspace = true, features = ["init-if-needed"] }
+noised-onchain = { workspace = true }
+pinocchio = { workspace = true }
+
+# Host only (clients and tests), never in the on-chain binary: the Anchor
+# client API the test suites build instructions and read accounts with
+# (`accounts`, `instruction`, `AccountDeserialize` on `Shield`, the events).
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+anchor-lang = { workspace = true }
+
+# ABI tests: the program's layouts against Anchor's serialization, the IDL
+# and Borsh; the base-mint policy, the zToken metadata and the zToken
+# instructions against spl-token-2022-interface and
+# spl-token-metadata-interface (the shared parsers are tested in
+# noised-onchain).
+[dev-dependencies]
 anchor-spl = { workspace = true }
-spl-transfer-hook-interface = { workspace = true }
-spl-tlv-account-resolution = { workspace = true }
+serde_json = "1"
 
 # LiteSVM tests live in tests/litesvm (their own workspace, see the root Cargo.toml).
 
