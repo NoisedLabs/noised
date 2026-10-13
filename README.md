@@ -297,7 +297,7 @@ You choose the curve and the economics inside hard bounds. The program fixes eve
 
 | You choose | Bounds |
 |---|---|
-| Name, symbol, description, icon | name up to 32 bytes, symbol up to 10; a description and a 32x32 icon stored on-chain (up to 3,072 bytes in all) |
+| Name, symbol, description, icon | name up to 32 bytes, symbol up to 10; a description and an icon (a logo up to 64x64) stored on-chain (up to 3,072 bytes in all) |
 | When it opens | a window of 1 minute to 1 hour, starting at most 7 days after you sign it, with at least a minute of it left when your signature lands. If nobody opens it in time, you sign a new time. |
 | Your post-quantum identity | from a passkey or a dedicated 24-word phrase |
 | Decimals | 6 to 9 |

@@ -85,7 +85,7 @@ The record's `doc` is an SDK-defined JSON document; the program treats it as opa
 | links | `https://` only; X and Telegram links must go to their own hosts |
 | whole document | at most 3,072 bytes |
 
-The icon is a palette PNG: a 32 × 32 icon with 16 colours is about 130 to 700 bytes (`encodeIndexedPng`). The app's icon editor makes exactly that, and keeps the bytes it signed: another encoder could produce other bytes, and so another hash.
+The icon is a palette PNG (`encodeIndexedPng`): a 32 × 32 icon with 16 colours is about 130 to 700 bytes. The app stores an uploaded logo as the best smooth picture that fits next to the description and links: 64 × 64 with up to 256 colours, or fewer colours, or 56 × 56 or 48 × 48 when the words take more room. Its pixel editor makes 32 × 32 icons with 16 colours. Either way the app keeps the bytes it signed: another encoder could produce other bytes, and so another hash.
 
 ## Reading a token's metadata
 
