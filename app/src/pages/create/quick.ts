@@ -42,7 +42,7 @@ export const SPLIT_STOPS_PCT: readonly number[] = [10, 20, 25, 30, 40, 50, 60, 7
 export interface QuickState {
   name: string;
   symbol: string;
-  /** The logo (32 x 32 pixel icon) and the optional links. The description stays empty in a quick launch. */
+  /** The logo (an uploaded picture or a pixel icon) and the optional links. The description stays empty in a quick launch. */
   meta: TokenMetaDraft;
   /** The trading fee in bps: one of QUICK_FEE_STOPS_BPS. */
   feeBps: number;

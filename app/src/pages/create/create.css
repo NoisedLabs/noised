@@ -181,10 +181,11 @@
 
 /* ------------------------------------------------- token icon (pixels) --- */
 /*
- * "Make it yours": the 32x32 pixel editor (PixelIconEditor.tsx). Tools on
+ * "Draw a pixel icon": the 32x32 pixel editor (PixelIconEditor.tsx). Tools on
  * the left, the board in the middle, colours + previews on the right; one
  * column on phones. Canvases are drawn at integer scales and shown with
- * image-rendering: pixelated, so every icon pixel stays a crisp square.
+ * image-rendering: pixelated, so every icon pixel stays a crisp square. An
+ * uploaded logo is a picture (.lu-img, quick.css): always drawn smoothly.
  */
 .cr-meta .pg-card-body { gap: 22px; }
 .ie-editor {
@@ -261,21 +262,6 @@
 .ie-board-canvas[data-tool="pick"] { cursor: cell; }
 .ie-board-canvas:focus-visible { outline: none; }
 .ie-board:has(.ie-board-canvas:focus-visible) { box-shadow: 0 0 0 2px var(--pg-ink), 0 24px 60px -30px rgb(0 0 0 / 0.8); }
-.ie-stage[data-drag] .ie-board { box-shadow: 0 0 0 2px var(--pg-ink); }
-.ie-drop {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--bg, #070707) 72%, transparent);
-  font-family: var(--pg-label);
-  font-size: var(--ui-px, 18.6667px);
-  letter-spacing: var(--label-tracking, 1px);
-  text-transform: uppercase;
-  color: var(--pg-text);
-  pointer-events: none;
-}
-
 /* colours, actions, previews */
 .ie-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .ie-label { display: block; margin-bottom: 8px; padding: 0; font-family: var(--pg-label); font-size: var(--ui-px, 18.6667px); font-weight: 400; line-height: 1; letter-spacing: var(--label-tracking, 1px); text-transform: uppercase; color: var(--pg-dim); }
@@ -345,6 +331,7 @@
   overflow: hidden;
 }
 .ie-card-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--r-glass-sm, 3px); background: #0b0b0c; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1); }
+.ie-card-icon .lu-img { width: 48px; height: 48px; }
 .ie-card-none { font: 400 var(--px-1, 26.3158px)/1 var(--pg-head); color: #8a8a8a; }
 .ie-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ie-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--pg-head); font-stretch: var(--pg-stretch); font-size: var(--px-1, 26.3158px); line-height: 1.1; font-weight: var(--title-weight, 400); color: var(--pg-text); }

@@ -37,7 +37,7 @@ import { CheckLine, Checks, Chip, Comment, Details, DotBar, Fold, Grad, NoteBox,
 import { PageArt } from "../inner/art";
 import { QuantumKeyPanel } from "../quantumkey/QuantumKeyPanel";
 import { utcText } from "../../lib/signErrors";
-import { convertDraft, DESCRIPTION_MAX, draftFromPreset, dynamicDraftFor, iconPng, metaProblems, splitError, stepOfField, type Conversion, type Draft, type StepId, type TokenMetaDraft } from "./draft";
+import { convertDraft, DESCRIPTION_MAX, draftFromPreset, dynamicDraftFor, iconBudgetOf, metaProblems, splitError, stepOfField, type Conversion, type Draft, type StepId, type StoredIcon, type TokenMetaDraft } from "./draft";
 import {
   AFTER_FEES,
   afterFeeText,
@@ -74,8 +74,10 @@ import {
 } from "./simple";
 import { ChoiceCards, ChoiceChips, Say, StopSlider } from "./SimpleControls";
 import { FIELD_DOCS } from "./fieldDocs";
-import { IconCard, PixelIconEditor } from "./PixelIconEditor";
-import { isBlank } from "./pixelIcon";
+import { iconSummary, LogoUpload } from "./LogoUpload";
+import { IconCard } from "./PixelIconEditor";
+import { blankIcon } from "./pixelIcon";
+import { useStoredIcon } from "./useStoredIcon";
 import { plainRecipientProblem } from "./recipientWords";
 import { RulesGallery } from "./rules/RulesGallery";
 import { RulesReview } from "./rules/RulesReview";
@@ -260,24 +262,9 @@ function CustomLaunch({ started, onStarted }: { started: string | null; onStarte
   useEffect(() => {
     if (key.status === "unlocked" && key.identity.status === "idle") void launchIdentity(CLUSTER).catch(() => undefined);
   }, [key.status, key.identity.status]);
-  // The icon's PNG for the record's document (made by the SDK's encoder, asynchronously; kept per drawing).
-  const iconKey = `${draft.meta.icon.palette.join(",")}|${draft.meta.icon.pixels}`;
-  const [png, setPng] = useState<{ key: string; png: Uint8Array | null } | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void iconPng(draft.meta.icon).then(
-      (b) => {
-        if (alive) setPng({ key: iconKey, png: b });
-      },
-      () => {
-        if (alive) setPng({ key: iconKey, png: null });
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, [iconKey]);
-  const pngNow = png !== null && png.key === iconKey ? png.png : undefined;
+  // The icon the record stores (made asynchronously; an uploaded logo is re-fitted when the words next to it change).
+  const icon = useStoredIcon(draft);
+  const pngNow = icon.now === undefined ? undefined : icon.now.png;
   // The fee recipients as distribute pays them, checked against the chain as they are typed (audit round 3, F3). The
   // token's own Autopilot treasury is not a wallet and is not checked: create_launch takes it for this launch only.
   const [recipientCheck, setRecipientCheck] = useState<FeeRecipientsCheck | null>(null);
@@ -474,7 +461,7 @@ function CustomLaunch({ started, onStarted }: { started: string | null; onStarte
               <>
                 <PresetStep draft={draft} onPick={(p) => setDraftState((d) => draftFromPreset(p, { name: d.name, symbol: d.symbol, meta: d.meta, recipients: d.recipients }))} />
                 <TokenStep draft={draft} set={set} conv={conv} />
-                <MetaStep draft={draft} setMeta={setMeta} conv={conv} />
+                <MetaStep draft={draft} setMeta={setMeta} conv={conv} stored={icon.shown} />
               </>
             ) : null}
             {step === "curve" ? <CurveStep draft={draft} set={set} conv={conv} /> : null}
@@ -513,6 +500,7 @@ function CustomLaunch({ started, onStarted }: { started: string | null; onStarte
             {step === "review" ? (
               <ReviewStep
                 draft={draft}
+                stored={icon.shown}
                 conv={conv}
                 goTo={(part) => go(uiStepOf(part))}
                 started={started}
@@ -703,7 +691,7 @@ function TokenStep({ draft, set, conv }: { draft: Draft; set: SetDraft; conv: Co
  * Icon, description and links: stored on Solana in the token's metadata record (its document), with the name and
  * symbol, and signed by the creator's quantum key. No metadata link: the mint's link stays empty.
  */
-function MetaStep({ draft, setMeta, conv }: { draft: Draft; setMeta: SetMeta; conv: Conversion }): ReactNode {
+function MetaStep({ draft, setMeta, conv, stored }: { draft: Draft; setMeta: SetMeta; conv: Conversion; stored: StoredIcon | undefined }): ReactNode {
   const { connection } = useConnection();
   const m = draft.meta;
   const problems = metaProblems(m);
@@ -730,7 +718,7 @@ function MetaStep({ draft, setMeta, conv }: { draft: Draft; setMeta: SetMeta; co
   return (
     <Panel
       title="Make it yours"
-      description="Draw a 32 x 32 icon or upload a picture, and say what your token is about. They are stored on Solana with your token's name and symbol: no links to other sites, no IPFS."
+      description="Add a logo and say what your token is about. They are stored on Solana with your token's name and symbol: no links to other sites, no IPFS."
       status={
         <span className="cr-meta-chips">
           <Chip tone="muted">Optional</Chip>
@@ -741,8 +729,16 @@ function MetaStep({ draft, setMeta, conv }: { draft: Draft; setMeta: SetMeta; co
       }
       className="cr-meta"
     >
-      <PixelIconEditor icon={m.icon} onChange={(icon) => setMeta({ icon })} name={draft.name} symbol={draft.symbol} />
-      {docProblem !== null ? <Alert tone="fail">{docProblem}</Alert> : null}
+      <LogoUpload
+        meta={m}
+        stored={stored}
+        budget={iconBudgetOf(draft)}
+        onIcon={(icon) => setMeta({ icon, logo: null })}
+        onLogo={(logo) => setMeta({ logo, icon: blankIcon(m.icon.palette) })}
+        name={draft.name}
+        symbol={draft.symbol}
+      />
+      {docProblem !== null ? <Alert tone="fail">{docProblem.charAt(0).toUpperCase() + docProblem.slice(1)}</Alert> : null}
       <div className="pg-grid-2 cr-meta-fields">
         <Field
           className="cr-field pg-span-2"
@@ -1420,6 +1416,7 @@ function InProgress({ except }: { except: string | null }): ReactNode {
 
 function ReviewStep({
   draft,
+  stored,
   conv,
   goTo,
   started,
@@ -1435,6 +1432,8 @@ function ReviewStep({
   onEditAutopilot,
 }: {
   draft: Draft;
+  /** The icon the record stores (the last one made). */
+  stored: StoredIcon | undefined;
   conv: Conversion;
   goTo: (s: StepId) => void;
   started: string | null;
@@ -1576,11 +1575,11 @@ function ReviewStep({
 
       <Panel title="Your token" description="How it shows on a launch card." className="cr-review-token">
         <div className="cr-review-card">
-          <IconCard icon={draft.meta.icon} name={draft.name} symbol={draft.symbol} description={draft.meta.description} />
+          <IconCard icon={draft.meta.icon} stored={stored} name={draft.name} symbol={draft.symbol} description={draft.meta.description} />
           <Readout label="Token">
             <Row k="Name">{draft.name.trim() || "—"}</Row>
             <Row k="Symbol">{draft.symbol.trim() || "—"}</Row>
-            <Row k="Icon">{isBlank(draft.meta.icon.pixels) ? "None (its address pattern is shown)" : "32 x 32 pixel art"}</Row>
+            <Row k="Icon">{iconSummary(stored)}</Row>
             {draft.meta.website.trim() !== "" ? <Row k="Website">{draft.meta.website.trim()}</Row> : null}
             {draft.meta.x.trim() !== "" ? <Row k="X">@{draft.meta.x.trim().replace(/^@/, "")}</Row> : null}
             <Row k="On Solana">{conv.recordBytes > 0 ? `${conv.recordBytes.toLocaleString("en-US")} bytes, signed by your quantum key` : "—"}</Row>

@@ -81,6 +81,8 @@
 }
 .ql-h { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-family: var(--pg-head); font-size: var(--px-1, 26.3158px); font-weight: 400; line-height: 1.1; }
 .ql-grid { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 22px; align-items: start; }
+/* While a picture is being framed, the logo takes the whole row: the frame and the icon it makes, side by side. */
+.ql-grid:has(.lu[data-cropping]) { grid-template-columns: minmax(0, 1fr); }
 .ql-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 16px; }
 .ql-ticker { position: relative; display: block; }
 .ql-ticker > .input { padding-left: 26px; text-transform: uppercase; }
@@ -159,20 +161,15 @@
 .lu-frame:active { cursor: grabbing; }
 .lu-frame:focus-visible { outline: 3px solid var(--pg-ink); outline-offset: -3px; }
 .lu-frame-img { display: block; width: 224px; height: 224px; }
-/* The 32 x 32 grid the icon is made of, over the picture (7 px cells). */
-.lu-frame-grid {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: linear-gradient(to right, rgb(255 255 255 / 0.12) 1px, transparent 1px), linear-gradient(to bottom, rgb(255 255 255 / 0.12) 1px, transparent 1px);
-  background-size: 7px 7px;
-  mix-blend-mode: difference;
-}
 .lu-zoom { width: 224px; accent-color: var(--pg-ink); }
 .lu-preview { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.lu-sizes { display: flex; align-items: flex-end; gap: 14px; min-height: 100px; padding: 10px; background: linear-gradient(180deg, #1d1d1d, #0d0d0d); }
+.lu-sizes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; min-height: 100px; padding: 10px; background: linear-gradient(180deg, #1d1d1d, #0d0d0d); }
+.lu-sizes > img { flex: none; }
 .lu-wait { color: rgb(255 255 255 / 0.6); font-size: 13px; }
+/* An uploaded logo, exactly as stored: a picture, so it always scales smoothly (never pixelated). */
+.lu-img { display: block; image-rendering: auto; user-select: none; }
 .lu-note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--pg-muted); }
+.lu-note[data-tone="fail"] { color: var(--pg-danger); }
 .lu-draw { margin-top: 2px; }
 
 /* ------------------------------------------------- custom: treasury row --- */

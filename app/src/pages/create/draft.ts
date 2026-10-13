@@ -26,6 +26,7 @@ import {
   type PresetName,
   type TokenMetaInput,
 } from "../../lib/noised";
+import { iconByteBudget, type LogoFitter, type LogoIcon } from "./logoIcon";
 import { generateIcon, ICON_MAX_COLORS, ICON_SIZE, iconRgba, isBlank, seedOf, type IconDraft } from "./pixelIcon";
 
 export interface RecipientDraft {
@@ -42,7 +43,13 @@ export interface RecipientDraft {
  * together with the name and symbol. The mint's link stays empty.
  */
 export interface TokenMetaDraft {
+  /** Pixel art (drawn or made for you): the icon when there is no uploaded logo. Blank: none. */
   icon: IconDraft;
+  /**
+   * An uploaded picture (./logoIcon.ts): when set, it is the token's icon, stored as the best smooth picture that fits
+   * next to the description and links (up to 64 x 64; never pixel art). Kept in memory only.
+   */
+  logo: LogoFitter | null;
   /** At most DESCRIPTION_MAX bytes of UTF-8. */
   description: string;
   /** Optional https:// link. */
@@ -60,7 +67,10 @@ const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length;
 export const xHandle = (m: Pick<TokenMetaDraft, "x">): string => m.x.trim().replace(/^@/, "");
 
 // icon seed kept from the original name: changing it changes the default generated token icon
-export const defaultMeta = (): TokenMetaDraft => ({ icon: generateIcon(seedOf("phalanx#0")), description: "", website: "", x: "" });
+export const defaultMeta = (): TokenMetaDraft => ({ icon: generateIcon(seedOf("phalanx#0")), logo: null, description: "", website: "", x: "" });
+
+/** Whether the token has an icon: an uploaded logo, or pixel art that is not blank. */
+export const hasIcon = (m: Pick<TokenMetaDraft, "icon" | "logo">): boolean => m.logo !== null || !isBlank(m.icon.pixels);
 
 /**
  * Problems with the optional fields, in plain words (shown under them). They go into the record's document, so a
@@ -109,11 +119,11 @@ export function docInput(d: Pick<Draft, "name" | "symbol" | "meta">, iconPng: Ui
 
 /** Whether the draft has anything for the document (else the record holds the name and symbol only, no document). */
 export function hasDocument(d: Pick<Draft, "meta">): boolean {
-  return !isBlank(d.meta.icon.pixels) || d.meta.description.trim() !== "" || d.meta.website.trim() !== "" || xHandle(d.meta) !== "";
+  return hasIcon(d.meta) || d.meta.description.trim() !== "" || d.meta.website.trim() !== "" || xHandle(d.meta) !== "";
 }
 
 /** The document's problems in the wizard's words, by the field that shows them ("description", "website", "x", "icon"). */
-function documentErrors(input: MetadataDocInput): string[] {
+function documentErrors(input: MetadataDocInput, logo: boolean): string[] {
   const v = validateMetadataDoc(input);
   if (v.ok) return [];
   const out: string[] = [];
@@ -129,11 +139,18 @@ function documentErrors(input: MetadataDocInput): string[] {
     else if (field === "iconPng") out.push(`icon: ${message}`);
     else if (field === "document") {
       const size = /is (\d+) bytes/.exec(message)?.[1] ?? "?";
-      out.push(`icon: your icon, description and links take ${size} bytes together; at most ${METADATA.MAX_DOC_LEN} fit on Solana. Shorten the description or use fewer colours in the icon`);
+      // An uploaded logo is already as small as it gets (48 x 48, 64 colours): only the words can make room.
+      if (logo) out.push(input.description === undefined ? `icon: ${LOGO_TOO_DETAILED}` : `icon: ${LOGO_NO_ROOM}`);
+      else out.push(`icon: your icon, description and links take ${size} bytes together; at most ${METADATA.MAX_DOC_LEN} fit on Solana. Shorten the description or use fewer colours in the icon`);
     } else out.push(e);
   }
   return out;
 }
+
+/** When an uploaded logo and the description do not fit on Solana together, even with the logo at its smallest. */
+export const LOGO_NO_ROOM = "your logo and description are too big to keep on Solana together. Shorten the description to make room";
+/** When an uploaded logo does not fit even without a description. */
+export const LOGO_TOO_DETAILED = "this picture has too much fine detail to keep on Solana. Zoom in on it, or choose a simpler picture";
 
 export interface Draft {
   preset: PresetName;
@@ -445,10 +462,10 @@ export function convertDraft(d: Draft, pqIdentity: Uint8Array | null = null, ico
     pqIdentity: pqIdentity ?? new Uint8Array(32),
   };
   // Noised keeps the token's metadata itself (TokenMetaDraft) in the record's document: no uri mode, no off-chain link.
-  const png = isBlank(d.meta.icon.pixels) ? null : iconPng;
+  const png = hasIcon(d.meta) ? iconPng : null;
   const base = { name: d.name, symbol: d.symbol };
   const input = docInput(d, png ?? null);
-  const docProblems = hasDocument(d) ? documentErrors(input) : [];
+  const docProblems = hasDocument(d) ? documentErrors(input, d.meta.logo !== null) : [];
   const nameProblems = metadataErrors(base);
   let metadata: TokenMetaInput & { name: string; symbol: string } = base;
   if (hasDocument(d) && png !== undefined && docProblems.length === 0 && nameProblems.length === 0) metadata = { ...base, doc: buildMetadataDoc(input) };
@@ -503,4 +520,36 @@ export type StepId = "preset" | "token" | "curve" | "fees" | "guard" | "recipien
 export async function iconPng(icon: IconDraft): Promise<Uint8Array | null> {
   if (isBlank(icon.pixels)) return null;
   return encodeIndexedPng(iconRgba(icon), ICON_SIZE, ICON_SIZE, ICON_MAX_COLORS + 1);
+}
+
+/** The icon that goes into the document: none, the pixel art, or the uploaded logo's best fit. */
+export type StoredIcon =
+  | { kind: "none"; png: null }
+  | { kind: "pixel"; png: Uint8Array }
+  /** `fits` false: even the smallest variant leaves no room (`png` is that variant, and `convertDraft` says why). */
+  | { kind: "logo"; png: Uint8Array; logo: LogoIcon; fits: boolean };
+
+/** The bytes the icon's PNG may take next to the draft's name, symbol, description and links. */
+export const iconBudgetOf = (d: Pick<Draft, "name" | "symbol" | "meta">): number => iconByteBudget(docInput(d, null));
+
+/** Changes exactly when `storedIcon` would give another result (the logo and its budget, or the drawing). */
+export function storedIconKey(d: Pick<Draft, "name" | "symbol" | "meta">): string {
+  const m = d.meta;
+  if (m.logo !== null) return `logo:${m.logo.id}:${iconBudgetOf(d)}`;
+  return isBlank(m.icon.pixels) ? "none" : `pixel:${m.icon.palette.join(",")}|${m.icon.pixels}`;
+}
+
+/**
+ * The icon the record will store for this draft: an uploaded logo as the best smooth picture that fits next to the
+ * name, symbol, description and links (re-fitted when they change; ./logoIcon.ts), else the pixel art, else none.
+ */
+export async function storedIcon(d: Pick<Draft, "name" | "symbol" | "meta">): Promise<StoredIcon> {
+  const m = d.meta;
+  if (m.logo !== null) {
+    const fit = await m.logo.fit(iconBudgetOf(d));
+    const logo = fit ?? (await m.logo.smallest());
+    return { kind: "logo", png: logo.png, logo, fits: fit !== null };
+  }
+  const png = await iconPng(m.icon);
+  return png === null ? { kind: "none", png: null } : { kind: "pixel", png };
 }

@@ -1,11 +1,11 @@
 /**
- * The quick launch's logo: any picture, cropped to a square, shrunk to the token's 32 x 32, 16-colour icon (the same
- * icon pipeline as the pixel editor: pixelIcon.ts quantizes it, and the SDK's deterministic encoder makes the PNG that
- * is stored on Solana with the token's details).
+ * Framing an uploaded logo: any picture, cropped to a square and shrunk smoothly to a square master the token's icon
+ * is made from (./logoIcon.ts turns it into the best smooth picture that fits on Solana, up to 64 x 64; never pixel art).
  *
- * `cropSquare` is pure (tested); `cropToIcon` draws on a canvas (browser only). No markup injection: canvases only.
+ * `cropSquare` and `panCrop` are pure (tested); `cropToLogo` draws on a canvas (browser only). No markup injection:
+ * canvases only.
  */
-import { ICON_MAX_COLORS, ICON_SIZE, quantizeRgba, withFullPalette, type IconDraft } from "./pixelIcon";
+import { LogoFitter, LOGO_SIDES } from "./logoIcon";
 
 /** Zoom bounds of the crop (1 = the largest square that fits the picture). */
 export const MIN_ZOOM = 1;
@@ -46,15 +46,24 @@ export function panCrop(w: number, h: number, c: Crop, dx: number, dy: number, v
 
 export type Picture = CanvasImageSource & { width: number; height: number };
 
-/** The cropped square of `img`, smoothly shrunk (in halves) and quantized to the 32 x 32, 16-colour icon. */
-export function cropToIcon(img: Picture, c: Crop): IconDraft {
+/** The master's side: 4x the largest icon, so every icon size is an average of several picture pixels. */
+export const MASTER_SIDE = 256;
+
+/**
+ * The cropped square of `img` as a logo: shrunk in halves (the browser's high-quality smoothing, which works on
+ * premultiplied colours, so transparent edges stay clean) to a square master of MASTER_SIDE pixels (or the crop's own
+ * size when it is smaller, but at least the largest icon), ready to be fitted (./logoIcon.ts).
+ */
+export function cropToLogo(img: Picture, c: Crop): LogoFitter {
   const { sx, sy, side } = cropSquare(img.width, img.height, c);
+  const largest = Math.max(...LOGO_SIDES);
+  const target = Math.max(largest, Math.min(MASTER_SIDE, Math.round(side)));
   let src: CanvasImageSource = img;
   let x = sx;
   let y = sy;
   let s = side;
-  // Halve until one more halving would go below twice the icon (a box filter each time: no aliasing).
-  while (s / 2 >= ICON_SIZE * 2) {
+  // Halve until one more halving would go below twice the master (a box filter each time: no aliasing).
+  while (s / 2 >= target * 2) {
     const n = Math.max(1, Math.round(s / 2));
     const c2 = document.createElement("canvas");
     c2.width = n;
@@ -70,14 +79,15 @@ export function cropToIcon(img: Picture, c: Crop): IconDraft {
     s = n;
   }
   const out = document.createElement("canvas");
-  out.width = ICON_SIZE;
-  out.height = ICON_SIZE;
+  out.width = target;
+  out.height = target;
   const ctx = out.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("This browser cannot shrink images.");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(src, x, y, s, s, 0, 0, ICON_SIZE, ICON_SIZE);
-  return withFullPalette(quantizeRgba(ctx.getImageData(0, 0, ICON_SIZE, ICON_SIZE).data, ICON_MAX_COLORS));
+  ctx.drawImage(src, x, y, s, s, 0, 0, target, target);
+  const data = ctx.getImageData(0, 0, target, target).data;
+  return new LogoFitter({ rgba: new Uint8Array(data.buffer, data.byteOffset, data.length), side: target });
 }
 
 const MAX_UPLOAD = 8 * 1024 * 1024;

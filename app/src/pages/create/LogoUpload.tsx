@@ -1,10 +1,12 @@
 /**
- * The quick launch's logo: drop or choose a picture, frame it (drag to move, a zoom slider; arrow keys and + / - on
- * the frame), and see it as the token's 32 x 32 pixel icon at real sizes while you frame it. "Use this logo" keeps the
- * icon; it is stored on Solana with the token's details (as a small PNG the quantum key signs with them).
- * "Make one for me" draws one from the name; the full pixel editor is one fold away.
+ * The token's logo: drop or choose a picture, frame it (drag to move, a zoom slider; arrow keys and + / - on the
+ * frame), and see exactly the icon that will be stored while you frame it: a smooth picture, up to 64 x 64, made as
+ * good as the room next to the token's other details allows (./logoIcon.ts; never pixel art). "Use this logo" keeps
+ * it; it is stored on Solana with the token's details (as a small PNG the quantum key signs with them).
+ * "Make one for me" draws a pixel icon from the name; the pixel editor is one fold away.
  *
- * Canvas drawing only (no markup injection, no runtime styles: positions are CSSOM properties set by React).
+ * Canvas drawing and data: images only (no markup injection, no runtime styles: positions are CSSOM properties set by
+ * React).
  */
 import { ImageUp, Sparkles } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
@@ -12,22 +14,65 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, ty
 import { Button } from "../../components/ui";
 import { sfx } from "../../fx/sfx";
 import { Details } from "../inner/kit";
-import { CENTRED, cropSquare, cropToIcon, MAX_ZOOM, MIN_ZOOM, openPicture, panCrop, type Crop, type Picture } from "./logo";
+import { LOGO_NO_ROOM, LOGO_TOO_DETAILED, type StoredIcon, type TokenMetaDraft } from "./draft";
+import { CENTRED, cropSquare, cropToLogo, MAX_ZOOM, MIN_ZOOM, openPicture, panCrop, type Crop, type Picture } from "./logo";
+import { LogoImage } from "./LogoImage";
+import { LOGO_VARIANTS, type LogoFitter, type LogoIcon } from "./logoIcon";
 import { IconCanvas, PixelIconEditor } from "./PixelIconEditor";
 import { generateIcon, isBlank, seedOf, type IconDraft } from "./pixelIcon";
 
 /** The frame's size on screen (CSS pixels). */
 const VIEW = 224;
 
-export function LogoUpload({ icon, onChange, name, symbol }: { icon: IconDraft; onChange: (icon: IconDraft) => void; name: string; symbol: string }): ReactNode {
+const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Whether a logo's stored icon is less than the best (a smaller size or fewer colours, to fit). */
+const simplified = (icon: LogoIcon): boolean => icon.variant !== LOGO_VARIANTS[0];
+
+/** The stored icon in a few words (review rows). */
+export function iconSummary(stored: StoredIcon | undefined): string {
+  if (stored === undefined) return "Preparing…";
+  if (stored.kind === "none") return "None (its address pattern is shown)";
+  if (stored.kind === "pixel") return "32 x 32 pixel art";
+  return stored.fits ? `Your picture, ${stored.logo.side} x ${stored.logo.side}` : "Your picture (it does not fit yet)";
+}
+
+export function LogoUpload({
+  meta,
+  stored,
+  budget,
+  onIcon,
+  onLogo,
+  name,
+  symbol,
+}: {
+  meta: Pick<TokenMetaDraft, "icon" | "logo" | "description">;
+  /** The icon the record stores now (the last one made). */
+  stored: StoredIcon | undefined;
+  /** Bytes the icon may take next to the token's other details (the logo is fitted to it). */
+  budget: number;
+  /** Pixel art, drawn or made for you (replaces an uploaded logo). */
+  onIcon: (icon: IconDraft) => void;
+  /** An uploaded picture (replaces the pixel art). */
+  onLogo: (logo: LogoFitter) => void;
+  name: string;
+  symbol: string;
+}): ReactNode {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const fileRef = useRef<HTMLInputElement>(null);
   const [picture, setPicture] = useState<Picture | null>(null);
   const [crop, setCrop] = useState<Crop>(CENTRED);
-  const [preview, setPreview] = useState<IconDraft | null>(null);
+  const [framed, setFramed] = useState<LogoFitter | null>(null);
+  const [preview, setPreview] = useState<{ fitter: LogoFitter; icon: LogoIcon; fits: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
+
+  const close = (): void => {
+    setPicture(null);
+    setFramed(null);
+    setPreview(null);
+  };
 
   const choose = (file: File | undefined): void => {
     if (!file) return;
@@ -37,30 +82,47 @@ export function LogoUpload({ icon, onChange, name, symbol }: { icon: IconDraft; 
       .then((p) => {
         setPicture(p);
         setCrop(CENTRED);
+        setFramed(null);
+        setPreview(null);
         sfx.play("toggle");
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "This image could not be used."))
       .finally(() => setBusy(false));
   };
 
-  // The pixel preview follows the frame (a short pause while it is being dragged).
+  // The framed picture follows the frame (a short pause while it is being dragged)...
   useEffect(() => {
     if (picture === null) return;
     const t = window.setTimeout(() => {
       try {
-        setPreview(cropToIcon(picture, crop));
+        setFramed(cropToLogo(picture, crop));
       } catch (e) {
         setError(e instanceof Error ? e.message : "This image could not be used.");
       }
-    }, 90);
+    }, 120);
     return () => window.clearTimeout(t);
   }, [picture, crop]);
 
+  // ...and the preview is the icon it would be stored as, for the room there is now.
+  useEffect(() => {
+    if (framed === null) return;
+    let alive = true;
+    void (async () => {
+      const fit = await framed.fit(budget);
+      const icon = fit ?? (await framed.smallest());
+      if (alive) setPreview({ fitter: framed, icon, fits: fit !== null });
+    })().catch(() => {
+      if (alive) setError("This image could not be used.");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [framed, budget]);
+
   const use = (): void => {
     if (preview === null) return;
-    onChange(preview);
-    setPicture(null);
-    setPreview(null);
+    onLogo(preview.fitter);
+    close();
     sfx.play("success");
   };
 
@@ -70,7 +132,20 @@ export function LogoUpload({ icon, onChange, name, symbol }: { icon: IconDraft; 
     choose(e.dataTransfer.files[0]);
   };
 
-  const blank = isBlank(icon.pixels);
+  const words = meta.description.trim() !== "";
+  const blank = stored === undefined ? meta.logo === null && isBlank(meta.icon.pixels) : stored.kind === "none";
+  const tag = `${symbol.trim() || "Token"} logo`;
+  let face: ReactNode = <ImageUp aria-hidden="true" />;
+  let line = "Drop a picture here, or choose one. You frame it next.";
+  if (stored?.kind === "logo") {
+    face = <LogoImage icon={stored.logo} size={96} label={`${tag}, ${stored.logo.side} by ${stored.logo.side} pixels`} />;
+    line = stored.fits
+      ? `Stored on Solana with your token, as a ${stored.logo.side} x ${stored.logo.side} picture${simplified(stored.logo) ? ", simplified a little so it fits" : ""}.`
+      : "It does not fit on Solana next to your token's details yet (see below).";
+  } else if (stored?.kind === "pixel") {
+    face = <IconCanvas icon={meta.icon} size={96} label={`${tag}, 32 by 32 pixel art`} />;
+    line = "Stored on Solana with your token, as 32 x 32 pixel art.";
+  }
   return (
     <div className="lu" data-cropping={picture !== null ? "" : undefined}>
       <input
@@ -96,11 +171,11 @@ export function LogoUpload({ icon, onChange, name, symbol }: { icon: IconDraft; 
           onDrop={onDrop}
         >
           <span className="lu-icon" data-blank={blank ? "" : undefined}>
-            {blank ? <ImageUp aria-hidden="true" /> : <IconCanvas icon={icon} size={96} label={`${symbol.trim() || "Token"} logo, 32 by 32 pixels`} />}
+            {face}
           </span>
           <span className="lu-drop-text">
             <b>{blank ? "Add a logo" : "Your logo"}</b>
-            <span>{blank ? "Drop a picture here, or choose one. You frame it next." : "Stored on Solana with your token, as 32 x 32 pixels."}</span>
+            <span>{line}</span>
           </span>
           <span className="lu-drop-btns">
             <Button size="sm" variant={blank ? "primary" : "secondary"} loading={busy} onClick={() => fileRef.current?.click()}>
@@ -110,7 +185,7 @@ export function LogoUpload({ icon, onChange, name, symbol }: { icon: IconDraft; 
               size="sm"
               variant="ghost"
               onClick={() => {
-                onChange(generateIcon(seedOf(`${name}#${symbol}#${Date.now()}`)));
+                onIcon(generateIcon(seedOf(`${name}#${symbol}#${Date.now()}`)));
                 sfx.play("toggle");
               }}
             >
@@ -119,26 +194,27 @@ export function LogoUpload({ icon, onChange, name, symbol }: { icon: IconDraft; 
           </span>
         </div>
       ) : (
-        <Cropper picture={picture} crop={crop} onCrop={setCrop} preview={preview} onUse={use} onCancel={() => setPicture(null)} onOther={() => fileRef.current?.click()} />
+        <Cropper picture={picture} crop={crop} onCrop={setCrop} preview={preview} words={words} onUse={use} onCancel={close} onOther={() => fileRef.current?.click()} />
       )}
       {error !== null ? (
         <p className="field-error" role="alert">
           {error}
         </p>
       ) : null}
-      <Details summary="Or draw it pixel by pixel" className="lu-draw">
-        <PixelIconEditor icon={icon} onChange={onChange} name={name} symbol={symbol} />
+      <Details summary="Or draw a pixel icon" className="lu-draw">
+        <PixelIconEditor icon={meta.icon} onChange={onIcon} name={name} symbol={symbol} />
       </Details>
     </div>
   );
 }
 
-/** The frame: the picture's square at its zoom, draggable, with the pixel icon it makes beside it. */
+/** The frame: the picture's square at its zoom, draggable, with the icon it makes beside it (exactly as stored). */
 function Cropper({
   picture,
   crop,
   onCrop,
   preview,
+  words,
   onUse,
   onCancel,
   onOther,
@@ -146,7 +222,9 @@ function Cropper({
   picture: Picture;
   crop: Crop;
   onCrop: (c: Crop) => void;
-  preview: IconDraft | null;
+  preview: { icon: LogoIcon; fits: boolean } | null;
+  /** The token has a description (what to shorten when the logo does not fit). */
+  words: boolean;
   onUse: () => void;
   onCancel: () => void;
   onOther: () => void;
@@ -207,6 +285,13 @@ function Cropper({
     drag.current = null;
   };
 
+  const icon = preview?.icon ?? null;
+  let note = "Your logo is kept on Solana itself, signed with your token's details.";
+  if (preview !== null && icon !== null) {
+    if (!preview.fits) note = `${capital(words ? LOGO_NO_ROOM : LOGO_TOO_DETAILED)}.`;
+    else if (simplified(icon)) note = `Kept on Solana as a ${icon.side} x ${icon.side} picture, exactly as shown: simplified a little so it fits.`;
+    else note = `Kept on Solana as a ${icon.side} x ${icon.side} picture, exactly as shown.`;
+  }
   return (
     <div className="lu-crop glass">
       <div className="lu-frame-col">
@@ -222,7 +307,6 @@ function Cropper({
           onPointerCancel={up}
         >
           <canvas ref={canvas} className="lu-frame-img" aria-hidden="true" />
-          <span className="lu-frame-grid" aria-hidden="true" />
         </div>
         <label className="sl-label lu-zoom-label" htmlFor={`${id}-zoom`}>
           Zoom
@@ -241,18 +325,20 @@ function Cropper({
       </div>
       <div className="lu-preview">
         <p className="pg-label">As your token&apos;s icon</p>
-        <div className="lu-sizes" aria-hidden={preview === null ? "true" : undefined}>
-          {preview !== null ? (
+        <div className="lu-sizes" aria-hidden={icon === null ? "true" : undefined}>
+          {icon !== null ? (
             <>
-              <IconCanvas icon={preview} size={96} className="lu-big" label="Your logo as a 32 by 32 pixel icon" />
-              <IconCanvas icon={preview} size={64} />
-              <IconCanvas icon={preview} size={32} />
+              <LogoImage icon={icon} size={128} className="lu-big" label={`Your logo as stored: ${icon.side} by ${icon.side} pixels`} />
+              <LogoImage icon={icon} size={64} />
+              <LogoImage icon={icon} size={32} />
             </>
           ) : (
-            <span className="lu-wait">Shrinking…</span>
+            <span className="lu-wait">Preparing…</span>
           )}
         </div>
-        <p className="lu-note">32 x 32 pixels and up to 16 colours: small enough to keep on Solana itself, signed with your token&apos;s details.</p>
+        <p className="lu-note" data-tone={preview !== null && !preview.fits ? "fail" : undefined} aria-live="polite">
+          {note}
+        </p>
         <div className="pg-btns">
           <Button size="sm" variant="primary" disabled={preview === null} onClick={onUse}>
             Use this logo

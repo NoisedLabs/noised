@@ -32,10 +32,11 @@ import { launchIdentity, shortId, usePqKey } from "../../lib/pqKey";
 import { explainGraphLines } from "../../lib/programmable";
 import { Chip, Comment, Details, Panel, Readout, Row, Toggle } from "../inner/kit";
 import { QuantumKeyPanel } from "../quantumkey/QuantumKeyPanel";
-import { convertDraft, iconPng, metaProblems, splitError, xHandle } from "./draft";
-import { LogoUpload } from "./LogoUpload";
+import { convertDraft, iconBudgetOf, metaProblems, splitError, xHandle, type StoredIcon } from "./draft";
+import { iconSummary, LogoUpload } from "./LogoUpload";
 import { IconCard } from "./PixelIconEditor";
-import { isBlank } from "./pixelIcon";
+import { blankIcon } from "./pixelIcon";
+import { useStoredIcon } from "./useStoredIcon";
 import {
   buybackBuild,
   buybackFacts,
@@ -59,6 +60,8 @@ import {
 import { nearestIndex } from "./simple";
 import { StopSlider } from "./SimpleControls";
 
+const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
 const freshSeed = (): Uint8Array => crypto.getRandomValues(new Uint8Array(32));
 
 export function QuickLaunch({ started, onStarted }: { started: string | null; onStarted: (id: string) => void }): ReactNode {
@@ -78,20 +81,9 @@ export function QuickLaunch({ started, onStarted }: { started: string | null; on
   const treasury = useMemo(() => (me === null ? null : launchTreasury(me, seed).treasury), [me, seed]);
   const draft = useMemo(() => resolveTreasury(quickDraft(q, me?.toBase58() ?? ""), treasury), [q, me, treasury]);
 
-  // The logo's PNG for the record's document (the SDK's deterministic encoder; kept per drawing).
-  const iconKey = `${q.meta.icon.palette.join(",")}|${q.meta.icon.pixels}`;
-  const [png, setPng] = useState<{ key: string; png: Uint8Array | null } | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void iconPng(q.meta.icon).then(
-      (b) => alive && setPng({ key: iconKey, png: b }),
-      () => alive && setPng({ key: iconKey, png: null }),
-    );
-    return () => {
-      alive = false;
-    };
-  }, [iconKey]);
-  const pngNow = png !== null && png.key === iconKey ? png.png : undefined;
+  // The logo the record stores (made asynchronously; an uploaded picture is fitted to the room the details leave).
+  const icon = useStoredIcon(draft);
+  const pngNow = icon.now === undefined ? undefined : icon.now.png;
   const conv = useMemo(() => convertDraft(draft, pqId === null ? null : Uint8Array.from(pqId.match(/../g) ?? [], (h) => Number.parseInt(h, 16)), pngNow), [draft, pqId, pngNow]);
   const decimals = conv.params?.tokenDecimal ?? 6;
   const autopilot = useMemo(() => (needsAutopilot(q.destination) ? buybackBuild(decimals) : null), [q.destination, decimals]);
@@ -130,7 +122,15 @@ export function QuickLaunch({ started, onStarted }: { started: string | null; on
         <div className="ql-grid">
           <div className="ql-logo">
             <p className="label">Logo</p>
-            <LogoUpload icon={q.meta.icon} onChange={(icon) => set({ meta: { ...q.meta, icon } })} name={q.name} symbol={q.symbol} />
+            <LogoUpload
+              meta={q.meta}
+              stored={icon.shown}
+              budget={iconBudgetOf(draft)}
+              onIcon={(next) => set({ meta: { ...q.meta, icon: next, logo: null } })}
+              onLogo={(logo) => set({ meta: { ...q.meta, logo, icon: blankIcon(q.meta.icon.palette) } })}
+              name={q.name}
+              symbol={q.symbol}
+            />
           </div>
           <div className="ql-fields">
             <div className="contents" onBlurCapture={() => touch("name")}>
@@ -210,7 +210,7 @@ export function QuickLaunch({ started, onStarted }: { started: string | null; on
             </Field>
           </div>
         </div>
-        {fieldError("icon") !== null ? <Alert tone="fail">{fieldError("icon")}</Alert> : null}
+        {fieldError("icon") !== null ? <Alert tone="fail">{capital(fieldError("icon") ?? "")}</Alert> : null}
 
         <div className="ql-fee">
           <StopSlider
@@ -291,6 +291,7 @@ export function QuickLaunch({ started, onStarted }: { started: string | null; on
         comingSoon={comingSoon}
         connection={connection}
         png={pngNow ?? null}
+        stored={icon.shown}
       />
     </div>
   );
@@ -368,8 +369,11 @@ function QuickReview({
   comingSoon,
   connection,
   png,
+  stored,
 }: {
   png: Uint8Array | null;
+  /** The logo the record stores (the last one made). */
+  stored: StoredIcon | undefined;
   q: QuickState;
   conv: ReturnType<typeof convertDraft>;
   autopilotBytes: Uint8Array | null;
@@ -472,11 +476,11 @@ function QuickReview({
         ) : (
           <>
             <div className="ql-sum">
-              <IconCard icon={q.meta.icon} name={q.name} symbol={q.symbol} />
+              <IconCard icon={q.meta.icon} stored={stored} name={q.name} symbol={q.symbol} />
               <Readout label="Your launch">
                 <Row k="Name">{q.name.trim() || "—"}</Row>
                 <Row k="Ticker">{q.symbol.trim() ? `$${q.symbol.trim()}` : "—"}</Row>
-                <Row k="Logo">{isBlank(q.meta.icon.pixels) ? "None (its address pattern is shown)" : "32 x 32 pixels, stored on Solana"}</Row>
+                <Row k="Logo">{iconSummary(stored)}</Row>
                 {xHandle(q.meta) !== "" ? <Row k="X">@{xHandle(q.meta)}</Row> : null}
                 {q.meta.website.trim() !== "" ? <Row k="Website">{q.meta.website.trim()}</Row> : null}
                 <Row k="Trading fee">{feeText(q.feeBps)}</Row>

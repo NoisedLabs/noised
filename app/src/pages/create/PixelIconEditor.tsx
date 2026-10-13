@@ -1,15 +1,14 @@
 /**
- * The Create wizard's token icon (PIXEL_V6 §4): a tiny 32x32 pixel editor
- * with up to 16 colours, an image uploader that shrinks any picture to
- * 32x32 and 16 colours, a generator, and crisp previews.
+ * "Draw a pixel icon" (PIXEL_V6 §4): a tiny 32x32 pixel editor with up to 16
+ * colours, a generator, and crisp previews. An uploaded picture never comes
+ * here: it is stored as a smooth logo (LogoUpload.tsx, ./logoIcon.ts).
  *
  * Presentation and draft state only: the icon lives in the wizard's draft
  * (pixelIcon.ts); nothing here touches the chain. Canvas drawing only (no
- * markup injection); uploads are decoded with createImageBitmap (or a data:
- * image as a fallback), both allowed by the CSP.
+ * markup injection).
  */
-import { Dices, Eraser, FlipHorizontal2, Grid3x3, ImageUp, PaintBucket, Pencil, Pipette, Redo2, Trash2, Undo2 } from "lucide-react";
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { Dices, Eraser, FlipHorizontal2, Grid3x3, PaintBucket, Pencil, Pipette, Redo2, Trash2, Undo2 } from "lucide-react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 
 import { sfx } from "../../fx/sfx";
 import {
@@ -25,15 +24,15 @@ import {
   lineCells,
   mainSlot,
   normalizeHex,
-  quantizeRgba,
   seedOf,
   setPixels,
   slotOf,
   usedSlots,
-  withFullPalette,
   withMirror,
   type IconDraft,
 } from "./pixelIcon";
+import type { StoredIcon } from "./draft";
+import { LogoImage } from "./LogoImage";
 
 type Tool = "draw" | "erase" | "fill" | "pick";
 
@@ -45,7 +44,6 @@ const TOOLS: { id: Tool; label: string; key: string; icon: ReactNode }[] = [
 ];
 
 const HISTORY = 64;
-const MAX_UPLOAD = 8 * 1024 * 1024;
 
 // ---------------------------------------------------------------- drawing ---
 
@@ -136,79 +134,11 @@ export function IconCanvas({ icon, size, className = "", label }: { icon: IconDr
   );
 }
 
-// ----------------------------------------------------------------- upload ---
-
-async function decode(file: File): Promise<CanvasImageSource & { width: number; height: number }> {
-  if (typeof createImageBitmap === "function") {
-    try {
-      return await createImageBitmap(file);
-    } catch {
-      // Fall through to the data: image (some browsers refuse GIF or WebP bitmaps).
-    }
-  }
-  const url = await new Promise<string>((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => (typeof fr.result === "string" ? resolve(fr.result) : reject(new Error("Could not read the image.")));
-    fr.onerror = () => reject(new Error("Could not read the image."));
-    fr.readAsDataURL(file);
-  });
-  return await new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("This image could not be opened."));
-    img.src = url;
-  });
-}
-
-/** Any picture as a 32x32, 16-colour icon: fitted inside the square (no cropping), transparent around it. */
-export async function imageToIcon(file: File): Promise<IconDraft> {
-  if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) throw new Error("Choose a PNG, JPEG, GIF or WebP image.");
-  if (file.size > MAX_UPLOAD) throw new Error("Choose an image under 8 MB.");
-  const img = await decode(file);
-  const w = img.width;
-  const h = img.height;
-  if (!(w > 0 && h > 0)) throw new Error("This image is empty.");
-  const scale = Math.min(ICON_SIZE / w, ICON_SIZE / h);
-  const dw = Math.max(1, Math.round(w * scale));
-  const dh = Math.max(1, Math.round(h * scale));
-  // Pixel art that is already an exact multiple of 32 keeps hard edges; anything else is shrunk smoothly in halves.
-  const pixelArt = w % ICON_SIZE === 0 && h % ICON_SIZE === 0 && w === h;
-  let src: CanvasImageSource = img;
-  let sw = w;
-  let sh = h;
-  if (!pixelArt) {
-    while (sw / 2 >= dw * 2 && sh / 2 >= dh * 2) {
-      const c = document.createElement("canvas");
-      c.width = Math.round(sw / 2);
-      c.height = Math.round(sh / 2);
-      const cx = c.getContext("2d");
-      if (!cx) break;
-      cx.imageSmoothingEnabled = true;
-      cx.imageSmoothingQuality = "high";
-      cx.drawImage(src, 0, 0, c.width, c.height);
-      src = c;
-      sw = c.width;
-      sh = c.height;
-    }
-  }
-  const out = document.createElement("canvas");
-  out.width = ICON_SIZE;
-  out.height = ICON_SIZE;
-  const ctx = out.getContext("2d", { willReadFrequently: true });
-  if (!ctx) throw new Error("This browser cannot shrink images.");
-  ctx.imageSmoothingEnabled = !pixelArt;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(src, Math.floor((ICON_SIZE - dw) / 2), Math.floor((ICON_SIZE - dh) / 2), dw, dh);
-  if ("close" in img && typeof img.close === "function") img.close();
-  const data = ctx.getImageData(0, 0, ICON_SIZE, ICON_SIZE).data;
-  return withFullPalette(quantizeRgba(data, ICON_MAX_COLORS));
-}
-
 // ----------------------------------------------------------------- editor ---
 
 /**
  * The 32x32 editor: tools, mirror, undo, the 16-colour palette (each slot
- * editable), upload, "make one for me", and previews at real sizes.
+ * editable), "make one for me", and previews at real sizes.
  * Keyboard: arrows move the cursor (Shift: 4 at a time), Space draws, Delete
  * erases, B / E / G / I pick a tool, M mirrors, Ctrl+Z / Ctrl+Y undo / redo.
  */
@@ -222,9 +152,6 @@ export function PixelIconEditor({ icon, onChange, name, symbol }: { icon: IconDr
   const [hover, setHover] = useState<number | null>(null);
   const [focused, setFocused] = useState(false);
   const [announce, setAnnounce] = useState("");
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const generated = useRef(0);
 
   // The working copy: a stroke paints here and reaches the draft when it ends.
@@ -490,27 +417,6 @@ export function PixelIconEditor({ icon, onChange, name, symbol }: { icon: IconDr
     sfx.play("click");
     setAnnounce("Cleared.");
   };
-  const fileRef = useRef<HTMLInputElement>(null);
-  const load = (file: File | undefined): void => {
-    if (!file) return;
-    setBusy(true);
-    setUploadError(null);
-    imageToIcon(file)
-      .then((next) => {
-        commit(next, workRef.current);
-        setSlot(mainSlot(next, 0));
-        sfx.play("toggle");
-        setAnnounce(`Image shrunk to 32 by 32 pixels with ${usedSlots(next.pixels).length} colours.`);
-      })
-      .catch((err: unknown) => setUploadError(err instanceof Error ? err.message : "This image could not be used."))
-      .finally(() => setBusy(false));
-  };
-  const onDrop = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setDragOver(false);
-    load(e.dataTransfer.files[0]);
-  };
-
   // A whole colour-picker session is one undo step.
   const colourSession = useRef(false);
   const setColour = (hex: string): void => {
@@ -535,7 +441,7 @@ export function PixelIconEditor({ icon, onChange, name, symbol }: { icon: IconDr
   const current = work.palette[slot] ?? "#000000";
 
   return (
-    <div className="ie-editor" data-busy={busy ? "" : undefined}>
+    <div className="ie-editor">
       <div className="ie-tools" role="toolbar" aria-label="Icon tools" aria-controls={`${uid}-canvas`}>
         <div className="ie-tool-group" role="group" aria-label="Tool">
           {TOOLS.map((t) => (
@@ -583,17 +489,7 @@ export function PixelIconEditor({ icon, onChange, name, symbol }: { icon: IconDr
         </div>
       </div>
 
-      <div
-        className="ie-stage"
-        data-drag={dragOver ? "" : undefined}
-        onDragOver={(e) => {
-          if (![...e.dataTransfer.types].includes("Files")) return;
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-      >
+      <div className="ie-stage">
         <div className="ie-board" ref={boxRef}>
           <canvas
             ref={canvasRef}
@@ -615,11 +511,6 @@ export function PixelIconEditor({ icon, onChange, name, symbol }: { icon: IconDr
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
           />
-          {dragOver ? (
-            <span className="ie-drop" aria-hidden="true">
-              Drop to use this image
-            </span>
-          ) : null}
         </div>
         <p className="sr-only" id={`${uid}-keys`}>
           Arrow keys move the cursor, Shift moves 4 pixels. Space draws with the current tool, Delete erases. B draw, E erase, G fill, I pick a colour, M mirror,
@@ -689,29 +580,8 @@ export function PixelIconEditor({ icon, onChange, name, symbol }: { icon: IconDr
           <button type="button" className="btn btn-secondary btn-sm ie-action" onClick={generate}>
             <Dices aria-hidden="true" /> Make one for me
           </button>
-          <button type="button" className="btn btn-secondary btn-sm ie-action" disabled={busy} onClick={() => fileRef.current?.click()}>
-            <ImageUp aria-hidden="true" /> {busy ? "Shrinking…" : "Upload an image"}
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden="true"
-            onChange={(e) => {
-              load(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
         </div>
-        {uploadError ? (
-          <p className="field-error" role="alert">
-            {uploadError}
-          </p>
-        ) : (
-          <p className="ie-hint">Any picture becomes 32 x 32 pixels and at most 16 colours. You can drop one on the grid.</p>
-        )}
+        <p className="ie-hint">Draw your own 32 x 32 pixel icon with up to 16 colours. To use a picture, upload it as your logo instead.</p>
 
         <div className="ie-previews" aria-label="Previews">
           <span className="ie-label">Preview</span>
@@ -739,13 +609,29 @@ export function PixelIconEditor({ icon, onChange, name, symbol }: { icon: IconDr
   );
 }
 
-/** How the icon looks on a launch card. */
-export function IconCard({ icon, name, symbol, description }: { icon: IconDraft; name: string; symbol: string; description?: string | undefined }): ReactNode {
-  const blank = isBlank(icon.pixels);
+/**
+ * How the icon looks on a launch card: the pixel art `icon`, or with `stored` an uploaded logo exactly as it is stored
+ * (smooth).
+ */
+export function IconCard({
+  icon,
+  stored,
+  name,
+  symbol,
+  description,
+}: {
+  icon: IconDraft;
+  stored?: StoredIcon | undefined;
+  name: string;
+  symbol: string;
+  description?: string | undefined;
+}): ReactNode {
+  const logo = stored?.kind === "logo" ? stored.logo : null;
+  const blank = logo === null && isBlank(icon.pixels);
   return (
     <div className="ie-card" aria-hidden="true">
       <span className="ie-card-icon" data-blank={blank ? "" : undefined}>
-        {blank ? <span className="ie-card-none">?</span> : <IconCanvas icon={icon} size={48} />}
+        {logo !== null ? <LogoImage icon={logo} size={48} /> : blank ? <span className="ie-card-none">?</span> : <IconCanvas icon={icon} size={48} />}
       </span>
       <span className="ie-card-text">
         <span className="ie-card-name">{name.trim() || "Your token"}</span>
