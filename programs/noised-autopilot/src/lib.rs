@@ -92,103 +92,219 @@
 //!    revoked; a freeze is used only until the `not_after` it was signed
 //!    with.
 //! 7. A failed check changes nothing (every refusal is an error).
+//!
+//! # No framework
+//!
+//! The program is written on `pinocchio` and `noised-onchain` (the shared
+//! Anchor-compatible building blocks: account checks, errors, SPL Token /
+//! Token-2022 parsing, CPIs); no Anchor code is linked into it. Its ABI is
+//! the one the Anchor 1.2.1 build had, byte for byte: the same program id,
+//! instruction discriminators (`sha256("global:<name>")[..8]`), account
+//! order and signer/writable flags, Borsh arguments, account discriminators
+//! (`sha256("account:<Name>")[..8]`) and layouts (the 1,244-byte
+//! `Autopilot`, `GraphRecord`), PDA seeds and bumps, events
+//! (`sha256("event:<Name>")[..8]` + Borsh, through `sol_log_data`) and
+//! error numbers, the framework's included (`ConstraintSeeds` 2006, ...).
+//! Each instruction in [`instructions`] lists every account constraint of
+//! the Anchor build (its source is kept verbatim in `anchor/`) and checks
+//! them in Anchor's order; [`processor`] dispatches. The hand-maintained
+//! `idls/noised_autopilot.json` describes the ABI.
+//!
+//! The decisions ([`logic`], [`reference`], [`price`]) and the layout
+//! readers ([`launchpad`], [`external`]) are the Anchor build's, line for
+//! line; only their error type changed ([`error`]).
+//!
+//! Off-chain (`not(target_os = "solana")`), the crate keeps the Anchor
+//! client API its users have: [`accounts`], [`instruction`],
+//! `program::NoisedAutopilot`, the Anchor account traits on
+//! [`state::Autopilot`] and [`state::GraphRecord`] and the Anchor `Event`
+//! trait on the [`events`]. That code is host-only and never part of the
+//! program binary.
 
-use anchor_lang::prelude::*;
+extern crate alloc;
 
+/// Anchor's `require!(cond, e)`: return `e` (converted into the function's
+/// error type) unless `cond` holds.
+macro_rules! require {
+    ($cond:expr, $err:expr $(,)?) => {
+        if !($cond) {
+            return Err(::core::convert::Into::into($err));
+        }
+    };
+}
+
+/// Anchor's `err!(e)`: `Err(e)`, converted into the function's error type.
+macro_rules! err {
+    ($err:expr $(,)?) => {
+        Err(::core::convert::Into::into($err))
+    };
+}
+
+/// Anchor's `require_keys_eq!(left, right, e)`: unless the keys are equal,
+/// return `e` logged with both keys (`Left:` / `Right:`), as Anchor logs it.
+macro_rules! require_keys_eq {
+    ($left:expr, $right:expr, $err:expr $(,)?) => {{
+        let (left, right): (&$crate::Pubkey, &$crate::Pubkey) = (&$left, &$right);
+        if !noised_onchain::same(left, right) {
+            return Err(::core::convert::Into::into($crate::error::keys(
+                $err, left, right,
+            )));
+        }
+    }};
+}
+
+#[cfg(not(target_os = "solana"))]
+mod client;
 pub mod constants;
 pub mod cpi;
 pub mod error;
 pub mod events;
 pub mod external;
 pub mod instructions;
+pub mod int;
 pub mod launchpad;
 pub mod logic;
 pub mod price;
+pub mod processor;
 pub mod reference;
 pub mod state;
 
 #[cfg(test)]
 mod tests;
 
-use instructions::*;
+#[cfg(not(target_os = "solana"))]
+pub use client::{accounts, instruction};
 
-declare_id!("D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx");
+#[cfg(not(feature = "no-entrypoint"))]
+noised_onchain::entrypoint!(crate::processor::process_instruction);
+
+/// An account address (`solana_address::Address`, which Anchor's `Pubkey`
+/// also is).
+pub type Pubkey = pinocchio::Address;
+
+/// The result of the program's decisions: an [`error::AutopilotError`] by
+/// default, logged when `?` turns it into the instruction's `ProgramError`.
+pub type Result<T, E = error::AutopilotError> = core::result::Result<T, E>;
+
+pub use pinocchio::error::ProgramError;
+
+/// The program id (`declare_id!` of the Anchor build).
+pub const ID: Pubkey = decode_pubkey("D5fuqCXNP7BkU3CyNrpZUFStgdZ6XwRkpURiK9v5esbx");
+
+/// The program id.
+pub const fn id() -> Pubkey {
+    ID
+}
+
+/// Whether `id` is the program id.
+pub fn check_id(id: &Pubkey) -> bool {
+    *id == ID
+}
+
+/// The program type (`Id` off-chain, as `#[program]` generated it), and the
+/// [`noised_onchain::Program`] the account checks and errors are generic
+/// over.
+pub mod program {
+    /// The autopilot program.
+    #[derive(Clone)]
+    pub struct NoisedAutopilot;
+
+    impl noised_onchain::Program for NoisedAutopilot {
+        const ID: crate::Pubkey = crate::ID;
+        const ERRORS: noised_onchain::ErrorTable = crate::error::ERRORS;
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    impl anchor_lang::Id for NoisedAutopilot {
+        fn id() -> crate::Pubkey {
+            crate::ID
+        }
+    }
+}
+
+/// Discriminators: instructions `sha256("global:<snake_case name>")[..8]`,
+/// accounts `sha256("account:<Name>")[..8]`, events
+/// `sha256("event:<Name>")[..8]` (checked against the IDL in `tests/abi.rs`).
+pub mod discriminator {
+    pub const INIT_AUTOPILOT: [u8; 8] = [120, 236, 35, 34, 115, 30, 166, 245];
+    pub const BIND_MINT: [u8; 8] = [252, 89, 36, 147, 181, 231, 160, 219];
+    pub const BIND_POOL: [u8; 8] = [42, 253, 183, 246, 58, 106, 92, 243];
+    pub const PUBLISH_GRAPH: [u8; 8] = [107, 216, 172, 115, 29, 125, 3, 224];
+    pub const ACTIVATE: [u8; 8] = [194, 203, 35, 100, 151, 55, 170, 82];
+    pub const APPLY_PENDING: [u8; 8] = [88, 86, 232, 48, 42, 150, 180, 196];
+    pub const FREEZE: [u8; 8] = [255, 91, 207, 84, 251, 194, 254, 63];
+    pub const REVOKE_OPERATOR: [u8; 8] = [185, 25, 87, 77, 88, 8, 30, 175];
+    pub const RUN: [u8; 8] = [203, 27, 228, 218, 208, 69, 35, 84];
+    pub const UPDATE_PRICE: [u8; 8] = [61, 34, 117, 155, 75, 34, 123, 208];
+
+    /// `sha256("account:Autopilot")[..8]`.
+    pub const AUTOPILOT: [u8; 8] = [113, 195, 229, 57, 158, 250, 49, 134];
+    /// `sha256("account:GraphRecord")[..8]`.
+    pub const GRAPH_RECORD: [u8; 8] = [118, 95, 92, 21, 103, 22, 179, 120];
+
+    pub const AUTOPILOT_INITIALIZED: [u8; 8] = [253, 56, 229, 45, 213, 208, 230, 246];
+    pub const MINT_BOUND: [u8; 8] = [234, 244, 192, 242, 103, 41, 255, 18];
+    pub const POOL_BOUND: [u8; 8] = [234, 212, 32, 69, 240, 237, 33, 28];
+    pub const GRAPH_PUBLISHED: [u8; 8] = [93, 40, 45, 124, 250, 139, 155, 19];
+    pub const GRAPH_QUEUED: [u8; 8] = [192, 247, 91, 23, 239, 238, 253, 1];
+    pub const GRAPH_ACTIVATED: [u8; 8] = [90, 74, 13, 95, 27, 203, 114, 27];
+    pub const GRAPH_FROZEN: [u8; 8] = [11, 115, 120, 89, 92, 55, 86, 18];
+    pub const OPERATOR_REVOKED: [u8; 8] = [234, 41, 78, 23, 191, 224, 103, 64];
+    pub const NODE_RAN: [u8; 8] = [181, 67, 182, 114, 33, 181, 84, 224];
+    pub const REFERENCE_PRICE_UPDATED: [u8; 8] = [84, 187, 73, 53, 203, 174, 5, 238];
+
+    /// Anchor's `EVENT_IX_TAG` (`0x1d9acb512ea545e4`, little-endian): the
+    /// event-CPI instruction tag, which this program (like the Anchor build,
+    /// compiled without `event-cpi`) refuses with `EventInstructionStub`.
+    pub const EVENT_IX_TAG_LE: [u8; 8] = noised_onchain::event::EVENT_IX_TAG_LE;
+}
 
 /// SHA-256 through the `sol_sha256` syscall (host builds use the same API).
 pub struct SolSha256;
 
 impl noised_rules::Sha256 for SolSha256 {
     fn hashv(parts: &[&[u8]]) -> [u8; 32] {
-        solana_sha256_hasher::hashv(parts).to_bytes()
+        noised_onchain::hashv(parts)
     }
 }
 
-#[program]
-pub mod noised_autopilot {
-    use super::*;
-
-    /// Create a launch's autopilot and its treasury's wSOL account
-    /// (permissionless, once).
-    pub fn init_autopilot(ctx: Context<InitAutopilot>) -> Result<()> {
-        instructions::init_autopilot::handle_init_autopilot(ctx)
+/// `Pubkey::from_str` of a base58 address, in const context: the address
+/// constants (`constants.rs`'s `pubkey!`) are decoded at compile time (a
+/// malformed one fails to compile). Each is checked against
+/// `Pubkey::from_str` in `tests/abi.rs`.
+#[doc(hidden)]
+pub const fn decode_pubkey(text: &str) -> Pubkey {
+    const ALPHABET: &[u8; 58] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    let text = text.as_bytes();
+    let mut out = [0u8; 32];
+    let mut leading_ones = 0;
+    let mut i = 0;
+    while i < text.len() {
+        let mut digit = 0;
+        while digit < ALPHABET.len() && ALPHABET[digit] != text[i] {
+            digit += 1;
+        }
+        assert!(digit < ALPHABET.len(), "not base58");
+        if digit == 0 && leading_ones == i {
+            leading_ones += 1;
+        }
+        // out = out * 58 + digit, big-endian.
+        let mut carry = digit as u32;
+        let mut j = out.len();
+        while j > 0 {
+            j -= 1;
+            carry += out[j] as u32 * 58;
+            out[j] = (carry & 0xFF) as u8;
+            carry >>= 8;
+        }
+        assert!(carry == 0, "more than 32 bytes");
+        i += 1;
     }
-
-    /// Bind the autopilot to the launch's certified mint once the launch is
-    /// live; create the treasury's token account (permissionless, once).
-    pub fn bind_mint(ctx: Context<BindMint>) -> Result<()> {
-        instructions::bind_mint::handle_bind_mint(ctx)
+    // Leading '1's encode exactly the leading zero bytes.
+    let mut zeros = 0;
+    while zeros < out.len() && out[zeros] == 0 {
+        zeros += 1;
     }
-
-    /// Bind the autopilot to the DAMM v2 pool DBC's migration created for
-    /// the launch: from then on it has graduated (permissionless, once).
-    pub fn bind_pool(ctx: Context<BindPool>) -> Result<()> {
-        instructions::bind_pool::handle_bind_pool(ctx)
-    }
-
-    /// Publish a verified PXG1 graph at the address its content hashes to
-    /// (permissionless, idempotent).
-    pub fn publish_graph(ctx: Context<PublishGraph>, bytes: Vec<u8>) -> Result<()> {
-        instructions::publish_graph::handle_publish_graph(ctx, bytes)
-    }
-
-    /// Queue a published graph to take effect at `activate_at`, authorized
-    /// by the launch's post-quantum identity (permissionless).
-    pub fn activate(ctx: Context<Activate>, activate_at: i64) -> Result<()> {
-        instructions::governance::handle_activate(ctx, activate_at)
-    }
-
-    /// Make the queued graph active at or after its time (permissionless).
-    pub fn apply_pending(ctx: Context<ApplyPending>) -> Result<()> {
-        instructions::governance::handle_apply_pending(ctx)
-    }
-
-    /// Make the active graph permanent, authorized by the launch's
-    /// post-quantum identity until `not_after`, which the authorization
-    /// signs (permissionless).
-    pub fn freeze(ctx: Context<Govern>, not_after: i64) -> Result<()> {
-        instructions::governance::handle_freeze(ctx, not_after)
-    }
-
-    /// Clear the operator, authorized by the launch's post-quantum identity
-    /// (permissionless).
-    pub fn revoke_operator(ctx: Context<Govern>) -> Result<()> {
-        instructions::governance::handle_revoke_operator(ctx)
-    }
-
-    /// Run one due node of the active graph and tip the caller
-    /// (permissionless; operator-gated nodes need the operator and its
-    /// amount; a keeper may choose a smaller buyback amount).
-    pub fn run<'info>(
-        ctx: Context<'info, Run<'info>>,
-        node: u8,
-        amount: Option<u64>,
-    ) -> Result<()> {
-        instructions::run::handle_run(ctx, node, amount)
-    }
-
-    /// Observe the pool's price and move the reference toward what the
-    /// observations agree on (permissionless, any time after graduation).
-    pub fn update_price(ctx: Context<UpdatePrice>) -> Result<()> {
-        instructions::update_price::handle_update_price(ctx)
-    }
+    assert!(zeros == leading_ones, "not a 32-byte address");
+    Pubkey::new_from_array(out)
 }

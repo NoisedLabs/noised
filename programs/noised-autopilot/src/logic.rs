@@ -5,7 +5,6 @@
 //! instruction handlers read accounts, call these, then perform exactly the
 //! planned CPIs.
 
-use anchor_lang::prelude::*;
 use noised_rules::graph::{action, current_epoch, Graph, GraphCtx, NodeState, NotDue};
 
 use crate::{
@@ -18,6 +17,7 @@ use crate::{
     price,
     reference::{self, Seen},
     state::{AuthMark, NodeRecord, MAX_NODES},
+    Pubkey, Result,
 };
 
 /// Whether a graph may be queued to take effect at `activate_at` (spec §4
@@ -424,7 +424,7 @@ pub fn take_tip(
     value: u64,
     max_tip: u64,
 ) -> u64 {
-    let start = now.saturating_sub(now.rem_euclid(TIP_EPOCH_SECS));
+    let start = now.saturating_sub(crate::int::rem_euclid(now, TIP_EPOCH_SECS));
     if start > *epoch_start {
         *epoch_start = start;
         *in_epoch = 0;

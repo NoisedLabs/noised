@@ -2,7 +2,15 @@
 //! (spec §4). None of these can change after deployment: the program has no
 //! admin and no configuration account.
 
-use anchor_lang::prelude::*;
+use crate::Pubkey;
+
+/// Anchor's `pubkey!("<base58>")`: an address constant, decoded at compile
+/// time (`crate::decode_pubkey`).
+macro_rules! pubkey {
+    ($text:literal) => {
+        crate::decode_pubkey($text)
+    };
+}
 
 /// `["autopilot", launch]`: a launch's autopilot state.
 pub const AUTOPILOT_SEED: &[u8] = b"autopilot";

@@ -3,7 +3,8 @@
 Each mutant is applied to a scratch copy of the workspace (outside the
 repository; the repository is never written) and must make a test fail:
 
-  1. the program's host tests (`cargo test -p noised-autopilot`), then, if
+  1. the program's host tests (`cargo test -p noised-autopilot --lib --test
+     abi`: the unit tests and the ABI tests), then, if
      they all pass and the mutant names LiteSVM tests,
   2. the LiteSVM suites, pinned: the test binaries built from the unmutated
      sources (`--svm-bins`, from `cargo test --no-run` of
@@ -54,6 +55,9 @@ PROGRAM = os.path.join(WS, "programs", "noised-autopilot")
 
 P = "src/"
 LOGIC, PRICE, LP, EXT, CONST, REF = P + "logic.rs", P + "price.rs", P + "launchpad.rs", P + "external.rs", P + "constants.rs", P + "reference.rs"
+# The framework-free program's own code (no Anchor): account layout, events,
+# dispatch, error lines, integer division.
+STATE, EVENTS, PROC, ERR, INT = P + "state.rs", P + "events.rs", P + "processor.rs", P + "error.rs", P + "int.rs"
 RUN, GOV, INIT, BIND, BINDP, PUB, UPD = (
     P + "instructions/run.rs",
     P + "instructions/governance.rs",
@@ -240,35 +244,35 @@ MUTANTS = [
     (EXT, "mint.to_bytes()\n            && bytes32(data, damm_pool::TOKEN_B_MINT_OFFSET)? == WSOL_MINT.to_bytes(),", "mint.to_bytes(),", "pool of another quote", None),
     (EXT, "    pub const SQRT_PRICE_OFFSET: usize = 456;", "    pub const SQRT_PRICE_OFFSET: usize = 440;", "pool price offset", None),
     # ---- run
-    (RUN, "        ap.pending_graph == [0; 32] || now < ap.pending_activate_at,", "        true,", "runs after an update is due", [GOVERN]),
-    (RUN, "        *pool_authority.key == DAMM_V2_POOL_AUTHORITY\n            && ", "        ", "any pool authority", [WRONG]),
-    (RUN, "            && *vault_a.key == pool.token_a_vault\n", "\n", "any vault A", [WRONG]),
-    (RUN, "            && *vault_b.key == pool.token_b_vault\n", "\n", "any vault B", [WRONG]),
-    (RUN, "            && *event_authority.key == DAMM_V2_EVENT_AUTHORITY\n", "\n", "any event authority", [WRONG]),
-    (RUN, "            && *program.key == DAMM_V2_PROGRAM_ID\n", "\n", "any swap program", [WRONG]),
+    (RUN, "        a.ap.pending_graph == [0; 32] || now < a.ap.pending_activate_at,", "        true,", "runs after an update is due", [GOVERN]),
+    (RUN, "        same(pool_authority.address(), &DAMM_V2_POOL_AUTHORITY)\n            && ", "        ", "any pool authority", [WRONG]),
+    (RUN, "            && same(vault_a.address(), &pool.token_a_vault)\n", "\n", "any vault A", [WRONG]),
+    (RUN, "            && same(vault_b.address(), &pool.token_b_vault)\n", "\n", "any vault B", [WRONG]),
+    (RUN, "            && same(event_authority.address(), &DAMM_V2_EVENT_AUTHORITY)\n", "\n", "any event authority", [WRONG]),
+    (RUN, "            && same(program.address(), &DAMM_V2_PROGRAM_ID)\n", "\n", "any swap program", [WRONG]),
     (RUN, "        rest.len() == BUYBACK_ACCOUNTS,", "        rest.len() >= BUYBACK_ACCOUNTS,", "extra DAMM accounts", [WRONG]),
     (RUN, "    token_amount(vault_b)\n", "    token_amount(vault_a)\n", "the keeper floor from the token vault", [F4]),
-    (RUN, "            input: &a.treasury_wsol.to_account_info(),\n            output: &a.treasury_token.to_account_info(),", "            input: &a.treasury_token.to_account_info(),\n            output: &a.treasury_wsol.to_account_info(),", "the treasury sells", [E2E]),
-    (RUN, "        bought,\n        a.mint.decimals,", "        bought / 2,\n        a.mint.decimals,", "half the purchase burned", [E2E]),
-    (RUN, "            *ata.key == expected && ata.is_writable,", "            ata.is_writable,", "any recipient account", [WRONG]),
-    (RUN, "            *ata.key == expected && ata.is_writable,", "            *ata.key == expected,", "read-only recipient account", [WRONG]),
+    (RUN, "            input: a.treasury_wsol,\n            output: a.treasury_token,", "            input: a.treasury_token,\n            output: a.treasury_wsol,", "the treasury sells", [E2E]),
+    (RUN, "        bought,\n        a.decimals,", "        bought / 2,\n        a.decimals,", "half the purchase burned", [E2E]),
+    (RUN, "            same(ata.address(), &expected) && ata.is_writable(),", "            ata.is_writable(),", "any recipient account", [WRONG]),
+    (RUN, "            same(ata.address(), &expected) && ata.is_writable(),", "            same(ata.address(), &expected),", "read-only recipient account", [WRONG]),
     (RUN, "        rest.len() == graph.recipient_count(),", "        rest.len() <= graph.recipient_count(),", "missing recipient accounts", [WRONG]),
     (RUN, "        let share = shares.get(i).copied().unwrap_or(0);", "        let share = shares.first().copied().unwrap_or(0);", "every recipient gets the first share", [E2E]),
-    (RUN, "            require!(\n                ctx.remaining_accounts.is_empty(),\n                AutopilotError::UnexpectedAccounts\n            );\n", "", "accounts on a burn", [WRONG]),
+    (RUN, "            require!(a.remaining.is_empty(), AutopilotError::UnexpectedAccounts);\n", "", "accounts on a burn", [WRONG]),
     (RUN, "    logic::record_run(\n        slot,\n        open,\n        &mut ap.seq,\n        gnode.epoch_secs,\n        now,\n        plan.spent(),\n        plan.partial(),\n    )?;", "    let _ = (slot, open);", "run not recorded", [E2E]),
     (RUN, "    ap.set_price_state(&price);\n", "", "a run's observation not kept", [E2E]),
-    (RUN, "    if let Some(p) = pool {\n        reference::observe(", "    if let Some(p) = pool.filter(|_| false) {\n        reference::observe(", "runs observe nothing", [E2E]),
+    (RUN, "    if let Some(p) = &pool {\n        reference::observe(", "    if let Some(p) = pool.as_ref().filter(|_| false) {\n        reference::observe(", "runs observe nothing", [E2E]),
     (RUN, "        if is_buyback {\n            Some(read?", "        if true {\n            Some(read?", "every action needs a readable pool", [POOLFMT]),
-    (RUN, "    let graduated = ap.damm_pool != Pubkey::default();", "    let graduated = ap.damm_pool != Pubkey::default() && ctx.accounts.damm_pool.is_some();", "a missing pool reads as not graduated", [WRONG]),
-    (RUN, "            &a.tip_account.to_account_info(),", "            &a.treasury_wsol.to_account_info(),", "tip kept", [E2E]),
+    (RUN, "    let graduated = a.ap.damm_pool != Pubkey::default();", "    let graduated = a.ap.damm_pool != Pubkey::default() && a.damm_pool.is_some();", "a missing pool reads as not graduated", [WRONG]),
+    (RUN, "            a.tip_account,\n            a.treasury,\n            tip,", "            a.treasury_wsol,\n            a.treasury,\n            tip,", "tip kept", [E2E]),
     (RUN, "        now,\n        treasury_sol,\n        plan.value(burn_price, kept),", "        now,\n        u64::MAX,\n        plan.value(burn_price, kept),", "tip beyond what the action left", [DIST]),
     (RUN, "        plan.value(burn_price, kept),", "        u64::MAX,", "tip regardless of what the run moved", [F5]),
-    (RUN, "        constraint = autopilot.active_graph != [0; 32] @ AutopilotError::NoActiveGraph,\n", "", "run without a graph", [EARLY]),
-    (RUN, "    #[account(address = autopilot.damm_pool @ AutopilotError::InvalidPool)]\n    pub damm_pool: Option<UncheckedAccount<'info>>,", "    pub damm_pool: Option<UncheckedAccount<'info>>,", "run with any pool", [WRONG]),
+    (RUN, "    check_autopilot_constraint(ap.active_graph != [0; 32], AutopilotError::NoActiveGraph)?;\n", "", "run without a graph", [EARLY]),
+    (RUN, "    if let Some(pool) = a.damm_pool {\n        check_keys::<P>(\n            pool.address(),\n            &ap.damm_pool,\n            AutopilotError::InvalidPool.code(),\n            DAMM_POOL,\n        )?;\n    }\n", "", "run with any pool", [WRONG]),
     # ---- governance
     (GOV, "    autopilot.auth_marks[logic::mark_index(kind)?] = mark;\n", "", "used authorization not recorded", [GOVERN]),
     (GOV, "    logic::check_activation(\n        &ap.active_graph,\n        &ap.pending_graph,\n        ap.frozen,\n        now,\n        activate_at,\n        auth.unix_time,\n    )?;\n", "    let _ = (now, auth);\n", "activation without the rules", [GOVERN]),
-    (GOV, "    ap.pending_operator = operator;\n    emit!(GraphQueued", "    emit!(GraphQueued", "queued graph without its operator", [OPERATOR]),
+    (GOV, "    ap.pending_operator = operator;\n    GraphQueued {", "    GraphQueued {", "queued graph without its operator", [OPERATOR]),
     (GOV, "    ap.nodes = [NodeRecord::default(); MAX_NODES];\n", "", "node states kept across graphs", [GOVERN]),
     (GOV, "    ap.operator = operator;\n    ap.nodes", "    ap.nodes", "operator not taken from the queued graph", [OPERATOR]),
     (GOV, "    ap.active_graph = ap.pending_graph;\n", "", "applied graph not activated", [GOVERN]),
@@ -276,12 +280,12 @@ MUTANTS = [
     (GOV, "    require!(ap.active_graph != [0; 32], AutopilotError::NoActiveGraph);\n", "", "freeze without a graph", [GOVERN]),
     (GOV, "    ap.frozen = true;\n", "", "freeze does not freeze", [GOVERN]),
     (GOV, "    ap.frozen = true;\n    ap.pending_graph = [0; 32];\n", "    ap.frozen = true;\n", "freeze keeps the update", [GOVERN]),
-    (GOV, "    ap.pending_activate_at = 0;\n    ap.pending_operator = Pubkey::default();\n    emit!(GraphFrozen", "    ap.pending_activate_at = 0;\n    emit!(GraphFrozen", "freeze keeps the queued operator", [F3B]),
+    (GOV, "    ap.pending_activate_at = 0;\n    ap.pending_operator = Pubkey::default();\n    GraphFrozen {", "    ap.pending_activate_at = 0;\n    GraphFrozen {", "freeze keeps the queued operator", [F3B]),
     (GOV, "    require!(operator != Pubkey::default(), AutopilotError::NoOperator);\n", "", "revoke without an operator", [OPERATOR]),
     (GOV, "    ap.operator = Pubkey::default();\n    let pending_cleared", "    let pending_cleared", "revoke does not revoke", [OPERATOR]),
     (GOV, "    if pending_cleared {\n        ap.pending_operator = Pubkey::default();\n    }\n", "", "the queued graph keeps a revoked operator", [F3B]),
     (GOV, "launchpad::revoke_payload(&autopilot_key, &ap.active_graph, &operator, &ap.active_auth)", "launchpad::revoke_payload(&autopilot_key, &[0; 32], &operator, &ap.active_auth)", "revocation of another graph", [OPERATOR]),
-    (GOV, "        kind::GRAPH_FREEZE,", "        kind::GRAPH_ACTIVATE,", "freeze with an activation", [GOVERN]),
+    (GOV, "kind::GRAPH_FREEZE, &payload)", "kind::GRAPH_ACTIVATE, &payload)", "freeze with an activation", [GOVERN]),
     (GOV, "    logic::check_freeze_window(now, not_after)?;\n", "", "freeze after its not_after (review 4, R5)", [GOVERN]),
     (GOV, "launchpad::freeze_payload(&autopilot_key, &ap.active_graph, not_after)", "launchpad::freeze_payload(&autopilot_key, &ap.active_graph, now)", "freeze payload with the clock as not_after", [GOVERN, F3B]),
     (LOGIC, "    require!(now <= not_after, AutopilotError::FreezeExpired);", "    require!(now < not_after, AutopilotError::FreezeExpired);", "freeze window ends a second early", [GOVERN]),
@@ -330,53 +334,62 @@ MUTANTS = [
     (RUN, "    require!(paid > 0, AutopilotError::NoRecipientAccount);\n", "", "a run that pays nobody (audit 4, M4)", [DIST]),
     (RUN, "        paid = paid\n            .checked_add(share)", "        paid = paid\n            .checked_add(0)", "payments not counted (audit 4, M4)", [E2E]),
     (RUN, "        plan.value(burn_price, kept),", "        plan.value(burn_price, 0),", "tips of the skipped shares (audit 4, M4)", [M4]),
-    (RUN, "        && state.base.owner == *owner\n", "\n", "skip check of any owner (audit 4, M4)", [M4]),
+    (RUN, "        && same(&state.owner(), owner)\n", "\n", "skip check of any owner (audit 4, M4)", [M4]),
     (LOGIC, "            Plan::Distribute { total, .. } => total.saturating_sub(kept),", "            Plan::Distribute { total, .. } => total,", "a distribution valued with its kept shares (audit 4, M4)", None),
     # ---- init, bind, publish, update_price
-    (INIT, "    require_keys_eq!(\n        dbc_config.key(),\n        launch.dbc_config,\n        AutopilotError::InvalidDbcConfig\n    );\n", "", "another launch's config", [INITB]),
-    (INIT, "    ap.ref_sqrt_price = ref_sqrt_price;\n", "", "reference not seeded", [E2E]),
+    (INIT, "    require_keys_eq!(\n        *dbc_config.address(),\n        launch.dbc_config,\n        AutopilotError::InvalidDbcConfig\n    );\n", "", "another launch's config", [INITB]),
+    (INIT, "        Autopilot::write_new(data, bump, treasury_bump, launch_key, ref_sqrt_price)", "        Autopilot::write_new(data, bump, treasury_bump, launch_key, 0)", "reference not seeded", [E2E]),
     (BIND, "    require!(launch.live, AutopilotError::LaunchNotLive);\n", "", "bind before live", [INITB]),
     (BIND, "    ap.mint = mint;\n", "", "mint not bound", [E2E]),
-    (BINDP, "    external::check_migration_config(config.owner, &config.try_borrow_data()?)?;\n", "", "bind a pool of any config", [F2]),
-    (BINDP, "    require_keys_eq!(\n        pool.key(),\n        external::pool_address(&config.key(), &mint),\n        AutopilotError::InvalidPool\n    );\n", "", "bind any pool address", [F2]),
-    (BINDP, "    external::read_pool(pool.owner, &pool.try_borrow_data()?, &mint)?\n        .ok_or(AutopilotError::NotGraduated)?;", "    external::read_pool(pool.owner, &pool.try_borrow_data()?, &mint)?;", "bind a pool that does not exist", [EARLY]),
-    (BINDP, "        constraint = autopilot.damm_pool == Pubkey::default() @ AutopilotError::PoolAlreadyBound,\n", "", "bind the pool twice", [INITB]),
-    (BINDP, "        constraint = autopilot.mint != Pubkey::default() @ AutopilotError::MintNotBound,\n", "", "bind a pool before the mint", [INITB]),
+    (BINDP, "    external::check_migration_config(config.owner(), &config.try_borrow()?)?;\n", "", "bind a pool of any config", [F2]),
+    (BINDP, "    require_keys_eq!(\n        *pool.address(),\n        external::pool_address(config.address(), &mint),\n        AutopilotError::InvalidPool\n    );\n", "", "bind any pool address", [F2]),
+    (BINDP, "    external::read_pool(pool.owner(), &pool.try_borrow()?, &mint)?\n        .ok_or(AutopilotError::NotGraduated)?;", "    external::read_pool(pool.owner(), &pool.try_borrow()?, &mint)?;", "bind a pool that does not exist", [EARLY]),
+    (BINDP, "    check_autopilot_constraint(\n        ap.damm_pool == Pubkey::default(),\n        AutopilotError::PoolAlreadyBound,\n    )?;\n", "", "bind the pool twice", [INITB]),
+    (BINDP, "    check_autopilot_constraint(ap.mint != Pubkey::default(), AutopilotError::MintNotBound)?;\n", "", "bind a pool before the mint", [INITB]),
     (BINDP, "    ap.damm_pool = damm_pool;\n", "", "pool not bound", [E2E]),
-    (PUB, "    if let Err(e) = Graph::verify(&bytes) {", "    if let Err(e) = Graph::parse(&bytes) {", "graphs published unverified", [INITB]),
-    (PUB, "    launchpad::read_launch(&ctx.accounts.launch)?;\n    if let Err", "    if let Err", "graphs under any account", [INITB]),
-    (PUB, "    if record.version != 0 {\n        return Ok(());\n    }\n", "", "publish rewrites", [INITB]),
-    (UPD, "        constraint = autopilot.damm_pool != Pubkey::default() @ AutopilotError::NotGraduated,\n", "", "price update before graduation", [EARLY]),
-    (UPD, "    #[account(address = autopilot.damm_pool @ AutopilotError::InvalidPool)]\n", "", "price from any pool", [F2]),
+    (PUB, "    if let Err(e) = Graph::verify(bytes) {", "    if let Err(e) = Graph::parse(bytes) {", "graphs published unverified", [INITB]),
+    (PUB, "    launchpad::read_launch(launch)?;\n    if let Err", "    if let Err", "graphs under any account", [INITB]),
+    (PUB, "    if let Some(record) = existing.filter(|r| r.version != 0) {", "    if let Some(record) = existing.filter(|_| false) {", "publish rewrites", [INITB]),
+    (UPD, "    check_autopilot_constraint(\n        ap.damm_pool != Pubkey::default(),\n        AutopilotError::NotGraduated,\n    )?;\n", "", "price update before graduation", [EARLY]),
+    (UPD, "    check_keys::<P>(\n        pool.address(),\n        &ap.damm_pool,\n        AutopilotError::InvalidPool.code(),\n        DAMM_POOL,\n    )?;\n", "", "price from any pool", [F2]),
     (UPD, "    reference::observe(&mut price.observations, now, spot);\n", "", "update_price observes nothing", [E2E]),
     (UPD, "    ap.set_price_state(&price);\n", "", "update_price keeps nothing", [E2E]),
+    # ---- the framework-free code (killed by the ABI tests, tests/abi.rs)
+    (STATE, "            _ => return None,", "            _ => true,", "a frozen byte that is no bool reads", None),
+    (STATE, "        set(d, SEQ, self.seq.to_le_bytes());", "        set(d, SEQ + 1, self.seq.to_le_bytes());", "seq written at another offset", None),
+    (STATE, "        s.seq = u64::from_le_bytes(get(d, SEQ));", "        s.seq = u64::from_le_bytes(get(d, SEQ + 1));", "seq read at another offset", None),
+    (EVENTS, "            w.put(&[u8::from(self.partial), self.skipped]);", "            w.put(&[self.skipped, u8::from(self.partial)]);", "NodeRan's partial and skipped swapped", None),
+    (PROC, "        ACTIVATE => instructions::governance::activate(accounts, args),", "        ACTIVATE => instructions::governance::freeze(accounts, args),", "activate dispatched to freeze", None),
+    (ERR, "            *digit = b'0' + (n % 10) as u8;", "            *digit = b'1' + (n % 10) as u8;", "logged values off by one digit", None),
+    (INT, "        -(((-(a + 1)) as u64 / b) as i64) - 1", "        -((((-(a + 1)) as u64 + 1) / b) as i64)", "euclid quotient of a negative time", None),
+    (INT, "        (b - 1 - (-(a + 1)) as u64 % b) as i64", "        (b - (-(a + 1)) as u64 % b) as i64", "euclid remainder of a negative time", None),
 ]
 
 # Equivalent mutants (not run): (file, original, mutant, label, reason).
 EQUIVALENT = [
-    (RUN, "        token::mint = wsol_mint,\n", "", "tip account of any mint",
+    (RUN, "    check_token_mint::<P>(&a.tip_state, a.wsol_mint.address(), TIP_ACCOUNT)?;\n", "", "tip account of any mint",
      "the tip is a transfer_checked of wSOL: SPL Token refuses any other account, and with no tip nothing is sent to it"),
-    (RUN, "            && program.executable,", "", "swap program not executable",
+    (RUN, "\n            && program.executable(),", ",", "swap program not executable",
      "the key is DAMM v2's program id, which is executable; a non-executable account cannot have it"),
     (RUN, "sol_before.checked_sub(sol_after) == Some(amount_in) && bought >= min_out,", "true,", "swap result unchecked",
      "DAMM v2's exact-in swap takes exactly amount_in and refuses less than minimum_amount_out itself; ours is a second check"),
-    (RUN, "        token_amount(&a.treasury_token.to_account_info())? == tokens_before,", "        true,", "burn result unchecked",
+    (RUN, "        token_amount(a.treasury_token)? == tokens_before,", "        true,", "burn result unchecked",
      "Token-2022 burns exactly `bought`, which the swap added: the balance is tokens_before by construction"),
     (BIND, "    require_keys_eq!(mint, launch.base_mint, AutopilotError::InvalidCertificate);\n", "", "bind another mint",
      "the certificate at [\"certificate\", mint] must name this launch, and a launch has one mint: check_certificate already refuses"),
     (BIND, "    launchpad::check_certificate(", "    let _ = (", "bind without the certificate",
      "a live launch's base mint always has its certificate (written by the same `launch`): with the live and mint checks, the read is defense in depth"),
-    (RUN, "        constraint = autopilot.mint != Pubkey::default() @ AutopilotError::MintNotBound,\n", "", "run before bind (constraint)",
+    (RUN, "    check_autopilot_constraint(ap.mint != Pubkey::default(), AutopilotError::MintNotBound)?;\n", "", "run before bind (constraint)",
      "`mint`'s address constraint (address = autopilot.mint, the default) refuses with the same error"),
     (REF, "    let target = if s.min > r {", "    let target = if s.max > r {", "a rise without every observation",
      "the rise goes toward the window's lowest price and stops at once if that is no rise: with an observation at or below the reference nothing moves either way"),
     (RUN, "        if is_buyback {\n            Some(read?", "        if false {\n            Some(read?", "a buyback reads the pool leniently",
      "a buyback whose pool cannot be read has no spot price, which `plan_run` refuses with the same InvalidPool"),
-    (RUN, "    if *info.owner != token::ID {\n        return false;\n    }\n", "", "a recipient account of any program (audit 4, M4)",
+    (RUN, "    if !owned_by(info, &TOKEN_PROGRAM_ID) {\n        return false;\n    }\n", "", "a recipient account of any program (audit 4, M4)",
      "the canonical ATA address is a PDA of the ATA program, which only ever assigns it to the token program of its seeds; any other account there is a system account without data, which does not unpack"),
-    (RUN, "    state.base.mint == WSOL_MINT\n        && ", "    ", "a recipient account of any mint (audit 4, M4)",
+    (RUN, "    same(&state.mint(), &WSOL_MINT)\n        && ", "    ", "a recipient account of any mint (audit 4, M4)",
      "the ATA program initializes the account at the canonical address with the mint of its seeds (wSOL), and a token account's mint never changes"),
-    (RUN, "\n        && state.base.state == spl_token_2022::state::AccountState::Initialized", "", "a frozen recipient account (audit 4, M4)",
+    (RUN, "\n        && state.state() == ACCOUNT_STATE_INITIALIZED", "", "a frozen recipient account (audit 4, M4)",
      "wSOL has no freeze authority, so no wSOL account is ever frozen, and an account that unpacks is initialized"),
 ]
 
@@ -410,7 +423,7 @@ def ps(cmd, timeout=3600):
 def host_tests():
     return ps(
         f"$env:CARGO_TARGET_DIR='{WORK}\\target-host'; Set-Location '{WS}'; "
-        "cargo test --no-fail-fast -p noised-autopilot --lib 2>&1 | Out-String; exit $LASTEXITCODE"
+        "cargo test --no-fail-fast -p noised-autopilot --lib --test abi 2>&1 | Out-String; exit $LASTEXITCODE"
     )
 
 

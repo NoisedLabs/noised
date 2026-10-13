@@ -3,158 +3,146 @@
 //! of treasury wSOL into the token (never the other way), a Token-2022 burn
 //! of treasury tokens, and SPL Token transfers of treasury wSOL. There is no
 //! close, approve, set-authority or arbitrary invoke.
+//!
+//! Each builds the instruction the Anchor build built (the SPL builders
+//! `spl_token_2022::instruction::{transfer_checked, burn_checked}` and the
+//! DAMM v2 `swap` of the launchpad's `declare_program!` client; the bytes
+//! are checked against them in `tests/abi.rs`) and invokes it signed by the
+//! treasury.
 
-use anchor_lang::{
-    prelude::*,
-    solana_program::{
-        instruction::{AccountMeta, Instruction},
-        program::invoke_signed,
-    },
+use noised_onchain::{
+    cpi::invoke,
+    ids::{TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID},
+    token::{burn_checked_data, transfer_checked_data},
 };
-use anchor_spl::{token, token_2022, token_interface::spl_token_2022};
+use pinocchio::{cpi::Signer, instruction::InstructionAccount, AccountView, ProgramResult};
 
 use crate::{
     constants::{DAMM_V2_PROGRAM_ID, WSOL_DECIMALS},
     external::DAMM_SWAP_DISCRIMINATOR,
 };
 
-/// SPL Token `transfer_checked` of `amount` wSOL from a treasury account.
-pub fn transfer_wsol<'info>(
-    token_program: &AccountInfo<'info>,
-    from: &AccountInfo<'info>,
-    wsol_mint: &AccountInfo<'info>,
-    to: &AccountInfo<'info>,
-    authority: &AccountInfo<'info>,
+/// SPL Token `transfer_checked` of `amount` wSOL from a treasury account
+/// (`from`, writable; `wsol_mint`; `to`, writable; `authority`, signer).
+#[inline(never)]
+pub fn transfer_wsol(
+    token_program: &AccountView,
+    from: &AccountView,
+    wsol_mint: &AccountView,
+    to: &AccountView,
+    authority: &AccountView,
     amount: u64,
-    seeds: &[&[u8]],
-) -> Result<()> {
-    let ix = spl_token_2022::instruction::transfer_checked(
-        &token::ID,
-        from.key,
-        wsol_mint.key,
-        to.key,
-        authority.key,
-        &[],
-        amount,
-        WSOL_DECIMALS,
-    )?;
-    invoke_signed(
-        &ix,
+    signers: &[Signer],
+) -> ProgramResult {
+    invoke(
+        &TOKEN_PROGRAM_ID,
         &[
-            from.clone(),
-            wsol_mint.clone(),
-            to.clone(),
-            authority.clone(),
-            token_program.clone(),
+            InstructionAccount::writable(from.address()),
+            InstructionAccount::readonly(wsol_mint.address()),
+            InstructionAccount::writable(to.address()),
+            InstructionAccount::readonly_signer(authority.address()),
         ],
-        &[seeds],
-    )?;
-    Ok(())
+        &transfer_checked_data(amount, WSOL_DECIMALS),
+        &[from, wsol_mint, to, authority, token_program],
+        signers,
+    )
 }
 
-/// Token-2022 `burn_checked` of `amount` tokens from a treasury account.
-pub fn burn<'info>(
-    token_2022_program: &AccountInfo<'info>,
-    from: &AccountInfo<'info>,
-    mint: &AccountInfo<'info>,
-    authority: &AccountInfo<'info>,
+/// Token-2022 `burn_checked` of `amount` tokens from a treasury account
+/// (`from`, writable; `mint`, writable; `authority`, signer).
+#[inline(never)]
+pub fn burn(
+    token_2022_program: &AccountView,
+    from: &AccountView,
+    mint: &AccountView,
+    authority: &AccountView,
     amount: u64,
     decimals: u8,
-    seeds: &[&[u8]],
-) -> Result<()> {
-    let ix = spl_token_2022::instruction::burn_checked(
-        &token_2022::ID,
-        from.key,
-        mint.key,
-        authority.key,
-        &[],
-        amount,
-        decimals,
-    )?;
-    invoke_signed(
-        &ix,
+    signers: &[Signer],
+) -> ProgramResult {
+    invoke(
+        &TOKEN_2022_PROGRAM_ID,
         &[
-            from.clone(),
-            mint.clone(),
-            authority.clone(),
-            token_2022_program.clone(),
+            InstructionAccount::writable(from.address()),
+            InstructionAccount::writable(mint.address()),
+            InstructionAccount::readonly_signer(authority.address()),
         ],
-        &[seeds],
-    )?;
-    Ok(())
+        &burn_checked_data(amount, decimals),
+        &[from, mint, authority, token_2022_program],
+        signers,
+    )
 }
 
 /// The accounts of a DAMM v2 `swap` buying the token (A) with wSOL (B).
-pub struct DammSwap<'a, 'info> {
-    pub pool_authority: &'a AccountInfo<'info>,
-    pub pool: &'a AccountInfo<'info>,
+pub struct DammSwap<'a> {
+    pub pool_authority: &'a AccountView,
+    pub pool: &'a AccountView,
     /// The treasury's wSOL account.
-    pub input: &'a AccountInfo<'info>,
+    pub input: &'a AccountView,
     /// The treasury's token account.
-    pub output: &'a AccountInfo<'info>,
-    pub token_a_vault: &'a AccountInfo<'info>,
-    pub token_b_vault: &'a AccountInfo<'info>,
-    pub token_a_mint: &'a AccountInfo<'info>,
-    pub token_b_mint: &'a AccountInfo<'info>,
+    pub output: &'a AccountView,
+    pub token_a_vault: &'a AccountView,
+    pub token_b_vault: &'a AccountView,
+    pub token_a_mint: &'a AccountView,
+    pub token_b_mint: &'a AccountView,
     /// The treasury authority (signs).
-    pub payer: &'a AccountInfo<'info>,
-    pub token_a_program: &'a AccountInfo<'info>,
-    pub token_b_program: &'a AccountInfo<'info>,
-    pub event_authority: &'a AccountInfo<'info>,
-    pub program: &'a AccountInfo<'info>,
+    pub payer: &'a AccountView,
+    pub token_a_program: &'a AccountView,
+    pub token_b_program: &'a AccountView,
+    pub event_authority: &'a AccountView,
+    pub program: &'a AccountView,
+}
+
+/// The DAMM v2 `swap` instruction data: `sha256("global:swap")[..8]`, then
+/// `SwapParameters { amount_in, minimum_amount_out }`.
+#[inline]
+pub fn damm_swap_data(amount_in: u64, min_out: u64) -> [u8; 24] {
+    let mut data = [0u8; 24];
+    data[..8].copy_from_slice(&DAMM_SWAP_DISCRIMINATOR);
+    data[8..16].copy_from_slice(&amount_in.to_le_bytes());
+    data[16..].copy_from_slice(&min_out.to_le_bytes());
+    data
 }
 
 /// DAMM v2 `swap` (exact in, no referral): `amount_in` of the input account
 /// for at least `min_out` into the output account.
-pub fn damm_swap(
-    a: &DammSwap<'_, '_>,
-    amount_in: u64,
-    min_out: u64,
-    seeds: &[&[u8]],
-) -> Result<()> {
-    let mut data = Vec::with_capacity(24);
-    data.extend_from_slice(&DAMM_SWAP_DISCRIMINATOR);
-    data.extend_from_slice(&amount_in.to_le_bytes());
-    data.extend_from_slice(&min_out.to_le_bytes());
-    let ix = Instruction {
-        program_id: DAMM_V2_PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new_readonly(*a.pool_authority.key, false),
-            AccountMeta::new(*a.pool.key, false),
-            AccountMeta::new(*a.input.key, false),
-            AccountMeta::new(*a.output.key, false),
-            AccountMeta::new(*a.token_a_vault.key, false),
-            AccountMeta::new(*a.token_b_vault.key, false),
-            AccountMeta::new_readonly(*a.token_a_mint.key, false),
-            AccountMeta::new_readonly(*a.token_b_mint.key, false),
-            AccountMeta::new_readonly(*a.payer.key, true),
-            AccountMeta::new_readonly(token_2022::ID, false),
-            AccountMeta::new_readonly(token::ID, false),
-            // No referral account (Anchor's `None`: the program id).
-            AccountMeta::new_readonly(DAMM_V2_PROGRAM_ID, false),
-            AccountMeta::new_readonly(*a.event_authority.key, false),
-            AccountMeta::new_readonly(DAMM_V2_PROGRAM_ID, false),
-        ],
-        data,
-    };
-    invoke_signed(
-        &ix,
+#[inline(never)]
+pub fn damm_swap(a: &DammSwap, amount_in: u64, min_out: u64, signers: &[Signer]) -> ProgramResult {
+    invoke(
+        &DAMM_V2_PROGRAM_ID,
         &[
-            a.pool_authority.clone(),
-            a.pool.clone(),
-            a.input.clone(),
-            a.output.clone(),
-            a.token_a_vault.clone(),
-            a.token_b_vault.clone(),
-            a.token_a_mint.clone(),
-            a.token_b_mint.clone(),
-            a.payer.clone(),
-            a.token_a_program.clone(),
-            a.token_b_program.clone(),
-            a.event_authority.clone(),
-            a.program.clone(),
+            InstructionAccount::readonly(a.pool_authority.address()),
+            InstructionAccount::writable(a.pool.address()),
+            InstructionAccount::writable(a.input.address()),
+            InstructionAccount::writable(a.output.address()),
+            InstructionAccount::writable(a.token_a_vault.address()),
+            InstructionAccount::writable(a.token_b_vault.address()),
+            InstructionAccount::readonly(a.token_a_mint.address()),
+            InstructionAccount::readonly(a.token_b_mint.address()),
+            InstructionAccount::readonly_signer(a.payer.address()),
+            InstructionAccount::readonly(&TOKEN_2022_PROGRAM_ID),
+            InstructionAccount::readonly(&TOKEN_PROGRAM_ID),
+            // No referral account (Anchor's `None`: the program id).
+            InstructionAccount::readonly(&DAMM_V2_PROGRAM_ID),
+            InstructionAccount::readonly(a.event_authority.address()),
+            InstructionAccount::readonly(&DAMM_V2_PROGRAM_ID),
         ],
-        &[seeds],
-    )?;
-    Ok(())
+        &damm_swap_data(amount_in, min_out),
+        &[
+            a.pool_authority,
+            a.pool,
+            a.input,
+            a.output,
+            a.token_a_vault,
+            a.token_b_vault,
+            a.token_a_mint,
+            a.token_b_mint,
+            a.payer,
+            a.token_a_program,
+            a.token_b_program,
+            a.event_authority,
+            a.program,
+        ],
+        signers,
+    )
 }

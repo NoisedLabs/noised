@@ -855,8 +855,10 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "noised-launchpad",
+ "noised-onchain",
  "noised-rules",
- "solana-sha256-hasher",
+ "pinocchio",
+ "serde_json",
 ]
 
 [[package]]

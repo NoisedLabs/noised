@@ -1800,9 +1800,9 @@ name = "noised-autopilot"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
- "anchor-spl",
+ "noised-onchain",
  "noised-rules",
- "solana-sha256-hasher",
+ "pinocchio",
 ]
 
 [[package]]

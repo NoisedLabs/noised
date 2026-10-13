@@ -29,14 +29,13 @@ use crate::{
     price,
     reference::{self, PriceState, Seen},
     state::{AuthMark, NodeRecord, ObsBucket, MAX_NODES},
+    Pubkey, Result,
 };
-use anchor_lang::prelude::*;
 
 fn err_name<T>(r: &Result<T>) -> Option<String> {
     match r {
         Ok(_) => None,
-        Err(Error::AnchorError(e)) => Some(e.error_name.clone()),
-        Err(e) => Some(format!("{e:?}")),
+        Err(e) => Some(e.name().to_string()),
     }
 }
 

@@ -29,13 +29,13 @@ function rustFiles(dir: string): string[] {
   });
 }
 
-/** The Anchor sources each program's reference is generated from (`src/`; the hook, the vault and the shield, written without Anchor, from their Anchor references). */
+/** The Anchor sources each program's reference is generated from (`src/`; the hook, the vault, the shield and the autopilot, written without Anchor, from their Anchor references). */
 const PROGRAM_DIRS: Record<string, string> = {
   launchpad: "programs/noised-launchpad/src",
   hook: "programs/noised-hook/anchor",
   vault: "programs/noised-vault/anchor",
   shield: "programs/noised-shield/anchor",
-  autopilot: "programs/noised-autopilot/src",
+  autopilot: "programs/noised-autopilot/anchor",
 };
 
 describe("generated reference", () => {
