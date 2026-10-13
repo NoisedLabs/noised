@@ -6,11 +6,11 @@
 
 `@noisedlabs/mcp` is a local [Model Context Protocol](https://modelcontextprotocol.io) server for **Noised, the quantum security layer for Solana**. It lets an AI assistant or agent (Claude Code, Claude Desktop, Cursor, a LangGraph app, any MCP client) read Noised token launches, their launch rules and their Autopilots, check a token against the QSL-1 standard, simulate transfers and Autopilots, and build **unsigned** Autopilot transactions for a person or a separate signer to review and sign. It runs on your own machine, talks to the Solana RPC endpoint you choose, never signs anything and holds no keys. It is built on [`@noisedlabs/sdk`](https://github.com/NoisedLabs/noised/blob/main/sdk/README.md) 0.9.0.
 
-> **Status: devnet only, not professionally audited.**
-> - Noised's programs run on **Solana devnet only**: the hook, launchpad, autopilot and vault programs are deployed there; the shield program is not deployed. There is **no mainnet deployment**.
-> - The programs are **upgradeable** (not finalized), so their rules can still change.
+> **Status: on mainnet but not finalized, protocol not initialized, not professionally audited.**
+> - Noised's five programs are deployed on **Solana mainnet** since 2026-10-13 ([docs/MAINNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/MAINNET.md)), but the mainnet protocol is **not initialized yet**, so no Noised launch or Autopilot exists there. On **devnet**, older builds of the hook, launchpad, autopilot and vault programs run, with test launches; the shield program is not deployed on devnet.
+> - The programs are **upgradeable** (not finalized), on both clusters, so their rules can still change.
 > - They have **not been audited by a professional security firm**. The reviews so far are internal, AI-assisted reviews, listed in [docs/AUDIT.md](https://github.com/NoisedLabs/noised/blob/main/docs/AUDIT.md).
-> - This server **refuses to serve mainnet** unless you set `NOISED_ALLOW_MAINNET=1`. Leave it unset.
+> - This server **refuses to serve mainnet** unless you set `NOISED_ALLOW_MAINNET=1`, and it never signs either way. Leave it unset unless you mean to read mainnet. For mainnet's Autopilot use a release newer than 0.2.0: 0.2.0 predates review F1, which the deployed autopilot program includes ([CHANGELOG](https://github.com/NoisedLabs/noised/blob/main/packages/noised-mcp/CHANGELOG.md)).
 > - While the version is `0.x`, a minor release may change tools, inputs or outputs ([CHANGELOG](https://github.com/NoisedLabs/noised/blob/main/packages/noised-mcp/CHANGELOG.md)). Pin the exact version.
 
 ## Contents
@@ -399,7 +399,7 @@ Autopilot: <autopilot> (a graph is active).
 
 Checks a token against the **QSL-1** standard (level 1 "no-rug", level 2 "quantum-attested") and runs Noised's **independent verifier** (certificate, no mint or freeze authority, locked liquidity, fee recipients, the creator's post-quantum signature, on-chain metadata), from live chain reads. Results are in plain English. The verdicts come from the SDK's `checkQsl1` and `verifyLaunch`; the server adds no judgement of its own.
 
-**QSL-1 levels are only awarded on mainnet with finalized programs.** Noised runs on devnet with upgradeable programs today, so every token gets `level: 0` there; `wouldBe` says which level it would reach, and `candidate` is true when it meets every condition of that level except the cluster and program finality. "Programmable" (launch rules or an Autopilot) is a tag shown next to the level, never a level of its own.
+**QSL-1 levels are only awarded on mainnet with finalized programs.** Noised's programs are upgradeable today, on mainnet and on devnet, so every token gets `level: 0`; `wouldBe` says which level it would reach, and `candidate` is true when it meets every condition of that level except the cluster and program finality. "Programmable" (launch rules or an Autopilot) is a tag shown next to the level, never a level of its own.
 
 **Input**
 
@@ -1239,7 +1239,7 @@ The genesis-hash check guards against a misconfigured endpoint (a "devnet" URL t
 - **Never give the agent a signing key**, and never put one where the agent's tools can read it (environment, files, clipboard). This server has no setting for one; keep it that way around it too.
 - **Have a person approve every signature**, or a fixed policy you wrote and tested, not the model.
 - **An operator key is a hot, classical key.** Give it only the operator-only steps the creator chose, and remember the creator can revoke it with their post-quantum key.
-- **Keep mainnet off.** Noised has no mainnet deployment, and the server refuses mainnet unless `NOISED_ALLOW_MAINNET=1`. Never test an exploit against mainnet ([SECURITY.md](https://github.com/NoisedLabs/noised/blob/main/SECURITY.md)).
+- **Keep mainnet off unless you need it.** Noised's programs are on mainnet but still upgradeable, and no launch exists there until the protocol is initialized ([docs/MAINNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/MAINNET.md)). The server refuses mainnet unless `NOISED_ALLOW_MAINNET=1`, and never signs either way. Never test an exploit against mainnet ([SECURITY.md](https://github.com/NoisedLabs/noised/blob/main/SECURITY.md)).
 - **Pin the version** (`@noisedlabs/mcp@0.2.0`) so the code your client runs is the code you reviewed.
 
 The project's full threat model is in [docs/THREAT_MODEL.md](https://github.com/NoisedLabs/noised/blob/main/docs/THREAT_MODEL.md).
@@ -1256,7 +1256,7 @@ The server exits with code 2 in every case. Builds check again later and refuse 
 
 ### `refusing to start on mainnet`
 
-Intended. Noised is on devnet only, and the server refuses `NOISED_CLUSTER=mainnet` unless `NOISED_ALLOW_MAINNET=1`. An endpoint that turns out to serve mainnet while you configured devnet or localnet is refused as the wrong cluster, whatever `NOISED_ALLOW_MAINNET` says.
+Intended: the server refuses `NOISED_CLUSTER=mainnet` unless `NOISED_ALLOW_MAINNET=1`, an explicit opt-in (it never signs either way). Noised's programs are on mainnet, but they are not finalized and no launch exists there until the protocol is initialized. An endpoint that turns out to serve mainnet while you configured devnet or localnet is refused as the wrong cluster, whatever `NOISED_ALLOW_MAINNET` says.
 
 ### Configuration errors
 
