@@ -17,18 +17,45 @@ use noised_rules::{
 
 use crate::error::AutopilotError;
 
+/// The program's results (an `AutopilotError` by default; the layout
+/// readers that log compared keys return a `ProgramError`).
+pub type Result<T, E = AutopilotError> = core::result::Result<T, E>;
+
 pub fn key(b: u8) -> Pubkey {
     Pubkey::new_from_array([b; 32])
+}
+
+/// The error number of an error the program returns: an `AutopilotError`,
+/// or a `ProgramError::Custom` (the Anchor error number); `None` for any
+/// other `ProgramError`.
+pub trait ErrorNumber: std::fmt::Debug {
+    fn number(&self) -> Option<u32>;
+}
+
+impl ErrorNumber for AutopilotError {
+    fn number(&self) -> Option<u32> {
+        Some(u32::from(*self))
+    }
+}
+
+impl ErrorNumber for crate::ProgramError {
+    fn number(&self) -> Option<u32> {
+        match self {
+            crate::ProgramError::Custom(n) => Some(*n),
+            _ => None,
+        }
+    }
 }
 
 /// The Anchor error number of `r`'s error (panics on success or a
 /// non-Anchor error).
 #[track_caller]
-pub fn code<T: std::fmt::Debug>(r: Result<T>) -> u32 {
+pub fn code<T: std::fmt::Debug>(r: Result<T, impl ErrorNumber>) -> u32 {
     match r {
         Ok(v) => panic!("expected an error, got Ok({v:?})"),
-        Err(Error::AnchorError(e)) => e.error_code_number,
-        Err(e) => panic!("not an Anchor error: {e:?}"),
+        Err(e) => e
+            .number()
+            .unwrap_or_else(|| panic!("not an Anchor error: {e:?}")),
     }
 }
 
@@ -38,7 +65,7 @@ pub fn num(e: AutopilotError) -> u32 {
 }
 
 #[track_caller]
-pub fn assert_err<T: std::fmt::Debug>(r: Result<T>, e: AutopilotError) {
+pub fn assert_err<T: std::fmt::Debug>(r: Result<T, impl ErrorNumber>, e: AutopilotError) {
     assert_eq!(code(r), num(e), "expected {e:?}");
 }
 

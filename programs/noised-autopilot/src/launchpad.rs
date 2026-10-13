@@ -59,36 +59,34 @@
 //! in which authorizations may be used) and create the account at the
 //! canonical bump, which it stores.
 
-use anchor_lang::prelude::*;
+use noised_onchain::AccountView;
 
-use crate::{constants::LAUNCHPAD_PROGRAM_ID, error::AutopilotError};
+use crate::{constants::LAUNCHPAD_PROGRAM_ID, error::AutopilotError, ProgramError, Pubkey, Result};
 
 /// Little-endian readers over a slice whose length the caller checked;
 /// out-of-range reads fail closed instead of panicking.
 pub(crate) fn bytes32(data: &[u8], at: usize) -> Result<[u8; 32]> {
     data.get(at..at + 32)
         .and_then(|s| s.try_into().ok())
-        .ok_or_else(|| error!(AutopilotError::MathOverflow))
+        .ok_or(AutopilotError::MathOverflow)
 }
 
 pub(crate) fn read_u8(data: &[u8], at: usize) -> Result<u8> {
-    data.get(at)
-        .copied()
-        .ok_or_else(|| error!(AutopilotError::MathOverflow))
+    data.get(at).copied().ok_or(AutopilotError::MathOverflow)
 }
 
 pub(crate) fn read_u32(data: &[u8], at: usize) -> Result<u32> {
     data.get(at..at + 4)
         .and_then(|s| s.try_into().ok())
         .map(u32::from_le_bytes)
-        .ok_or_else(|| error!(AutopilotError::MathOverflow))
+        .ok_or(AutopilotError::MathOverflow)
 }
 
 pub(crate) fn read_u64(data: &[u8], at: usize) -> Result<u64> {
     data.get(at..at + 8)
         .and_then(|s| s.try_into().ok())
         .map(u64::from_le_bytes)
-        .ok_or_else(|| error!(AutopilotError::MathOverflow))
+        .ok_or(AutopilotError::MathOverflow)
 }
 
 pub(crate) fn read_i64(data: &[u8], at: usize) -> Result<i64> {
@@ -99,7 +97,7 @@ pub(crate) fn read_u128(data: &[u8], at: usize) -> Result<u128> {
     data.get(at..at + 16)
         .and_then(|s| s.try_into().ok())
         .map(u128::from_le_bytes)
-        .ok_or_else(|| error!(AutopilotError::MathOverflow))
+        .ok_or(AutopilotError::MathOverflow)
 }
 
 /// `noised_launchpad::state::Launch`: version 2 is 585 bytes.
@@ -186,7 +184,7 @@ pub struct LaunchView {
 }
 
 /// Decode the fields the autopilot uses from a `Launch` account's bytes.
-pub fn parse_launch(owner: &Pubkey, data: &[u8]) -> Result<LaunchView> {
+pub fn parse_launch(owner: &Pubkey, data: &[u8]) -> Result<LaunchView, ProgramError> {
     require_keys_eq!(*owner, LAUNCHPAD_PROGRAM_ID, AutopilotError::NotALaunch);
     require!(
         data.len() >= launch::MIN_LEN && data[..8] == launch::DISCRIMINATOR,
@@ -205,9 +203,9 @@ pub fn parse_launch(owner: &Pubkey, data: &[u8]) -> Result<LaunchView> {
     })
 }
 
-pub fn read_launch(info: &AccountInfo) -> Result<LaunchView> {
-    let data = info.try_borrow_data()?;
-    parse_launch(info.owner, &data)
+pub fn read_launch(info: &AccountView) -> Result<LaunchView, ProgramError> {
+    let data = info.try_borrow()?;
+    parse_launch(info.owner(), &data)
 }
 
 /// Check a certificate's bytes: the launchpad's, for `launch` and `mint`,
@@ -217,7 +215,7 @@ pub fn check_certificate(
     data: &[u8],
     launch_key: &Pubkey,
     mint: &Pubkey,
-) -> Result<()> {
+) -> Result<(), ProgramError> {
     require_keys_eq!(
         *owner,
         LAUNCHPAD_PROGRAM_ID,
@@ -264,7 +262,7 @@ pub fn check_authorization(
     pq_identity: &[u8; 32],
     kind: u8,
     payload_hash: &[u8; 32],
-) -> Result<AuthView> {
+) -> Result<AuthView, ProgramError> {
     use authorization as a;
     require_keys_eq!(
         *owner,
@@ -278,7 +276,7 @@ pub fn check_authorization(
         AutopilotError::InvalidAuthorization
     );
     let bump = read_u8(data, a::BUMP_OFFSET)?;
-    let expected = Pubkey::create_program_address(
+    let expected = noised_onchain::pda::create_program_address(
         &[
             a::SEED,
             launch_key.as_ref(),
@@ -288,7 +286,7 @@ pub fn check_authorization(
         ],
         &LAUNCHPAD_PROGRAM_ID,
     )
-    .map_err(|_| error!(AutopilotError::InvalidAuthorization))?;
+    .ok_or(AutopilotError::InvalidAuthorization)?;
     require_keys_eq!(*key, expected, AutopilotError::InvalidAuthorization);
     require!(
         bytes32(data, a::LAUNCH_OFFSET)? == launch_key.to_bytes()
@@ -305,7 +303,7 @@ pub fn check_authorization(
 }
 
 fn sha256(parts: &[&[u8]]) -> [u8; 32] {
-    solana_sha256_hasher::hashv(parts).to_bytes()
+    noised_onchain::hashv(parts)
 }
 
 /// `SHA256("PHX-GRAPH-ACT-V1" || autopilot || graph_hash || i64le(activate_at))`.

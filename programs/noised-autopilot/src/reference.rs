@@ -70,13 +70,14 @@ pub struct Seen {
 
 /// The observation bucket of a unix time.
 pub fn bucket_of(now: i64) -> i64 {
-    now.div_euclid(OBS_BUCKET_SECS)
+    crate::int::div_euclid(now, OBS_BUCKET_SECS)
 }
 
 /// Record an observation of the pool's sqrt price `spot` at `now` (a zero
 /// price is no observation). The current bucket only widens; a new bucket
 /// keeps the current one as the previous if they are adjacent. A clock
 /// that steps back records into the current bucket.
+#[inline(never)]
 pub fn observe(observations: &mut [ObsBucket; 2], now: i64, spot: u128) {
     if spot == 0 {
         return;
@@ -104,6 +105,7 @@ pub fn observe(observations: &mut [ObsBucket; 2], now: i64, spot: u128) {
 /// The lowest and highest price observed in the current and the previous
 /// bucket at `now`, if those observations span at least
 /// `OBS_MIN_SPAN_SECS` (the earliest of them is at least that old).
+#[inline(never)]
 pub fn seen(observations: &[ObsBucket; 2], now: i64) -> Option<Seen> {
     let oldest_counted = bucket_of(now).saturating_sub(1);
     let mut window: Option<(Seen, i64)> = None;
@@ -142,6 +144,7 @@ pub fn buyback_cap(reference: u128, seen: Option<Seen>) -> Option<u128> {
 /// `now`, however recent (a burn's value, audit 4, A4-4: a lower price only
 /// ever lowers a tip, so no observation needs to be a minute old); `None`
 /// without one.
+#[inline(never)]
 pub fn lowest(observations: &[ObsBucket; 2], now: i64) -> Option<u128> {
     let oldest_counted = bucket_of(now).saturating_sub(1);
     observations
@@ -170,6 +173,7 @@ fn accrue(p: &mut PriceState, now: i64) {
 /// above the reference (at most what the allowance allows, which the rise
 /// spends), down to its highest price if every observation is below it.
 /// Returns whether it moved.
+#[inline(never)]
 pub fn follow(p: &mut PriceState, seen: Option<Seen>, now: i64) -> bool {
     accrue(p, now);
     let Some(s) = seen else {

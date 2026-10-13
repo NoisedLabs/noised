@@ -73,3 +73,10 @@ opt-level = 3
 
 [profile.dev.package.noised-rules]
 opt-level = 3
+
+# The autopilot is the one program built for size: with the workspace's
+# opt-level 3 its binary is about 7 KB larger (loops unrolled and helpers
+# inlined at many sites), with "z" larger still. Only the autopilot's binary
+# is affected; the other programs keep the workspace profile.
+[profile.release.package.noised-autopilot]
+opt-level = "s"

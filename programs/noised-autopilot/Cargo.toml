@@ -14,22 +14,32 @@ name = "noised_autopilot"
 
 [features]
 default = []
-cpi = ["no-entrypoint"]
+# Use as a library: no program entrypoint, global allocator or panic handler.
 no-entrypoint = []
-no-idl = []
+cpi = ["no-entrypoint"]
+# Skip the `Instruction: <Name>` log line each instruction starts with.
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
-custom-heap = []
-custom-panic = []
-anchor-debug = []
 
+# Written without a framework (no Anchor): the on-chain binary links only
+# pinocchio (entrypoint, account views, CPI, syscalls), noised-onchain (the
+# shared Anchor-compatible account checks, errors, SPL Token / Token-2022
+# parsing and CPIs, built on pinocchio and the sol_sha256 wrapper) and the
+# PXG1 verifier and evaluator (noised-rules, no features on-chain:
+# allocation-free). The ABI (instruction, account and event layouts,
+# discriminators, error numbers) is the Anchor 1.2.1 build's, byte for byte;
+# `idls/noised_autopilot.json` describes it and `anchor/` keeps the Anchor
+# source it implements.
 [dependencies]
-anchor-lang = { workspace = true, features = ["init-if-needed"] }
-anchor-spl = { workspace = true }
-solana-sha256-hasher = { workspace = true }
-# PXG1 verification, due-ness, epochs, caps and shares (no features on-chain:
-# allocation-free).
+noised-onchain = { workspace = true }
 noised-rules = { workspace = true }
+pinocchio = { workspace = true }
+
+# Host only (clients and tests), never in the on-chain binary: the Anchor
+# client API the test suites build instructions and read accounts with
+# (`accounts`, `instruction`, `AccountDeserialize` on `Autopilot` and
+# `GraphRecord`, `Event` on the events).
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+anchor-lang = { workspace = true }
 
 [dev-dependencies]
 # Host tests encode graphs and hash with the sha2 backend.
@@ -37,6 +47,10 @@ noised-rules = { workspace = true, features = ["alloc", "sha2-backend"] }
 # Pins the launchpad account layouts the autopilot reads by offset
 # (`launchpad.rs`) against the launchpad's own types.
 noised-launchpad = { path = "../noised-launchpad", features = ["no-entrypoint"] }
+# ABI tests: the layouts against Anchor's serialization, the IDL and Borsh,
+# the CPIs against the SPL builders.
+anchor-spl = { workspace = true }
+serde_json = "1"
 
 [lints]
 workspace = true

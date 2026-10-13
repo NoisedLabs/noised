@@ -112,7 +112,8 @@ describe("constants match the Rust sources", () => {
     // The vault is written without Anchor; its Anchor reference (programs/noised-vault/anchor, the same ABI) declares the id.
     expect(declareId("programs/noised-vault/anchor/lib.rs")).toBe(PROGRAM_IDS.vault.toBase58());
     expect(declareId("programs/noised-shield/src/lib.rs")).toBe(PROGRAM_IDS.shield.toBase58());
-    expect(declareId("programs/noised-autopilot/src/lib.rs")).toBe(PROGRAM_IDS.autopilot.toBase58());
+    // The autopilot is written without Anchor too; its Anchor reference (programs/noised-autopilot/anchor) declares the id.
+    expect(declareId("programs/noised-autopilot/anchor/lib.rs")).toBe(PROGRAM_IDS.autopilot.toBase58());
     expect(IDLS.autopilot.address).toBe(PROGRAM_IDS.autopilot.toBase58());
     expect(IDLS.launchpad.address).toBe(PROGRAM_IDS.launchpad.toBase58());
     expect(IDLS.hook.address).toBe(PROGRAM_IDS.hook.toBase58());
@@ -535,7 +536,9 @@ describe("constants match the Rust sources", () => {
     const le = new Uint8Array(8);
     new DataView(le.buffer).setBigInt64(0, 1_767_229_200n, true);
     expect(freezePayload(a, g, 1_767_229_200n)).toEqual(sha256(new Uint8Array([...enc.encode("PHX-GRAPH-FRZ-V2"), ...a.toBytes(), ...g, ...le])));
-    const errors = src("programs/noised-autopilot/src/error.rs");
+    // The error enum as the Anchor reference declares it (programs/noised-autopilot/anchor; the program's
+    // src/error.rs has the same variants, numbers and messages, checked against the IDL by tests/abi.rs).
+    const errors = src("programs/noised-autopilot/anchor/error.rs");
     const variants = [...errors.matchAll(/^\s{4}(\w+),$/gm)].map((m) => m[1]!);
     expect([6000 + variants.indexOf("FreezeExpired"), variants[40]]).toEqual([6040, "FreezeExpired"]);
     expect((AUTOPILOT_ERRORS as readonly string[])[40]).toBe("FreezeExpired");
@@ -594,7 +597,7 @@ describe("constants match the Rust sources", () => {
     const g = new Uint8Array(32).fill(9);
     expect(revokePayload(k(1), g, k(2), k(3))).toEqual(sha256(new Uint8Array([...new TextEncoder().encode("PHX-OP-REVOKE-V3"), ...k(1).toBytes(), ...g, ...k(2).toBytes(), ...k(3).toBytes()])));
     // A4-2 / M4: the errors appended after FreezeExpired, the SDK's table, and plain messages.
-    const variants = [...src("programs/noised-autopilot/src/error.rs").matchAll(/^\s{4}(\w+),$/gm)].map((m) => m[1]!);
+    const variants = [...src("programs/noised-autopilot/anchor/error.rs").matchAll(/^\s{4}(\w+),$/gm)].map((m) => m[1]!);
     expect(variants.slice(40)).toEqual(["FreezeExpired", "RemainderTooSmall", "NoRecipientAccount"]);
     expect([...(AUTOPILOT_ERRORS as readonly string[])]).toEqual(variants);
     expect(plainErrorMessage(PROGRAM_IDS.autopilot.toBase58(), 6041)).toMatch(/^This smaller buyback would leave too little .*\.$/);
@@ -682,7 +685,9 @@ describe("the IDLs are current with the program sources", () => {
     // programs/noised-vault/tests/abi.rs, against the program itself).
     ["vault", "programs/noised-vault/anchor/error.rs", "programs/noised-vault/anchor/lib.rs"],
     ["shield", "programs/noised-shield/src/error.rs", "programs/noised-shield/src/lib.rs"],
-    ["autopilot", "programs/noised-autopilot/src/error.rs", "programs/noised-autopilot/src/lib.rs"],
+    // Written without Anchor: its IDL is checked against the Anchor reference it implements (and, in
+    // programs/noised-autopilot/tests/abi.rs, against the program itself).
+    ["autopilot", "programs/noised-autopilot/anchor/error.rs", "programs/noised-autopilot/anchor/lib.rs"],
   ];
   for (const [name, errors, lib] of programs) {
     it(`${name}: error codes and messages, instruction names`, () => {

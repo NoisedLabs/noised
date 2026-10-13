@@ -4,14 +4,13 @@
 //! buyback swaps through). Offsets are pinned against the IDL types the
 //! launchpad generates (`tests`).
 
-use anchor_lang::prelude::*;
-
 use crate::{
     constants::{
         DAMM_V2_POOL_SEED, DAMM_V2_PROGRAM_ID, DBC_POOL_AUTHORITY, DBC_PROGRAM_ID, WSOL_MINT,
     },
     error::AutopilotError,
     launchpad::{bytes32, read_u128},
+    ProgramError, Pubkey, Result,
 };
 
 /// DBC `ConfigWithTransferHook` (zero-copy, 1,128 bytes): the config the
@@ -51,7 +50,7 @@ pub const DAMM_SWAP_DISCRIMINATOR: [u8; 8] = [248, 198, 158, 145, 225, 117, 135,
 /// The migration sqrt price (Q64.64) of a launch's DBC config: the price DBC
 /// opens the DAMM v2 pool at. Fixed at `create_launch`, so nobody can move
 /// it; it seeds the reference price.
-pub fn migration_sqrt_price(owner: &Pubkey, data: &[u8]) -> Result<u128> {
+pub fn migration_sqrt_price(owner: &Pubkey, data: &[u8]) -> Result<u128, ProgramError> {
     require_keys_eq!(*owner, DBC_PROGRAM_ID, AutopilotError::InvalidDbcConfig);
     require!(
         data.len() == dbc_config::LEN && data[..8] == dbc_config::DISCRIMINATOR,
@@ -71,7 +70,7 @@ pub fn migration_sqrt_price(owner: &Pubkey, data: &[u8]) -> Result<u128> {
 /// signs as that authority only when it migrates a curve, so a pool of such
 /// a config holding `(mint, wSOL)` is the pool DBC created for the curve of
 /// `mint`: the launch's, whose LP is locked.
-pub fn check_migration_config(owner: &Pubkey, data: &[u8]) -> Result<()> {
+pub fn check_migration_config(owner: &Pubkey, data: &[u8]) -> Result<(), ProgramError> {
     require_keys_eq!(
         *owner,
         DAMM_V2_PROGRAM_ID,
@@ -96,7 +95,7 @@ pub fn pool_address(config: &Pubkey, mint: &Pubkey) -> Pubkey {
     } else {
         (WSOL_MINT, *mint)
     };
-    Pubkey::find_program_address(
+    noised_onchain::pda::find_program_address(
         &[DAMM_V2_POOL_SEED, config.as_ref(), hi.as_ref(), lo.as_ref()],
         &DAMM_V2_PROGRAM_ID,
     )
@@ -113,6 +112,8 @@ pub struct PoolView {
 
 /// `None` while the pool does not exist (the launch has not graduated);
 /// otherwise the pool, which must trade exactly (mint, wSOL) as (A, B).
+/// Its error is not logged until it leaves the instruction: `run` drops it
+/// for actions that do not trade (Anchor logged an error only then too).
 pub fn read_pool(owner: &Pubkey, data: &[u8], mint: &Pubkey) -> Result<Option<PoolView>> {
     if *owner != DAMM_V2_PROGRAM_ID {
         // Only DAMM v2 can create an account at the pool's address; until
