@@ -17,10 +17,11 @@ With this SDK you can check any mint against QSL-1 and show the result as a plai
 
 ## Status
 
-> **Devnet only. Upgradeable programs. Not audited by an independent firm. Nothing on mainnet.**
+> **On mainnet, but upgradeable and not finalized. Mainnet protocol not initialized yet. Not audited by an independent firm.**
 >
-> - **Where it runs.** The Noised launchpad, Launch Guard (transfer hook), autopilot and vault programs are deployed on Solana **devnet** only. The shield program is **not** deployed on devnet. **Nothing is deployed on mainnet.** The program ids are the same on every cluster: they are compiled into this SDK (`PROGRAM_IDS`) and listed in [docs/DEVNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/DEVNET.md).
-> - **Upgradeable.** The devnet programs are upgradeable. Their upgrade authority is the devnet deployer key (`EeGcnw6yAjVC73QdjdtQDqoQgjxDpm2amLWzdoX1Kxvf`), so their code can still change.
+> - **Where it runs.** All five Noised programs (launchpad, Launch Guard transfer hook, autopilot, vault, shield) are deployed on Solana **mainnet** since 2026-10-13 ([docs/MAINNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/MAINNET.md)). The mainnet protocol is **not initialized yet** (`initialize_protocol` has not run), so no launch exists on mainnet and `buildCreateLaunchTx` refuses there ("the launchpad protocol account is not initialized"); the vault and the shield do not depend on it. On **devnet**, older builds of the launchpad, hook, autopilot and vault run ([docs/DEVNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/DEVNET.md)); the shield is not deployed there. The program ids are the same on every cluster: they are compiled into this SDK (`PROGRAM_IDS`).
+> - **Upgradeable.** No program is finalized, so their code can still change. The upgrade authority is `EXgNtEcJ2Co61EQUHfNFN7z8SC3RpmhYKrqcMVcPpJqz` on mainnet (a single key) and the devnet deployer key (`EeGcnw6yAjVC73QdjdtQDqoQgjxDpm2amLWzdoX1Kxvf`) on devnet.
+> - **The mainnet autopilot includes review F1.** It judges a price condition across every price observed in its window. SDK 0.9.0 predates that and judges it on the reference price alone, so it can show a price-gated step as due when the program would refuse it; the next release mirrors the program ([CHANGELOG.md](https://github.com/NoisedLabs/noised/blob/main/sdk/CHANGELOG.md)).
 > - **No independent audit.** Neither the programs nor this SDK have been audited by a professional, independent security firm. The reviews so far were internal and AI-assisted (finders, skeptics, proofs of concept and a regression test for every fix), recorded in [docs/AUDIT.md](https://github.com/NoisedLabs/noised/blob/main/docs/AUDIT.md). They are not an audit.
 > - **SDK 0.9.0.** While the version is `0.x`, a minor release may break the API ([CHANGELOG.md](https://github.com/NoisedLabs/noised/blob/main/sdk/CHANGELOG.md)).
 >
@@ -1425,7 +1426,7 @@ An import is authenticated (each signature must verify under its recorded key ov
 
 ### Shield: private balances
 
-> **Not deployed on devnet.** The shield program is not deployed on devnet ([docs/DEVNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/DEVNET.md)), and nothing is deployed on mainnet, so the transactions below cannot land on a public cluster yet.
+> **Mainnet only.** The shield program is deployed on mainnet (since 2026-10-13, upgradeable; [docs/MAINNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/MAINNET.md)) but not on devnet ([docs/DEVNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/DEVNET.md)), so on devnet the transactions below cannot land.
 
 The shield wraps a token 1:1 into its **zToken**, a Token-2022 mint with confidential balances, and unwraps it again. It hides **amounts**, not parties (who sends to whom stays public), and its encryption (twisted ElGamal and zero-knowledge proofs over Curve25519) is **not** post-quantum: amounts hidden today may become public later, and the ElGamal key is derived from a signature of your Ed25519 wallet ([docs/PRIVACY.md](https://github.com/NoisedLabs/noised/blob/main/docs/PRIVACY.md)). Confidential transfers themselves need zero-knowledge proofs that this SDK does not generate: use the `spl-token` CLI (5.6 or later, `--confidential`) for configure, deposit, apply-pending-balance, transfer and withdraw.
 
@@ -1816,7 +1817,7 @@ The certificate is never trusted on its own: each check is recomputed from live 
 
 ### Shield
 
-`shieldAddresses(baseMint, baseTokenProgram?) → { shield, authority, zMint, escrow }`, `fetchShield(conn, baseMint)`, `decodeShield(address, data)`, `buildCreateShieldTx(conn, payer, baseMint)`, `buildWrapTx(conn, owner, baseMint, amount)`, `buildUnwrapTx(conn, owner, baseMint, amount)`, `shieldMintPolicy(account)`, `SHIELD_ALLOWED_EXTENSIONS`. Not deployed on devnet; it hides amounts, not parties, and its encryption is not post-quantum ([guide](#shield-private-balances)).
+`shieldAddresses(baseMint, baseTokenProgram?) → { shield, authority, zMint, escrow }`, `fetchShield(conn, baseMint)`, `decodeShield(address, data)`, `buildCreateShieldTx(conn, payer, baseMint)`, `buildWrapTx(conn, owner, baseMint, amount)`, `buildUnwrapTx(conn, owner, baseMint, amount)`, `shieldMintPolicy(account)`, `SHIELD_ALLOWED_EXTENSIONS`. Deployed on mainnet, not on devnet; it hides amounts, not parties, and its encryption is not post-quantum ([guide](#shield-private-balances)).
 
 ### RPC and transactions
 
@@ -1841,7 +1842,7 @@ Two small byte formats a creator can add to a launch, both verified on chain by 
 - **Launch rules (PXR1)** add restrictions to the Launch Guard while it is on (see [custom launch with launch rules](#custom-launch-with-launch-rules)).
 - **Autopilot graphs (PXG1)** run a launched token's treasury inside fixed on-chain bounds (see [autopilot](#autopilot-treasury-automation)).
 
-Status: the launchpad, hook and autopilot are deployed on devnet only, upgradeable and not independently audited (see [status](#status)). Since 0.7.0 the launch rules are bound on-chain (`publish_rules`, attestation message v3, the hook policy and certificate v4), and the launchpad's post-quantum authorization (`pq_authorize`) drives the autopilot's `activate`, `freeze` and `revoke_operator`. Since 0.8.0 a freeze approval expires (`not_after`), the hook skips creator rules for holders' moves through the Noised vault or shield, and rules and automation are a description in QSL-1 ("programmable"), never a level. Since 0.9.0 the autopilot account is 1,244 bytes (it records the running graph's approval, `active_auth`, and keepers' partial buybacks), a keeper may buy back less than a step's cap when the pool cannot fill it, a distribution skips recipients without a wSOL account, and removing the operator names the running graph's approval (revoke payload v3).
+Status: the launchpad, hook and autopilot are deployed on mainnet (protocol not initialized yet, so no launch exists there) and on devnet (older builds), upgradeable and not independently audited (see [status](#status)). Since 0.7.0 the launch rules are bound on-chain (`publish_rules`, attestation message v3, the hook policy and certificate v4), and the launchpad's post-quantum authorization (`pq_authorize`) drives the autopilot's `activate`, `freeze` and `revoke_operator`. Since 0.8.0 a freeze approval expires (`not_after`), the hook skips creator rules for holders' moves through the Noised vault or shield, and rules and automation are a description in QSL-1 ("programmable"), never a level. Since 0.9.0 the autopilot account is 1,244 bytes (it records the running graph's approval, `active_auth`, and keepers' partial buybacks), a keeper may buy back less than a step's cap when the pool cannot fill it, a distribution skips recipients without a wSOL account, and removing the operator names the running graph's approval (revoke payload v3).
 
 The pure part is also its own entry point, without the Solana client stack: `import { … } from "@noisedlabs/sdk/programmable"` (everything below except the account readers and builders, which come from the root). Its own guide, with the text grammars of both languages: [`sdk/src/programmable/README.md`](https://github.com/NoisedLabs/noised/blob/main/sdk/src/programmable/README.md).
 
