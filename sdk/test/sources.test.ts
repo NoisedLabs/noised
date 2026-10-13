@@ -112,7 +112,8 @@ describe("constants match the Rust sources", () => {
     // the same ABI) declare the ids.
     expect(declareId("programs/noised-hook/anchor/lib.rs")).toBe(PROGRAM_IDS.hook.toBase58());
     expect(declareId("programs/noised-vault/anchor/lib.rs")).toBe(PROGRAM_IDS.vault.toBase58());
-    expect(declareId("programs/noised-shield/src/lib.rs")).toBe(PROGRAM_IDS.shield.toBase58());
+    // The shield too: its Anchor reference (programs/noised-shield/anchor) declares the id.
+    expect(declareId("programs/noised-shield/anchor/lib.rs")).toBe(PROGRAM_IDS.shield.toBase58());
     expect(declareId("programs/noised-autopilot/src/lib.rs")).toBe(PROGRAM_IDS.autopilot.toBase58());
     expect(IDLS.autopilot.address).toBe(PROGRAM_IDS.autopilot.toBase58());
     expect(IDLS.launchpad.address).toBe(PROGRAM_IDS.launchpad.toBase58());
@@ -685,7 +686,8 @@ describe("the IDLs are current with the program sources", () => {
     // implements (and, in programs/noised-{hook,vault}/tests/abi.rs, against the program itself).
     ["hook", "programs/noised-hook/anchor/lib.rs", "programs/noised-hook/anchor/lib.rs"],
     ["vault", "programs/noised-vault/anchor/error.rs", "programs/noised-vault/anchor/lib.rs"],
-    ["shield", "programs/noised-shield/src/error.rs", "programs/noised-shield/src/lib.rs"],
+    // The shield likewise (programs/noised-shield/tests/abi.rs checks the program against its IDL).
+    ["shield", "programs/noised-shield/anchor/error.rs", "programs/noised-shield/anchor/lib.rs"],
     ["autopilot", "programs/noised-autopilot/src/error.rs", "programs/noised-autopilot/src/lib.rs"],
   ];
   for (const [name, errors, lib] of programs) {

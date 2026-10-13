@@ -21,391 +21,112 @@
 //! upgradeable by a multisig and the ZK ElGamal proof program has a
 //! feature-gate kill switch (used in 2025). A base mint's own authorities
 //! keep their powers (freeze, transfer-fee changes, transfer-hook upgrades).
+//!
+//! # No framework
+//!
+//! The program is written on `pinocchio` and `noised-onchain` (the shared
+//! Anchor-compatible building blocks: account checks, errors, Token-2022
+//! parsing, CPIs); no Anchor code is linked into it. Its ABI is the one the
+//! Anchor 1.2.1 build had, byte for byte: the same instruction
+//! discriminators (`sha256("global:<name>")[..8]`), account order and
+//! signer/writable flags, Borsh argument layouts, account discriminator
+//! (`sha256("account:Shield")[..8]`) and field layout, PDA seeds, events
+//! (`sha256("event:<Name>")[..8]` + Borsh, through `sol_log_data`) and error
+//! numbers, the framework's included (`ConstraintSeeds` 2006, ...).
+//! [`processor`] lists, per instruction, every account constraint the
+//! Anchor build enforced and checks them in the Anchor order. The Anchor
+//! source it implements is kept, not compiled, in `anchor/`; the
+//! hand-maintained `idls/noised_shield.json` describes the ABI.
+//!
+//! Off-chain (`not(target_os = "solana")`), the crate keeps the Anchor
+//! client API its users have: [`accounts`], [`instruction`], the Anchor
+//! account traits on [`state::Shield`] and the Anchor events. That code is
+//! host-only and never part of the program binary.
 
-use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token_2022::{spl_token_2022, Token2022},
-    token_interface::{self, BurnChecked, Mint, MintToChecked, TokenAccount, TokenInterface},
-};
+extern crate alloc;
 
+#[cfg(not(target_os = "solana"))]
+use anchor_lang::{AnchorDeserialize, AnchorSerialize, Discriminator};
+
+#[cfg(not(target_os = "solana"))]
+mod client;
 pub mod error;
 pub mod metadata;
 pub mod policy;
+pub mod processor;
 pub mod state;
 pub mod token;
 pub mod zmint;
 
-use error::ShieldError;
-use policy::Rejection;
-use state::{Shield, SHIELD_AUTHORITY_SEED, SHIELD_SEED, Z_MINT_SEED};
+#[cfg(not(target_os = "solana"))]
+pub use client::{accounts, instruction};
 
-declare_id!("BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9");
+#[cfg(not(feature = "no-entrypoint"))]
+noised_onchain::entrypoint!(crate::processor::process_instruction);
 
-#[program]
-pub mod noised_shield {
-    use super::*;
+/// An account address (`solana_address::Address`, which Anchor's `Pubkey`
+/// also is).
+pub type Pubkey = pinocchio::Address;
 
-    /// Create the shield, zToken mint and escrow for `base_mint`.
-    /// Permissionless; fails if a shield for this base mint already exists.
-    pub fn create_shield(ctx: Context<CreateShield>) -> Result<()> {
-        let accounts = &mut *ctx.accounts;
-        let base_mint = accounts.base_mint.key();
+/// `BUMHJyoS6JCz4pZDfryzXbFDorXb9nmGkj3ziR71z8E9`.
+pub const ID: Pubkey = Pubkey::new_from_array([
+    155, 150, 123, 175, 50, 212, 99, 79, 207, 208, 232, 168, 91, 92, 179, 112, 147, 13, 32, 207,
+    105, 103, 133, 61, 1, 154, 76, 132, 6, 12, 85, 30,
+]);
 
-        // SPL Token mints have no extensions and no embedded metadata.
-        let meta = {
-            let info = accounts.base_mint.to_account_info();
-            if *info.owner == spl_token_2022::ID {
-                let data = info.try_borrow_data()?;
-                policy::inspect_token_2022_mint(&data, &base_mint).map_err(reject)?
-            } else {
-                metadata::derive(None, &base_mint)
-            }
-        };
-
-        let decimals = accounts.base_mint.decimals;
-        let authority_bump = [ctx.bumps.shield_authority];
-        let authority_seeds: &[&[u8]] =
-            &[SHIELD_AUTHORITY_SEED, base_mint.as_ref(), &authority_bump];
-        let z_mint_bump = [ctx.bumps.z_mint];
-        let z_mint_seeds: &[&[u8]] = &[Z_MINT_SEED, base_mint.as_ref(), &z_mint_bump];
-        let z_accounts = zmint::ZMintAccounts {
-            payer: accounts.payer.as_ref(),
-            z_mint: accounts.z_mint.as_ref(),
-            shield_authority: accounts.shield_authority.as_ref(),
-            system_program: accounts.system_program.as_ref(),
-        };
-        zmint::create(&z_accounts, decimals, &meta, z_mint_seeds, authority_seeds)?;
-        zmint::verify(
-            accounts.z_mint.as_ref(),
-            &accounts.shield_authority.key(),
-            decimals,
-            &meta,
-        )?;
-
-        // `verify` proved the supply is 0. A pre-existing escrow (anyone can
-        // create an ATA) may already hold donated tokens: allowed surplus.
-        accounts.escrow.reload()?;
-        token::require_backed(accounts.escrow.amount, 0)?;
-
-        let shield = &mut accounts.shield;
-        shield.version = Shield::VERSION;
-        shield.bump = ctx.bumps.shield;
-        shield.authority_bump = ctx.bumps.shield_authority;
-        shield.z_mint_bump = ctx.bumps.z_mint;
-        shield.decimals = decimals;
-        shield.base_mint = base_mint;
-        shield.base_token_program = accounts.base_token_program.key();
-        shield.z_mint = accounts.z_mint.key();
-        shield.escrow = accounts.escrow.key();
-        shield.created_at = Clock::get()?.unix_timestamp;
-
-        emit!(ShieldCreated {
-            shield: shield.key(),
-            base_mint,
-            base_token_program: shield.base_token_program,
-            z_mint: shield.z_mint,
-            escrow: shield.escrow,
-            decimals,
-            name: meta.name,
-            symbol: meta.symbol,
-            uri: meta.uri,
-            payer: accounts.payer.key(),
-        });
-        Ok(())
-    }
-
-    /// Lock `amount` base tokens in the escrow and mint zTokens equal to what
-    /// the escrow actually received (less than `amount` under a transfer
-    /// fee). Transfer-hook accounts of the base mint go in remaining accounts.
-    pub fn wrap<'info>(ctx: Context<'info, Wrap<'info>>, amount: u64) -> Result<()> {
-        require!(amount > 0, ShieldError::ZeroAmount);
-        let accounts = &mut *ctx.accounts;
-        let escrow_before = accounts.escrow.amount;
-        let supply_before = accounts.z_mint.supply;
-
-        token::transfer_checked(
-            accounts.base_token_program.as_ref(),
-            &accounts.base_mint,
-            accounts.user_base.to_account_info(),
-            accounts.escrow.to_account_info(),
-            accounts.user.to_account_info(),
-            amount,
-            &[],
-            ctx.remaining_accounts,
-        )?;
-        accounts.escrow.reload()?;
-        let received = accounts
-            .escrow
-            .amount
-            .checked_sub(escrow_before)
-            .ok_or(ShieldError::AccountingMismatch)?;
-        require!(received > 0, ShieldError::NothingReceived);
-
-        let base_mint = accounts.base_mint.key();
-        let bump = [accounts.shield.authority_bump];
-        let seeds: &[&[u8]] = &[SHIELD_AUTHORITY_SEED, base_mint.as_ref(), &bump];
-        token_interface::mint_to_checked(
-            CpiContext::new_with_signer(
-                spl_token_2022::ID,
-                MintToChecked {
-                    mint: accounts.z_mint.to_account_info(),
-                    to: accounts.user_z.to_account_info(),
-                    authority: accounts.shield_authority.to_account_info(),
-                },
-                &[seeds],
-            ),
-            received,
-            accounts.z_mint.decimals,
-        )?;
-        accounts.z_mint.reload()?;
-        let minted = accounts
-            .z_mint
-            .supply
-            .checked_sub(supply_before)
-            .ok_or(ShieldError::AccountingMismatch)?;
-        require!(minted == received, ShieldError::AccountingMismatch);
-        token::require_backed(accounts.escrow.amount, accounts.z_mint.supply)?;
-
-        emit!(Wrapped {
-            shield: accounts.shield.key(),
-            base_mint,
-            user: accounts.user.key(),
-            amount,
-            minted,
-            z_supply: accounts.z_mint.supply,
-            escrow_balance: accounts.escrow.amount,
-        });
-        Ok(())
-    }
-
-    /// Burn `amount` zTokens from the user's (public) zToken balance and
-    /// release `amount` base tokens from the escrow. A base-mint transfer fee
-    /// is charged to the unwrapper. Transfer-hook accounts of the base mint
-    /// go in remaining accounts.
-    pub fn unwrap<'info>(ctx: Context<'info, Unwrap<'info>>, amount: u64) -> Result<()> {
-        require!(amount > 0, ShieldError::ZeroAmount);
-        let accounts = &mut *ctx.accounts;
-        let escrow_before = accounts.escrow.amount;
-        let supply_before = accounts.z_mint.supply;
-
-        token_interface::burn_checked(
-            CpiContext::new(
-                spl_token_2022::ID,
-                BurnChecked {
-                    mint: accounts.z_mint.to_account_info(),
-                    from: accounts.user_z.to_account_info(),
-                    authority: accounts.user.to_account_info(),
-                },
-            ),
-            amount,
-            accounts.z_mint.decimals,
-        )?;
-
-        let base_mint = accounts.base_mint.key();
-        let bump = [accounts.shield.authority_bump];
-        let seeds: &[&[u8]] = &[SHIELD_AUTHORITY_SEED, base_mint.as_ref(), &bump];
-        token::transfer_checked(
-            accounts.base_token_program.as_ref(),
-            &accounts.base_mint,
-            accounts.escrow.to_account_info(),
-            accounts.user_base.to_account_info(),
-            accounts.shield_authority.to_account_info(),
-            amount,
-            &[seeds],
-            ctx.remaining_accounts,
-        )?;
-
-        accounts.escrow.reload()?;
-        accounts.z_mint.reload()?;
-        let burned = supply_before
-            .checked_sub(accounts.z_mint.supply)
-            .ok_or(ShieldError::AccountingMismatch)?;
-        let released = escrow_before
-            .checked_sub(accounts.escrow.amount)
-            .ok_or(ShieldError::AccountingMismatch)?;
-        require!(
-            burned == amount && released == amount,
-            ShieldError::AccountingMismatch
-        );
-        token::require_backed(accounts.escrow.amount, accounts.z_mint.supply)?;
-
-        emit!(Unwrapped {
-            shield: accounts.shield.key(),
-            base_mint,
-            user: accounts.user.key(),
-            amount,
-            z_supply: accounts.z_mint.supply,
-            escrow_balance: accounts.escrow.amount,
-        });
-        Ok(())
-    }
+/// The program id.
+pub const fn id() -> Pubkey {
+    ID
 }
 
-fn reject(r: Rejection) -> Error {
-    match r {
-        Rejection::Malformed => error!(ShieldError::MalformedBaseMint),
-        Rejection::Unsupported(ext) => {
-            msg!("Base mint extension not accepted: {:?}", ext);
-            error!(ShieldError::UnsupportedExtension)
-        }
-        Rejection::Unknown => {
-            msg!("Base mint has an extension type this program does not know");
-            error!(ShieldError::UnsupportedExtension)
+/// Whether `id` is the program id.
+pub fn check_id(id: &Pubkey) -> bool {
+    *id == ID
+}
+
+/// The program type (`Id` off-chain, as `#[program]` generated it), and the
+/// [`noised_onchain::Program`] the account checks and errors are generic
+/// over.
+pub mod program {
+    /// The shield program.
+    #[derive(Clone)]
+    pub struct NoisedShield;
+
+    impl noised_onchain::Program for NoisedShield {
+        const ID: crate::Pubkey = crate::ID;
+        const ERRORS: noised_onchain::ErrorTable = crate::error::ERRORS;
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    impl anchor_lang::Id for NoisedShield {
+        fn id() -> crate::Pubkey {
+            crate::ID
         }
     }
 }
 
-#[derive(Accounts)]
-pub struct CreateShield<'info> {
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    #[account(mint::token_program = base_token_program)]
-    pub base_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + Shield::INIT_SPACE,
-        seeds = [SHIELD_SEED, base_mint.key().as_ref()],
-        bump,
-    )]
-    pub shield: Box<Account<'info, Shield>>,
-
-    /// CHECK: data-less PDA; signs as zToken mint authority and escrow owner.
-    #[account(seeds = [SHIELD_AUTHORITY_SEED, base_mint.key().as_ref()], bump)]
-    pub shield_authority: UncheckedAccount<'info>,
-
-    /// CHECK: PDA, created and initialized as the zToken mint in the handler
-    /// and verified afterwards (`zmint::verify`).
-    #[account(mut, seeds = [Z_MINT_SEED, base_mint.key().as_ref()], bump)]
-    pub z_mint: UncheckedAccount<'info>,
-
-    // init_if_needed: anyone can create this ATA first, which must not block
-    // the shield. Anchor still checks mint, owner and token program.
-    #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = base_mint,
-        associated_token::authority = shield_authority,
-        associated_token::token_program = base_token_program,
-    )]
-    pub escrow: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    pub base_token_program: Interface<'info, TokenInterface>,
-    pub token_2022_program: Program<'info, Token2022>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
+/// Instruction discriminators: `sha256("global:<snake_case name>")[..8]`.
+pub mod discriminator {
+    pub const CREATE_SHIELD: [u8; 8] = [47, 38, 125, 62, 228, 1, 164, 116];
+    pub const WRAP: [u8; 8] = [178, 40, 10, 189, 228, 129, 186, 140];
+    pub const UNWRAP: [u8; 8] = [126, 175, 198, 14, 212, 69, 50, 44];
+    /// `sha256("account:Shield")[..8]`.
+    pub const SHIELD: [u8; 8] = [122, 210, 171, 132, 124, 235, 186, 248];
+    /// `sha256("event:ShieldCreated")[..8]`.
+    pub const SHIELD_CREATED: [u8; 8] = [233, 222, 75, 70, 102, 75, 65, 67];
+    /// `sha256("event:Wrapped")[..8]`.
+    pub const WRAPPED: [u8; 8] = [11, 127, 145, 31, 206, 134, 73, 130];
+    /// `sha256("event:Unwrapped")[..8]`.
+    pub const UNWRAPPED: [u8; 8] = [25, 86, 93, 80, 145, 113, 86, 93];
+    /// Anchor's `EVENT_IX_TAG` (`0x1d9acb512ea545e4`, little-endian): the
+    /// event-CPI instruction tag, which this program (like the Anchor build,
+    /// compiled without `event-cpi`) refuses with `EventInstructionStub`.
+    pub const EVENT_IX_TAG_LE: [u8; 8] = noised_onchain::event::EVENT_IX_TAG_LE;
 }
 
-#[derive(Accounts)]
-pub struct Wrap<'info> {
-    /// Owner (or delegate) of `user_base`.
-    pub user: Signer<'info>,
-
-    #[account(
-        seeds = [SHIELD_SEED, base_mint.key().as_ref()],
-        bump = shield.bump,
-        has_one = base_mint,
-        has_one = base_token_program,
-        has_one = z_mint,
-        has_one = escrow,
-    )]
-    pub shield: Box<Account<'info, Shield>>,
-
-    /// CHECK: PDA signer for the zToken mint.
-    #[account(
-        seeds = [SHIELD_AUTHORITY_SEED, base_mint.key().as_ref()],
-        bump = shield.authority_bump,
-    )]
-    pub shield_authority: UncheckedAccount<'info>,
-
-    #[account(mint::token_program = base_token_program)]
-    pub base_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(mut, mint::token_program = token_2022_program)]
-    pub z_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(
-        mut,
-        token::mint = base_mint,
-        token::authority = shield_authority,
-        token::token_program = base_token_program,
-    )]
-    pub escrow: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// Base tokens come from here.
-    #[account(
-        mut,
-        token::mint = base_mint,
-        token::token_program = base_token_program,
-        constraint = user_base.key() != escrow.key() @ ShieldError::SameAccount,
-    )]
-    pub user_base: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// zTokens go here (any zToken account).
-    #[account(mut, token::mint = z_mint, token::token_program = token_2022_program)]
-    pub user_z: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    pub base_token_program: Interface<'info, TokenInterface>,
-    pub token_2022_program: Program<'info, Token2022>,
-}
-
-#[derive(Accounts)]
-pub struct Unwrap<'info> {
-    /// Owner (or delegate) of `user_z`.
-    pub user: Signer<'info>,
-
-    #[account(
-        seeds = [SHIELD_SEED, base_mint.key().as_ref()],
-        bump = shield.bump,
-        has_one = base_mint,
-        has_one = base_token_program,
-        has_one = z_mint,
-        has_one = escrow,
-    )]
-    pub shield: Box<Account<'info, Shield>>,
-
-    /// CHECK: PDA signer for the escrow.
-    #[account(
-        seeds = [SHIELD_AUTHORITY_SEED, base_mint.key().as_ref()],
-        bump = shield.authority_bump,
-    )]
-    pub shield_authority: UncheckedAccount<'info>,
-
-    #[account(mint::token_program = base_token_program)]
-    pub base_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(mut, mint::token_program = token_2022_program)]
-    pub z_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(
-        mut,
-        token::mint = base_mint,
-        token::authority = shield_authority,
-        token::token_program = base_token_program,
-    )]
-    pub escrow: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// Base tokens go here (any base token account).
-    #[account(
-        mut,
-        token::mint = base_mint,
-        token::token_program = base_token_program,
-        constraint = user_base.key() != escrow.key() @ ShieldError::SameAccount,
-    )]
-    pub user_base: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// zTokens are burned from here.
-    #[account(mut, token::mint = z_mint, token::token_program = token_2022_program)]
-    pub user_z: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    pub base_token_program: Interface<'info, TokenInterface>,
-    pub token_2022_program: Program<'info, Token2022>,
-}
-
-#[event]
+/// Emitted by `create_shield`.
+#[cfg_attr(not(target_os = "solana"), anchor_lang::event)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ShieldCreated {
     pub shield: Pubkey,
     pub base_mint: Pubkey,
@@ -413,13 +134,15 @@ pub struct ShieldCreated {
     pub z_mint: Pubkey,
     pub escrow: Pubkey,
     pub decimals: u8,
-    pub name: String,
-    pub symbol: String,
-    pub uri: String,
+    pub name: alloc::string::String,
+    pub symbol: alloc::string::String,
+    pub uri: alloc::string::String,
     pub payer: Pubkey,
 }
 
-#[event]
+/// Emitted by `wrap`.
+#[cfg_attr(not(target_os = "solana"), anchor_lang::event)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Wrapped {
     pub shield: Pubkey,
     pub base_mint: Pubkey,
@@ -432,7 +155,9 @@ pub struct Wrapped {
     pub escrow_balance: u64,
 }
 
-#[event]
+/// Emitted by `unwrap`.
+#[cfg_attr(not(target_os = "solana"), anchor_lang::event)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Unwrapped {
     pub shield: Pubkey,
     pub base_mint: Pubkey,
@@ -441,4 +166,217 @@ pub struct Unwrapped {
     pub amount: u64,
     pub z_supply: u64,
     pub escrow_balance: u64,
+}
+
+/// Bytes written into a fixed buffer (instruction data and event payloads
+/// whose length depends on the metadata strings).
+#[derive(Clone, Copy)]
+pub struct Buf<const N: usize> {
+    data: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> Default for Buf<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// [`Buf::put_all`], once for every `N`: the new length.
+#[inline(never)]
+fn put_into(data: &mut [u8], mut len: usize, parts: &[&[u8]]) -> usize {
+    for part in parts {
+        if let Some(dst) = data.get_mut(len..len + part.len()) {
+            dst.copy_from_slice(part);
+            len += part.len();
+        }
+    }
+    len
+}
+
+impl<const N: usize> Buf<N> {
+    pub const fn new() -> Self {
+        Self {
+            data: [0; N],
+            len: 0,
+        }
+    }
+
+    /// Appends `bytes` (callers size `N` for the longest content; anything
+    /// that would not fit is dropped, which the tests rule out).
+    pub fn put(&mut self, bytes: &[u8]) -> &mut Self {
+        self.put_all(&[bytes])
+    }
+
+    /// Appends each of `parts`, as [`Buf::put`].
+    pub fn put_all(&mut self, parts: &[&[u8]]) -> &mut Self {
+        self.len = put_into(&mut self.data, self.len, parts);
+        self
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        self.data.get(..self.len).unwrap_or(&[])
+    }
+}
+
+/// The `sol_log_data` payloads of the events: discriminator, then the fields
+/// in Borsh (pubkeys raw, integers little-endian, strings with a `u32`
+/// length).
+pub mod event_data {
+    use super::{discriminator, Buf, Pubkey, ShieldCreated, Unwrapped, Wrapped};
+    use crate::metadata::{MAX_NAME_LEN, MAX_SYMBOL_LEN, MAX_URI_LEN};
+
+    /// `ShieldCreated` with the longest name, symbol and uri.
+    pub const SHIELD_CREATED_MAX_LEN: usize =
+        8 + 32 * 5 + 1 + 4 + MAX_NAME_LEN + 4 + MAX_SYMBOL_LEN + 4 + MAX_URI_LEN + 32;
+    pub const WRAPPED_LEN: usize = 8 + 32 * 3 + 8 * 4;
+    pub const UNWRAPPED_LEN: usize = 8 + 32 * 3 + 8 * 3;
+
+    /// `ShieldCreated { shield, base_mint, base_token_program, z_mint,
+    /// escrow, decimals, name, symbol, uri, payer }`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn shield_created(
+        shield: &Pubkey,
+        base_mint: &Pubkey,
+        base_token_program: &Pubkey,
+        z_mint: &Pubkey,
+        escrow: &Pubkey,
+        decimals: u8,
+        name: &[u8],
+        symbol: &[u8],
+        uri: &[u8],
+        payer: &Pubkey,
+    ) -> Buf<SHIELD_CREATED_MAX_LEN> {
+        let lengths = [name.len(), symbol.len(), uri.len()].map(|n| (n as u32).to_le_bytes());
+        let mut d = Buf::new();
+        d.put_all(&[
+            &discriminator::SHIELD_CREATED,
+            shield.as_ref(),
+            base_mint.as_ref(),
+            base_token_program.as_ref(),
+            z_mint.as_ref(),
+            escrow.as_ref(),
+            &[decimals],
+            &lengths[0],
+            name,
+            &lengths[1],
+            symbol,
+            &lengths[2],
+            uri,
+            payer.as_ref(),
+        ]);
+        d
+    }
+
+    /// `Wrapped` / `Unwrapped`: the discriminator, shield, base_mint and
+    /// user, then `values` (the `u64` fields in order).
+    #[inline(never)]
+    pub fn exchange(
+        discriminator: &[u8; 8],
+        shield: &Pubkey,
+        base_mint: &Pubkey,
+        user: &Pubkey,
+        values: &[u64],
+    ) -> Buf<WRAPPED_LEN> {
+        let mut d = Buf::new();
+        d.put_all(&[
+            discriminator,
+            shield.as_ref(),
+            base_mint.as_ref(),
+            user.as_ref(),
+        ]);
+        for value in values {
+            d.put(&value.to_le_bytes());
+        }
+        d
+    }
+
+    /// `Wrapped { shield, base_mint, user, amount, minted, z_supply,
+    /// escrow_balance }`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn wrapped(
+        shield: &Pubkey,
+        base_mint: &Pubkey,
+        user: &Pubkey,
+        amount: u64,
+        minted: u64,
+        z_supply: u64,
+        escrow_balance: u64,
+    ) -> Buf<WRAPPED_LEN> {
+        exchange(
+            &discriminator::WRAPPED,
+            shield,
+            base_mint,
+            user,
+            &[amount, minted, z_supply, escrow_balance],
+        )
+    }
+
+    /// `Unwrapped { shield, base_mint, user, amount, z_supply,
+    /// escrow_balance }`.
+    pub fn unwrapped(
+        shield: &Pubkey,
+        base_mint: &Pubkey,
+        user: &Pubkey,
+        amount: u64,
+        z_supply: u64,
+        escrow_balance: u64,
+    ) -> Buf<WRAPPED_LEN> {
+        exchange(
+            &discriminator::UNWRAPPED,
+            shield,
+            base_mint,
+            user,
+            &[amount, z_supply, escrow_balance],
+        )
+    }
+
+    impl ShieldCreated {
+        /// The `sol_log_data` payload (Anchor's `Event::data`).
+        pub fn log_data(&self) -> alloc::vec::Vec<u8> {
+            shield_created(
+                &self.shield,
+                &self.base_mint,
+                &self.base_token_program,
+                &self.z_mint,
+                &self.escrow,
+                self.decimals,
+                self.name.as_bytes(),
+                self.symbol.as_bytes(),
+                self.uri.as_bytes(),
+                &self.payer,
+            )
+            .as_slice()
+            .to_vec()
+        }
+    }
+
+    impl Wrapped {
+        /// The `sol_log_data` payload (Anchor's `Event::data`).
+        pub fn log_data(&self) -> Buf<WRAPPED_LEN> {
+            wrapped(
+                &self.shield,
+                &self.base_mint,
+                &self.user,
+                self.amount,
+                self.minted,
+                self.z_supply,
+                self.escrow_balance,
+            )
+        }
+    }
+
+    impl Unwrapped {
+        /// The `sol_log_data` payload (Anchor's `Event::data`).
+        pub fn log_data(&self) -> Buf<WRAPPED_LEN> {
+            unwrapped(
+                &self.shield,
+                &self.base_mint,
+                &self.user,
+                self.amount,
+                self.z_supply,
+                self.escrow_balance,
+            )
+        }
+    }
 }
