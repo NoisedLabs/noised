@@ -21,8 +21,10 @@
 //! * [`pda`], [`sysvar`], [`cpi`], [`event`].
 //! * [`token`]: SPL Token / Token-2022 accounts, extensions, associated
 //!   token accounts, token CPIs, transfer-hook account resolution.
-//! * [`sys`]: every `unsafe` block of the crate (syscalls, CPI, the
-//!   entrypoint's account list), with its safety argument.
+//! * [`sys`]: the `unsafe` blocks of the crate (syscalls, CPI, the
+//!   entrypoint's account list, unborrowed data reads), with their safety
+//!   arguments; the only other `unsafe` code is the transfer-hook
+//!   resolution's data read after a borrow check (`token::hook`).
 //! * `host` (off-chain only): helpers for clients and tests.
 //!
 //! Off-chain (`not(target_os = "solana")`) the syscalls do nothing (logs are

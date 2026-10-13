@@ -349,9 +349,10 @@ top-up or refund, then resize). None of the five programs uses `zero`,
   `invoke` refuses a live `Ref` / `RefMut` of an instruction account
   (`AccountBorrowFailed`, as solana-cpi), but cannot see a plain slice kept
   from a dropped one. `AccountView` is `Copy`; `write_back` borrows mutably
-  only at exit, after every CPI. The transfer-hook resolution reads data
-  without a borrow check (`sys::data_unchecked`), which is only sound
-  between the account checks and the CPI.
+  only at exit, after every CPI. The transfer-hook resolution checks the
+  borrow state of each account it reads (`AccountBorrowFailed`, as the SPL
+  resolver's `try_borrow_data`), then reads without taking a borrow
+  (`HookAccount::data` is an `unsafe fn`: safe code cannot call it).
 * **Events**: `event::emit(&payload)`; `emit_cpi!` → `event::emit_cpi::<P>(
   event_authority, bump, &payload)` and the program must dispatch the
   event tag to `event::event_dispatch::<P>(accounts, &EVENT_AUTHORITY)`
@@ -477,8 +478,9 @@ Measured on the vault (SBPF v3, `cargo-build-sbf --arch v3`): Anchor build
 * **Host builds compile the processor too** (it is `pub` for tests):
   everything must compile off-chain; syscalls are no-ops there and logs /
   CPIs are recorded per thread.
-* **Unsafe code** lives only in `noised-onchain/src/sys.rs` (each block
-  with its safety argument); programs need none of their own (the
+* **Unsafe code** lives only in `noised-onchain/src/sys.rs` and the
+  transfer-hook resolution's data reads (`token/hook.rs`), each block with
+  its safety argument; programs need none of their own (the
   `entrypoint!` expansion contains pinocchio's entrypoint, allocator and
   panic handler, so do not `deny(unsafe_code)` at the program's root).
 

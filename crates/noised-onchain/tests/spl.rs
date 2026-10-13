@@ -355,19 +355,28 @@ fn token_parsing_matches_spl_token_2022() {
 
 // ------------------------------------------------------ transfer hooks
 
-/// A host account for the resolver.
+/// A host account for the resolver. `borrowed`: its data is mutably
+/// borrowed while the resolution runs (the SPL side holds a `RefMut`).
 struct TestAccount {
     key: Address,
     data: Vec<u8>,
     is_signer: bool,
     is_writable: bool,
+    borrowed: bool,
 }
 
 impl hook::HookAccount for TestAccount {
     fn key(&self) -> &Address {
         &self.key
     }
-    fn data(&self) -> &[u8] {
+    fn check_borrow(&self) -> Result<(), ProgramError> {
+        if self.borrowed {
+            Err(ProgramError::AccountBorrowFailed)
+        } else {
+            Ok(())
+        }
+    }
+    unsafe fn data(&self) -> &[u8] {
         &self.data
     }
 }
@@ -526,6 +535,13 @@ fn run_spl(
             false,
         ));
     }
+    // The accounts marked `borrowed` stay mutably borrowed during the call.
+    let held: Vec<_> = infos
+        .iter()
+        .zip(&all)
+        .filter(|(_, account)| account.borrowed)
+        .map(|(info, _)| info.try_borrow_mut_data().unwrap())
+        .collect();
     let (base_infos, extra_infos) = infos.split_at(4);
     let mut cpi = Instruction::new_with_bytes(
         TOKEN_2022_PROGRAM_ID,
@@ -551,6 +567,7 @@ fn run_spl(
             extra_infos,
         )
     }));
+    drop(held);
     match result {
         Err(_) => Outcome::Panic,
         Ok(Err(e)) => Outcome::Error(e),
@@ -609,7 +626,8 @@ fn run_ours(
 /// spl-transfer-hook-interface's (`add_extra_accounts_for_execute_cpi` with
 /// spl-tlv-account-resolution 0.11.1): the same accounts, order and flags,
 /// or the same error, for random validation data, seed configs and account
-/// sets.
+/// sets, and with one account now and then mutably borrowed during the call
+/// (`AccountBorrowFailed` exactly where the SPL code borrows it).
 #[test]
 fn hook_accounts_match_spl_transfer_hook_interface() {
     let quiet = std::panic::take_hook();
@@ -623,8 +641,9 @@ fn hook_accounts_match_spl_transfer_hook_interface() {
             data: r.some_bytes(80),
             is_signer: signer,
             is_writable: writable,
+            borrowed: false,
         };
-        let base = [
+        let mut base = [
             account(&mut r, false, true),
             account(&mut r, false, false),
             account(&mut r, false, true),
@@ -648,6 +667,7 @@ fn hook_accounts_match_spl_transfer_hook_interface() {
                 data: vec![],
                 is_signer: false,
                 is_writable: false,
+                borrowed: false,
             });
         }
         if r.chance(92) {
@@ -656,6 +676,7 @@ fn hook_accounts_match_spl_transfer_hook_interface() {
                 data: validation_data(&mut r, &metas),
                 is_signer: false,
                 is_writable: r.chance(50),
+                borrowed: false,
             });
         }
         // Accounts the metas resolve to (usually present), found by running
@@ -687,6 +708,7 @@ fn hook_accounts_match_spl_transfer_hook_interface() {
                     data: data.clone(),
                     is_signer: r.chance(30),
                     is_writable: r.chance(50),
+                    borrowed: false,
                 });
             }
             let data = extra
@@ -709,6 +731,7 @@ fn hook_accounts_match_spl_transfer_hook_interface() {
                 data: base[i].data.clone(),
                 is_signer: base[i].is_signer,
                 is_writable: base[i].is_writable,
+                borrowed: false,
             });
         }
         // Shuffle.
@@ -716,11 +739,24 @@ fn hook_accounts_match_spl_transfer_hook_interface() {
             let j = r.below(i as u64 + 1) as usize;
             extra.swap(i, j);
         }
+        // Now and then one account is mutably borrowed during the call
+        // (review L-2): both resolvers fail with AccountBorrowFailed if and
+        // where they borrow it. A separate generator keeps the other cases
+        // as they were.
+        let mut b = Rng(0xB0B0_0000 ^ round as u64);
+        if b.chance(10) {
+            let i = b.below(4 + extra.len() as u64) as usize;
+            match i.checked_sub(4) {
+                Some(j) => extra[j].borrowed = true,
+                None => base[i].borrowed = true,
+            }
+        }
 
         let theirs = run_spl(&program_id, &base, &extra, amount);
         let ours = run_ours(&program_id, &base, &extra, amount);
         assert_eq!(ours, theirs, "round {round}");
         let label = match &theirs {
+            Outcome::Error(ProgramError::AccountBorrowFailed) => "borrowed",
             Outcome::Accounts(a) if a.len() > 6 => "resolved extra accounts",
             Outcome::Accounts(_) => "program only / no extras",
             Outcome::Error(_) => "error",
@@ -734,6 +770,7 @@ fn hook_accounts_match_spl_transfer_hook_interface() {
         "resolved extra accounts",
         "program only / no extras",
         "error",
+        "borrowed",
     ] {
         assert!(tally.get(label).copied().unwrap_or(0) > 100, "{tally:?}");
     }
@@ -772,6 +809,75 @@ fn validation_tlv_matches_spl_type_length_value() {
             );
         }
     }
+}
+
+/// Review L-2, on runtime-layout accounts: the resolution checks the borrow
+/// state of every account it reads (the validation account, then the
+/// accounts so far before each meta), so a live `RefMut` of one fails with
+/// `AccountBorrowFailed`, as the SPL resolver's `try_borrow_data` does; a
+/// shared `Ref` does not.
+#[test]
+fn hook_resolution_checks_the_borrow_state_of_account_views() {
+    let program_id = Address::new_from_array([7; 32]);
+    let base: Vec<HostAccount> = (1u8..=4)
+        .map(|i| host(Address::new_from_array([i; 32]), TOKEN_2022_PROGRAM_ID, &[i; 8]))
+        .collect();
+    let mint = Address::new_from_array([2; 32]);
+    let validation_key = hook::extra_account_metas_address(&mint, &program_id);
+    // One extra account: a PDA of the hook seeded with the source's first
+    // 8 bytes (an AccountData seed: account 0, offset 0, length 8).
+    let mut meta = [0u8; 35];
+    meta[0] = 1;
+    meta[1..5].copy_from_slice(&[4, 0, 0, 8]);
+    let mut list = 1u32.to_le_bytes().to_vec();
+    list.extend_from_slice(&meta);
+    let mut validation = hook::EXECUTE_DISCRIMINATOR.to_vec();
+    validation.extend_from_slice(&(list.len() as u32).to_le_bytes());
+    validation.extend_from_slice(&list);
+    let (pda, _) = Address::find_program_address(&[&[1u8; 8]], &program_id);
+    let other = Address::new_from_array([9; 32]);
+    let extra_hosts = [
+        host(program_id, other, &[]),
+        host(validation_key, program_id, &validation),
+        host(pda, other, &[]),
+    ];
+    let v: Vec<_> = base.iter().map(HostAccount::view).collect();
+    let extra: Vec<_> = extra_hosts.iter().map(HostAccount::view).collect();
+    let resolve = || {
+        let mut entries: Vec<hook::Entry<noised_onchain::AccountView>> = Vec::new();
+        hook::add_extra_accounts_for_execute_cpi(
+            &mut entries,
+            &program_id,
+            &v[0],
+            &v[1],
+            &v[2],
+            &v[3],
+            5,
+            &extra,
+        )
+        .map(|()| {
+            entries
+                .iter()
+                .map(|e| *e.account.address())
+                .collect::<Vec<_>>()
+        })
+    };
+    assert_eq!(resolve(), Ok(vec![pda, validation_key, program_id]));
+
+    // The validation account mutably borrowed.
+    let mut writer = extra_hosts[1].view();
+    let held = writer.try_borrow_mut().unwrap();
+    assert_eq!(resolve(), Err(ProgramError::AccountBorrowFailed));
+    drop(held);
+    // The source (read for the seed) mutably borrowed.
+    let mut writer = base[0].view();
+    let held = writer.try_borrow_mut().unwrap();
+    assert_eq!(resolve(), Err(ProgramError::AccountBorrowFailed));
+    drop(held);
+    // A shared borrow is fine.
+    let shared = v[0].try_borrow().unwrap();
+    assert_eq!(resolve(), Ok(vec![pda, validation_key, program_id]));
+    drop(shared);
 }
 
 // -------------------------------------------------------------- CPIs

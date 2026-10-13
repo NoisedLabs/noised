@@ -3,8 +3,11 @@
 //! (`onchain::add_extra_accounts_for_execute_cpi`) and
 //! spl-tlv-account-resolution 0.11.1 (`ExtraAccountMetaList::
 //! add_to_cpi_instruction`, `ExtraAccountMeta::resolve`), with the same
-//! accounts, flags, order and errors. Written over [`HookAccount`] so the
-//! host tests can run it against the SPL crates.
+//! accounts, flags, order and errors, `AccountBorrowFailed` included: the
+//! SPL code borrows the validation account's data, then before each meta the
+//! data of every account resolved so far, and so does this one (it checks
+//! the borrow state, then reads without taking a borrow). Written over
+//! [`HookAccount`] so the host tests can run it against the SPL crates.
 
 use alloc::vec::Vec;
 
@@ -34,14 +37,32 @@ pub const POD_BUFFER_TOO_SMALL: u32 = 1;
 /// `is_signer`, `is_writable`.
 pub const EXTRA_ACCOUNT_META_LEN: usize = 35;
 
-/// An account the resolution can see: its address and its data.
+/// An account the resolution can see: its address, its borrow state and
+/// its data.
+///
+/// Reading the data is `unsafe`: it takes no borrow, so safe code can never
+/// hold it next to a `RefMut` of the same account. The resolution checks the
+/// borrow state first ([`HookAccount::check_borrow`], where the SPL code
+/// calls `try_borrow_data`) and reads nothing else while it holds the data.
+#[allow(unsafe_code)]
 pub trait HookAccount {
     fn key(&self) -> &Pubkey;
-    /// The account's data (Anchor's `try_borrow_data`; no account is
-    /// mutably borrowed while hook accounts are resolved).
-    fn data(&self) -> &[u8];
+
+    /// `try_borrow_data`'s check: `AccountBorrowFailed` while the data is
+    /// mutably borrowed.
+    fn check_borrow(&self) -> Result<(), ProgramError>;
+
+    /// The account's data, without taking a borrow.
+    ///
+    /// # Safety
+    ///
+    /// [`HookAccount::check_borrow`] must have passed, and no mutable borrow
+    /// of the data may be taken (nor a CPI made) while the returned slice is
+    /// alive.
+    unsafe fn data(&self) -> &[u8];
 }
 
+#[allow(unsafe_code)]
 impl HookAccount for AccountView {
     #[inline]
     fn key(&self) -> &Pubkey {
@@ -49,11 +70,30 @@ impl HookAccount for AccountView {
     }
 
     #[inline]
-    fn data(&self) -> &[u8] {
-        // The resolution runs between the account checks and the
-        // `transfer_checked` CPI, while nothing is mutably borrowed.
-        sys::data_unchecked(self)
+    fn check_borrow(&self) -> Result<(), ProgramError> {
+        AccountView::check_borrow(self)
     }
+
+    #[inline]
+    unsafe fn data(&self) -> &[u8] {
+        // SAFETY: the caller's contract (borrow checked, nothing writes the
+        // data while the slice lives) is `data_unchecked`'s.
+        unsafe { sys::data_unchecked(self) }
+    }
+}
+
+/// The data of `account`, after `try_borrow_data`'s check
+/// (`AccountBorrowFailed` while it is mutably borrowed). The resolution only
+/// reads while it holds the returned slice: it takes no borrow and makes no
+/// CPI.
+#[allow(unsafe_code)]
+#[inline]
+fn borrowed_data<A: HookAccount>(account: &A) -> Result<&[u8], ProgramError> {
+    account.check_borrow()?;
+    // SAFETY: not mutably borrowed (just checked), and every caller in this
+    // module drops the slice before returning, without taking a mutable
+    // borrow or invoking anything in between.
+    Ok(unsafe { account.data() })
 }
 
 /// An instruction account: address, signer, writable.
@@ -189,7 +229,8 @@ fn key_at<'a, A: HookAccount>(accounts: &[&'a A], index: u8) -> Result<&'a Pubke
 }
 
 /// `length` bytes at `data_index` of the data of the account at
-/// `account_index` (`AccountNotFound`, `AccountDataTooSmall`).
+/// `account_index` (`AccountNotFound`, `AccountBorrowFailed`,
+/// `AccountDataTooSmall`).
 fn data_at<'a, A: HookAccount>(
     accounts: &[&'a A],
     account_index: u8,
@@ -200,8 +241,7 @@ fn data_at<'a, A: HookAccount>(
         .get(account_index as usize)
         .ok_or_else(|| custom(RESOLUTION_ACCOUNT_NOT_FOUND))?;
     let start = data_index as usize;
-    account
-        .data()
+    borrowed_data(*account)?
         .get(start..start + length)
         .ok_or_else(|| custom(RESOLUTION_ACCOUNT_DATA_TOO_SMALL))
 }
@@ -409,8 +449,15 @@ pub fn add_extra_accounts_for_execute_cpi<'a, A: HookAccount>(
         execute.extend(base.iter().map(|a| Entry::new(*a, false, false)));
         let mut accounts: Vec<&'a A> = base.to_vec();
 
-        let list = extra_account_metas(execute_entry(validate_info.data())?)?;
+        // `validate_state_info.try_borrow_data()?`, then the TLV list.
+        let list = extra_account_metas(execute_entry(borrowed_data(validate_info)?)?)?;
         for meta in list.as_chunks::<EXTRA_ACCOUNT_META_LEN>().0 {
+            // `add_to_cpi_instruction` borrows the data of every account of
+            // the Execute instruction so far before resolving each meta
+            // (`AccountBorrowFailed` if one is mutably borrowed).
+            for account in &accounts {
+                account.check_borrow()?;
+            }
             let mut resolved = resolve(meta, &data, program_id, &accounts)?;
             de_escalate(&mut resolved, &execute);
             let info = find(extra, &resolved.pubkey)

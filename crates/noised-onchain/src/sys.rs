@@ -1,7 +1,8 @@
 //! Every `unsafe` block of the crate, each with its safety argument: the
 //! syscalls (logs, sysvars), the cross-program invocation, the entrypoint's
 //! account list and the unchecked data borrow of the transfer-hook
-//! resolution.
+//! resolution (whose callers, in `token::hook`, are the crate's only other
+//! `unsafe` code: they call it after a borrow check).
 //!
 //! Off-chain (host builds) the syscalls do nothing: programs only run
 //! on-chain. Host builds record the log lines and the invocations instead
@@ -172,17 +173,19 @@ fn check_borrows(metas: &[InstructionAccount], infos: &[&AccountView]) -> Progra
     Ok(())
 }
 
-/// The data of `account` without a borrow check (Anchor's `try_borrow_data`
-/// where nothing can hold a mutable borrow).
+/// The data of `account`, without taking a borrow (the transfer-hook
+/// resolution's `HookAccount::data`, which checks the borrow state first as
+/// spl-tlv-account-resolution's `try_borrow_data` does).
 ///
-/// Only for reads while no account data is mutably borrowed or written by a
-/// CPI: the transfer-hook resolution, which runs between the account checks
-/// and the `transfer_checked` CPI.
+/// # Safety
+///
+/// The data must not be mutably borrowed (`check_borrow` passed), and no
+/// `RefMut` of it may be taken, nor a CPI made, while the returned slice is
+/// alive.
 #[inline]
-pub(crate) fn data_unchecked(account: &AccountView) -> &[u8] {
-    // SAFETY: the caller (`token::hook`, through `HookAccount`) runs while no
-    // `RefMut` of any account exists and no CPI is in progress, so the data
-    // cannot change while the returned slice lives.
+pub(crate) unsafe fn data_unchecked(account: &AccountView) -> &[u8] {
+    // SAFETY: the caller's contract: nothing writes the data while the
+    // returned slice lives.
     unsafe { account.borrow_unchecked() }
 }
 
