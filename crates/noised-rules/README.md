@@ -13,7 +13,7 @@ Both share one condition mini-VM: a postfix array of 10-byte nodes over a boolea
 
 The crate is `no_std`, has no `unsafe`, never allocates on the verify/evaluate paths, never recurses, and its library code is checked by clippy for panic freedom (`indexing_slicing`, `arithmetic_side_effects`, `unwrap_used`, `panic`, lossy casts: all denied). Every verifier returns a precise `Error` for any input; evaluation of a verified program cannot fail.
 
-> **Status: pre-audit, not yet on crates.io.** No independent audit has been completed; the crate has had internal reviews by AI agents (review 4 and audit round 4, [docs/AUDIT.md](https://github.com/NoisedLabs/noised/blob/main/docs/AUDIT.md)), mutation testing and a differential run against the TypeScript SDK. Byte formats are version 1 and frozen once a program using them is finalized; the parity vectors pin them. The programs that use this crate are deployed on Solana devnet only (upgradeable). The first crates.io release is **coming soon**; until then, depend on it by git (below).
+> **Status: pre-audit; 0.1.0 is on [crates.io](https://crates.io/crates/noised-rules).** No independent audit has been completed; the crate has had internal reviews by AI agents (review 4 and audit round 4, [docs/AUDIT.md](https://github.com/NoisedLabs/noised/blob/main/docs/AUDIT.md)), mutation testing and a differential run against the TypeScript SDK. Byte formats are version 1 and frozen once a program using them is finalized; the parity vectors pin them. The programs that use this crate are deployed on Solana devnet only (upgradeable).
 
 **Who uses it.** The Noised hook (`noised_hook`) verifies a launch's rules when its policy is created and evaluates them on every guarded transfer; the launchpad (`noised_launchpad`) verifies rules in `publish_rules` and hashes them for the attestation; the autopilot (`noised_autopilot`) verifies graphs in `publish_graph` and schedules and bounds every `run`. The TypeScript SDK (`@noisedlabs/sdk/programmable`) mirrors the formats, the verifiers and the evaluators byte for byte, tested against this crate's vectors. This README is normative for both byte formats ([docs/SPEC.md](https://github.com/NoisedLabs/noised/blob/main/docs/SPEC.md) §1.9 and §9.2 refer to it).
 
@@ -34,7 +34,7 @@ cargo add noised-rules                                   # parse, verify, evalua
 cargo add noised-rules --features alloc,sha2-backend     # clients and tools: owned programs, encoders, SHA-256
 ```
 
-Until then, from this repository (pin a commit you reviewed):
+Or from this repository (pin a commit you reviewed):
 
 ```toml
 [dependencies]
@@ -42,7 +42,7 @@ noised-rules = { git = "https://github.com/NoisedLabs/noised", rev = "<commit>" 
 # clients and tools: features = ["alloc", "sha2-backend"]
 ```
 
-Releases are published from this repository's release workflow through crates.io trusted publishing. The published crate contains the library only (`src/`, this README, `LICENSE`, `NOTICE`); the parity vectors shared with the SDK and the mutation check live in the repository.
+Version 0.1.0 was published by hand; later releases are published from this repository's release workflow. The published crate contains the library only (`src/`, this README, `LICENSE`, `NOTICE`); the parity vectors shared with the SDK and the mutation check live in the repository.
 
 ## Features
 

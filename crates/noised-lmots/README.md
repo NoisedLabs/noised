@@ -11,7 +11,7 @@ Hash-based post-quantum signatures for Solana programs and clients, from [RFC 85
 
 Both rest only on SHA-256, so a quantum computer gains at most Grover's square-root speed-up against them: about 128-bit security against quantum attackers. The crate is `no_std` (with `alloc`), has no `unsafe` code, and takes SHA-256 as a trait, so on-chain it uses the `sol_sha256` syscall and off-chain any implementation.
 
-> **Status: pre-audit, not yet on crates.io.** No independent audit has been completed; the crate has had internal reviews (by AI agents, [docs/AUDIT.md](https://github.com/NoisedLabs/noised/blob/main/docs/AUDIT.md)) and none of them found an issue in its verification code. Its first crates.io release is **coming soon**; until then, depend on it by git (below). The parameter sets are the ones RFC 8554 defines and NIST SP 800-208 lists, but this crate carries no NIST approval: Noised's keys are software keys derived from a recovery phrase or a passkey secret, which SP 800-208 does not allow.
+> **Status: pre-audit; 0.1.0 is on [crates.io](https://crates.io/crates/noised-lmots).** No independent audit has been completed; the crate has had internal reviews (by AI agents, [docs/AUDIT.md](https://github.com/NoisedLabs/noised/blob/main/docs/AUDIT.md)) and none of them found an issue in its verification code. The parameter sets are the ones RFC 8554 defines and NIST SP 800-208 lists, but this crate carries no NIST approval: Noised's keys are software keys derived from a recovery phrase or a passkey secret, which SP 800-208 does not allow.
 
 ## Contents
 
@@ -36,7 +36,7 @@ cargo add noised-lmots                                  # verification only: wha
 cargo add noised-lmots --features signer,sha2-backend   # clients: key generation, signing, a SHA-256 backend
 ```
 
-Until then, from this repository (pin a commit you reviewed):
+Or from this repository (pin a commit you reviewed):
 
 ```toml
 [dependencies]
@@ -44,7 +44,7 @@ noised-lmots = { git = "https://github.com/NoisedLabs/noised", rev = "<commit>" 
 # clients: noised-lmots = { git = "https://github.com/NoisedLabs/noised", rev = "<commit>", features = ["signer", "sha2-backend"] }
 ```
 
-Releases are published from this repository's release workflow through crates.io trusted publishing. The published crate contains the library only (`src/`, this README, `LICENSE`, `NOTICE`); the RFC 8554 known-answer tests, the benchmark and the mutation check stay in the repository.
+Version 0.1.0 was published by hand; later releases are published from this repository's release workflow. The published crate contains the library only (`src/`, this README, `LICENSE`, `NOTICE`); the RFC 8554 known-answer tests, the benchmark and the mutation check stay in the repository.
 
 ## Features
 

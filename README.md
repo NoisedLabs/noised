@@ -352,12 +352,12 @@ Every top-level directory and file:
 |---|---|---|---|---|
 | [`@noisedlabs/sdk`](https://www.npmjs.com/package/@noisedlabs/sdk) | 0.9.0 | npm | [`sdk/`](sdk/) | The TypeScript SDK: everything to read, verify, build, sign (post-quantum) and simulate. ESM, Node 22.12+ and browsers. [README](sdk/README.md) |
 | [`@noisedlabs/mcp`](https://www.npmjs.com/package/@noisedlabs/mcp) | 0.2.0 | npm | [`packages/noised-mcp/`](packages/noised-mcp/) | The MCP server for AI agents (`npx -y @noisedlabs/mcp@0.2.0`). [README](packages/noised-mcp/README.md) |
-| `noised-lmots` | 0.1.0 | crates.io: **coming soon** | [`crates/noised-lmots/`](crates/noised-lmots/) | LM-OTS / LMS (RFC 8554) verification and signing, `no_std`. [README](crates/noised-lmots/README.md) |
-| `noised-rules` | 0.1.0 | crates.io: **coming soon** | [`crates/noised-rules/`](crates/noised-rules/) | PXR1 rules, PXG1 graphs and their VM, `no_std`. [README](crates/noised-rules/README.md) |
+| `noised-lmots` | 0.1.0 | [crates.io](https://crates.io/crates/noised-lmots) | [`crates/noised-lmots/`](crates/noised-lmots/) | LM-OTS / LMS (RFC 8554) verification and signing, `no_std`. [README](crates/noised-lmots/README.md) |
+| `noised-rules` | 0.1.0 | [crates.io](https://crates.io/crates/noised-rules) | [`crates/noised-rules/`](crates/noised-rules/) | PXR1 rules, PXG1 graphs and their VM, `no_std`. [README](crates/noised-rules/README.md) |
 | The five programs (`.so`) | | GitHub releases, with SHA-256 sums | [`programs/`](programs/) | Verifiable SBPF v3 builds |
 | QSL-1 and its proposals | draft 0.4 | | [`docs/standard/`](docs/standard/) | The token standard |
 
-Until the crates are on crates.io, depend on them by git (`noised-lmots = { git = "https://github.com/NoisedLabs/noised" }`) or by path; their crates.io badges above show "not found" until then.
+Install them with `cargo add noised-lmots` and `cargo add noised-rules` (see each crate's README for the client features), or depend on a reviewed commit of this repository by git.
 
 ## Program IDs (devnet)
 
