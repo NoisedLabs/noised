@@ -14,6 +14,18 @@ export const NAV = [
   { to: "/docs", label: "Docs", hint: "For developers" },
 ] as const;
 
+/**
+ * The official Noised mark, a hexagon of dots, next to the NOISED wordmark in the navbar, the mobile menu and the
+ * footer: black dots on the light theme (Paper), white dots on the dark one (Graphite). Each file is pre-scaled for one
+ * screen density (1x, 2x, 3x of `size` CSS pixels) from the 512 px originals in public/brand, so the browser never
+ * resamples the fine dots. The paths are relative: the site works from any path (IPFS gateways).
+ */
+export const BRAND_MARK = {
+  size: 26,
+  light: ["brand/noised-mark-nav-26.png", "brand/noised-mark-nav-52.png", "brand/noised-mark-nav-78.png"],
+  dark: ["brand/noised-mark-white-nav-26.png", "brand/noised-mark-white-nav-52.png", "brand/noised-mark-white-nav-78.png"],
+} as const;
+
 /** The footer's one line about Noised. */
 export const TAGLINE = "The quantum security layer for Solana. Launch, store, shield and verify tokens, with every rule checked on-chain.";
 

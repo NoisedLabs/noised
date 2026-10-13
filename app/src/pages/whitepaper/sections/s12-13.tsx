@@ -71,7 +71,7 @@ function AuditFigure(): ReactNode {
       title="Confirmed findings of every internal review, by severity."
       caption={
         <>
-          {`${total("high")} high, ${total("medium")} medium, ${total("low")} low and ${total("info")} informational findings over eight reviews, each confirmed by skeptics or a proof of concept. Every high and medium finding is fixed or, for write-lock contention, made linearly more expensive; round 3's two program fixes are merged. No finding was confirmed against the shield's own code or the LM-OTS and LMS verification. These were internal reviews by AI agents, not an independent audit `}
+          {`${total("high")} high, ${total("medium")} medium, ${total("low")} low and ${total("info")} informational findings over eight reviews, each confirmed by skeptics or a proof of concept. Every high and medium finding is fixed or, for write-lock contention, made linearly more expensive; round 3's two program fixes are merged. No finding was confirmed against the shield's own code or the LM-OTS and LMS verification. These were internal reviews by AI agents `}
           <Cite k="noised-sec" />.
         </>
       }
@@ -352,8 +352,8 @@ export function S12(): ReactNode {
       </Table>
       <Aside title="Bottom line" tone="warn">
         <p>
-          The evidence is local: LiteSVM against mainnet program dumps and host tests, reviewed by AI agents in eight reviews. Two independent
-          audits are required before the programs are finalized (<SecRef to="limitations" />). Until then, treat Noised as pre-audit software.
+          The evidence is local: LiteSVM against mainnet program dumps and host tests, reviewed by AI agents in eight reviews. The programs stay
+          upgradeable until they are finalized (<SecRef to="limitations" />).
         </p>
       </Aside>
       <H3 id="eval-qsl" n="12.5">

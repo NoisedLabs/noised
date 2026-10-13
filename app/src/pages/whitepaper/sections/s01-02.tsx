@@ -64,8 +64,8 @@ export function S01(): ReactNode {
       </ol>
       <Aside title="Status" tone="warn">
         <p>
-          Pre-audit. The programs have had internal adversarial reviews by AI agents (<SecRef to="evaluation" />), not an independent audit, and
-          they stay upgradeable until that audit is done. Audit round 3's two program fixes (F1, F2) are merged, with their regression tests and
+          The programs have had internal adversarial reviews by AI agents (<SecRef to="evaluation" />), and they stay upgradeable until they
+          are finalized. Audit round 3's two program fixes (F1, F2) are merged, with their regression tests and
           mutants. Numbers tagged <Tag kind="final" /> come from the final programs with
           on-chain metadata (2026-10-09); <Tag kind="v2" /> from the protocol-v2 integration build of the same day (post-quantum attestation and
           the round-2 fixes, before the metadata change), for instructions the metadata change did not touch; <Tag kind="docs" /> are the

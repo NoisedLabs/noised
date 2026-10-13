@@ -9,7 +9,7 @@ QSL-1 ("Quantum Security Layer token, version 1") is a token standard layered on
 This page summarizes the standard. The normative text, with every account offset, the verification algorithm and the test vectors, is `docs/standard/QSL-1.md` in the repository. Where the two differ, that file wins, and where it differs from the programs, the code wins.
 
 :::warn Status: draft, no token can meet it yet
-Level 1 requires finalized programs (condition C1.24), and Noised's programs stay upgradeable until independent audits are done. Until then a verifier reports at most "candidate" for a Noised token, and only on mainnet-beta can a level be awarded at all.
+Level 1 requires finalized programs (condition C1.24), and Noised's programs are still upgradeable. Until they are finalized a verifier reports at most "candidate" for a Noised token, and only on mainnet-beta can a level be awarded at all.
 :::
 
 ## The two levels

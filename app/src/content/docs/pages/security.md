@@ -4,8 +4,8 @@ nav: Security model
 summary: What Noised guarantees and how, who you still trust, what the internal reviews found, how it is tested, and how to report a vulnerability.
 ---
 
-:::warn Status: pre-audit
-No independent audit has been completed, and the programs have not been finalized. Until a program's upgrade authority is set to None, its holder can replace that program's code, and every guarantee it enforces is only as strong as that key. Check with `solana program show <program id>`: `Authority:` must read `none`.
+:::warn Status: not yet finalized
+The programs have not been finalized. Until a program's upgrade authority is set to None, its holder can replace that program's code, and every guarantee it enforces is only as strong as that key. Check with `solana program show <program id>`: `Authority:` must read `none`.
 :::
 
 ## Guarantees
@@ -69,7 +69,7 @@ Protected against a quantum computer: the authority to launch (the creator's LMS
 
 ## Internal reviews {#internal-reviews}
 
-Every review so far was carried out by AI agents: finders with one risk lens each, skeptics told to refute every finding, adversarial reviewers who wrote proofs of concept against the real program builds, and fixers who added a regression test for every fix. **None of this is an independent audit.** The full record is `docs/AUDIT.md`.
+Every review so far was carried out by AI agents: finders with one risk lens each, skeptics told to refute every finding, adversarial reviewers who wrote proofs of concept against the real program builds, and fixers who added a regression test for every fix. The full record is `docs/AUDIT.md`.
 
 | Review | Date | Who | Findings | Outcome |
 |---|---|---|---|---|

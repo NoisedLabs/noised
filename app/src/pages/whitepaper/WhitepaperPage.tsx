@@ -44,7 +44,6 @@ function Cover(): ReactNode {
         <span className="wp-eyebrow-dot" aria-hidden="true" />
         <span>Whitepaper</span>
         <span>{VERSION}</span>
-        <span>Pre-audit</span>
       </p>
       <h1 className="wp-title">
         <ResolveText text="Noised:" trigger="mount" durationMs={700} />{" "}

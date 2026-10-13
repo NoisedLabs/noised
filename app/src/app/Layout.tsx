@@ -3,7 +3,7 @@
  * theme, Connect), a small mode pill under it ("Demo mode — no real funds" in demo builds), the live-mode network
  * banner, the mobile menu sheet, the command palette (Ctrl/⌘ K or "/", no chip), toasts and a simple footer.
  * v6 (PIXEL_V6): pixel type in the chrome, a quick pixel-dissolve page transition, the pixel-shield loading state,
- * magnetic pixel buttons, a pixel brand mark and a pixel wordmark in the footer.
+ * magnetic pixel buttons and a pixel wordmark in the footer. The brand mark is the official Noised hexagon of dots.
  */
 import { Menu, Moon, OctagonX, Sun, TriangleAlert, Volume2, VolumeX, X, ArrowUpRight } from "lucide-react";
 import { m } from "motion/react";
@@ -22,7 +22,7 @@ import { installMagnetic } from "../fx/pixel/magnetic";
 import { sfx, useSound } from "../fx/sfx";
 import { ADAPTER_MODE, CLUSTERS, PROGRAMMABLE_AVAILABLE } from "../lib/noised";
 import { missingNoisedPrograms, useNetwork } from "./network";
-import { NAV, TAGLINE } from "./brand";
+import { BRAND_MARK, NAV, TAGLINE } from "./brand";
 import { APP_VERSION, CLUSTER, PALETTE_META, useSettings } from "./settings";
 import { WalletButton } from "./wallet";
 
@@ -96,7 +96,7 @@ function RouteLoading(): ReactNode {
 
 // ================================================================ brand ===
 
-/** The 3 x 3 pixel mark (square pixels, white fading to silver; ink to graphite on Paper) + "NOISED". */
+/** The Noised hexagon mark + "NOISED" (the link's name is "Noised home"; the mark itself is decorative). */
 function Brand({ onClick }: { onClick?: () => void }): ReactNode {
   return (
     <NavLink to="/" end className="phx-brand" aria-label="Noised home" onClick={onClick}>
@@ -108,15 +108,30 @@ function Brand({ onClick }: { onClick?: () => void }): ReactNode {
   );
 }
 
-const MARK_DOTS = [0, 1, 2].flatMap((r) => [0, 1, 2].map((c) => ({ r, c })));
+/** Both theme variants of the mark; html[data-theme] shows one (terminal.css). */
+const MARK_TONES = [
+  { tone: "light", files: BRAND_MARK.light },
+  { tone: "dark", files: BRAND_MARK.dark },
+] as const;
 
 function BrandMark(): ReactNode {
   return (
-    <svg className="phx-mark" viewBox="0 0 20 20" shapeRendering="crispEdges" aria-hidden="true" focusable="false">
-      {MARK_DOTS.map(({ r, c }) => (
-        <rect key={`${r}${c}`} x={c * 7} y={r * 7} width={6} height={6} className={`phx-mark-d${r + c}`} />
+    <span className="phx-mark" aria-hidden="true">
+      {MARK_TONES.map(({ tone, files }) => (
+        <img
+          key={tone}
+          className="phx-mark-img"
+          data-tone={tone}
+          src={files[0]}
+          srcSet={files.map((f, i) => `${f} ${i + 1}x`).join(", ")}
+          width={BRAND_MARK.size}
+          height={BRAND_MARK.size}
+          alt=""
+          decoding="async"
+          draggable={false}
+        />
       ))}
-    </svg>
+    </span>
   );
 }
 

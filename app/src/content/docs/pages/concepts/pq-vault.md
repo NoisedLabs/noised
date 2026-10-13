@@ -124,4 +124,4 @@ A `withdraw` carries 2,312 bytes of instruction data, so it must go in a **v1 tr
 - **Destinations.** Once paid to an ordinary wallet, tokens are Ed25519-protected again.
 - **SOL or other mints sent to the vault PDA itself are unrecoverable.** Deposit only into the vault's token account.
 - **Two ledgers, two signatures.** The program cannot see a signature that never landed. Two devices that hold one phrase but do not share their vault-key records can each sign a different withdrawal with one key before either lands, and anyone who sees both can forge a third (rule 6 above).
-- **Not yet independently audited.** Internal AI-agent reviews found five vault issues in round 1 (four fixed in v4, one the documented limitation above) and one in round 2 (the key-index binding, fixed); round 3 found nothing in the vault's code.
+- **Reviews.** Internal AI-agent reviews found five vault issues in round 1 (four fixed in v4, one the documented limitation above) and one in round 2 (the key-index binding, fixed); round 3 found nothing in the vault's code.
