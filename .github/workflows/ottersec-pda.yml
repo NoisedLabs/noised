@@ -18,6 +18,12 @@ name: ottersec-pda
 # Keep RUST_TOOLCHAIN and SOLANA_VERIFY_VERSION equal to release.yml.
 
 on:
+  # A push to this branch only registers the workflow with GitHub (dispatching
+  # needs a registered workflow when the file is not on the default branch);
+  # both jobs are skipped, they run only for a manual dispatch.
+  push:
+    branches: [ottersec-pda]
+    paths: [.github/workflows/ottersec-pda.yml]
   workflow_dispatch:
     inputs:
       step:
