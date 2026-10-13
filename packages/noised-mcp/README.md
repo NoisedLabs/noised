@@ -1056,7 +1056,7 @@ The server only helps. The limits below are checked by the Noised programs on ev
 - **Changing the plan (AP3).** A graph changes only with the launch identity's post-quantum (LMS) authorization. Publishing a graph changes nothing. Replacing an active or queued graph takes effect at least **72 hours** (259,200 s) after the authorization lands, visible on-chain the whole time; a first graph has no waiting period. A frozen graph never changes, and a freeze can only be used until its signed `not_after`.
 - **No admin (AP7).** The Autopilot has no admin, no pause and no configuration account, and cannot touch the launch, its liquidity, its Launch Guard policy or its mint's authorities.
 
-These rules are the deployed programs' rules. Until the programs are finalized (made immutable), whoever holds their upgrade authority could change them; on devnet today that is the devnet deployer ([docs/DEVNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/DEVNET.md)).
+These rules are the deployed programs' rules. Until the programs are finalized (made immutable), whoever holds their upgrade authority could change them: on mainnet today that is the key `EXgNtEcJ2Co61EQUHfNFN7z8SC3RpmhYKrqcMVcPpJqz` ([docs/MAINNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/MAINNET.md)), on devnet the devnet deployer ([docs/DEVNET.md](https://github.com/NoisedLabs/noised/blob/main/docs/DEVNET.md)).
 
 ### Keepers' partial buybacks
 
