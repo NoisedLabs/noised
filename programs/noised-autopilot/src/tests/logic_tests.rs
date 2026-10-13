@@ -1,7 +1,7 @@
 //! Every decision in `logic`, each guard at its edges and in its order.
 
 use noised_rules::{
-    graph::{action::*, trigger::*, NodeState, NotDue},
+    graph::{action::*, trigger::*, NodeState, NotDue, PriceRange},
     op, Graph, Node,
 };
 
@@ -365,6 +365,7 @@ struct Fx {
     spot: Option<u128>,
     reference: u128,
     seen: Option<Seen>,
+    observed: Option<Seen>,
     pool_quote: Option<u64>,
     now: i64,
     partial_spent: u64,
@@ -396,6 +397,7 @@ impl Fx {
             spot: Some(ONE),
             reference: ONE,
             seen: seen_at(ONE),
+            observed: seen_at(ONE),
             pool_quote: Some(100_000_000_000),
             now: NOW,
             partial_spent: 0,
@@ -407,12 +409,14 @@ impl Fx {
         self.graduated = true;
         self.spot = Some(sqrt_price);
         self.seen = seen_at(sqrt_price);
+        self.observed = seen_at(sqrt_price);
     }
 
     fn not_graduated(&mut self) {
         self.graduated = false;
         self.spot = None;
         self.seen = None;
+        self.observed = None;
         self.pool_quote = None;
     }
 
@@ -432,6 +436,7 @@ impl Fx {
             spot: self.spot,
             reference: self.reference,
             seen: self.seen,
+            observed: self.observed,
             pool_quote: self.pool_quote,
             partial_spent: self.partial_spent,
         })
@@ -624,7 +629,7 @@ fn leaf(op: u8, a: u8, arg: u64) -> Node {
 }
 
 #[test]
-fn plan_checks_the_condition_on_the_reference_price() {
+fn plan_checks_the_condition_across_the_reference_and_the_observations() {
     // WHEN price <= 1.0 (sqrt 2^64) AND treasury SOL >= 2 SOL.
     let mut n = gnode(WHEN, 0, BURN, 10, 0);
     n.cond_len = 3;
@@ -635,16 +640,146 @@ fn plan_checks_the_condition_on_the_reference_price() {
     ];
     let mut fx = Fx::new(vec![n], cond);
     fx.reference = ONE - 1;
+    fx.observed = None;
     fx.sol = 2_000_000_000;
     fx.plan(0).unwrap();
     fx.sol = 1_999_999_999;
     assert_err(fx.plan(0), AutopilotError::ConditionFalse);
     fx.sol = 2_000_000_000;
-    // The spot price and the observations do not matter, the reference does.
-    fx.pool_at(ONE * 4);
+    // The spot price alone does not matter...
+    fx.spot = Some(ONE * 4);
     fx.plan(0).unwrap();
+    // ... every price observed in the window does (review F1): "at most"
+    // must hold for the highest of them.
+    fx.observed = seen_at(ONE * 4);
+    assert_err(fx.plan(0), AutopilotError::ConditionFalse);
+    fx.observed = Some(Seen {
+        min: ONE / 2,
+        max: ONE - 1,
+    });
+    fx.plan(0).unwrap();
+    // And the reference.
     fx.reference = ONE;
     assert_err(fx.plan(0), AutopilotError::ConditionFalse);
+}
+
+#[test]
+fn condition_prices_span_the_reference_and_the_observations() {
+    let r = ONE;
+    assert_eq!(logic::condition_prices(r, None), PriceRange::at(r));
+    let o = |min: u128, max: u128| Some(Seen { min, max });
+    assert_eq!(
+        logic::condition_prices(r, o(r / 2, r * 2)),
+        PriceRange {
+            low: r / 2,
+            high: r * 2
+        }
+    );
+    // Observations all above (or all below) the reference: it is one end.
+    assert_eq!(
+        logic::condition_prices(r, o(r + 1, r * 2)),
+        PriceRange {
+            low: r,
+            high: r * 2
+        }
+    );
+    assert_eq!(
+        logic::condition_prices(r, o(r / 2, r - 1)),
+        PriceRange {
+            low: r / 2,
+            high: r
+        }
+    );
+}
+
+/// Review F1: a stale reference no longer holds a price condition true once
+/// any observation of the window disagrees. "At least P" after a fall: the
+/// honest low observations refuse it, whatever a pumped observation (the
+/// run's own) shows; "at most P" after a rise, the mirror. A condition all
+/// observations agree on still runs.
+#[test]
+fn plan_price_conditions_hold_only_across_every_observation() {
+    // Price 0.25 (sqrt 2^63): every threshold fits a u64.
+    let p = ONE / 2;
+    let at_least = || {
+        let mut n = gnode(WHEN, 0, BURN, 10, 0);
+        n.cond_len = 1;
+        Fx::new(vec![n], vec![leaf(op::graph::PRICE_GTE, 0, p as u64 - 1)])
+    };
+    let mut fx = at_least();
+    fx.reference = p; // stale: the market fell
+    fx.observed = Some(Seen {
+        min: p / 2,     // honest observations after the fall
+        max: p * 3 / 2, // a pump in the run's own transaction
+    });
+    assert_err(fx.plan(0), AutopilotError::ConditionFalse);
+    // Every observation at or above the threshold: it runs.
+    fx.observed = Some(Seen {
+        min: p - 1,
+        max: p * 3 / 2,
+    });
+    fx.plan(0).unwrap();
+    // The reference below the threshold refuses it whatever was observed.
+    fx.reference = p - 2;
+    assert_err(fx.plan(0), AutopilotError::ConditionFalse);
+
+    let mut n = gnode(WHEN, 0, BURN, 10, 0);
+    n.cond_len = 1;
+    let mut fx = Fx::new(vec![n], vec![leaf(op::graph::PRICE_LTE, 0, p as u64 - 1)]);
+    fx.reference = p - 1; // stale: the market rose
+    fx.observed = Some(Seen {
+        min: p / 2,     // a dump in the run's own transaction
+        max: p * 3 / 2, // honest observations after the rise
+    });
+    assert_err(fx.plan(0), AutopilotError::ConditionFalse);
+    fx.observed = Some(Seen {
+        min: p / 2,
+        max: p - 1,
+    });
+    fx.plan(0).unwrap();
+
+    // Under NOT the other end decides: "below P" (NOT at least P) needs the
+    // highest price below P, so a pump refuses it and a dump does not help.
+    let mut n = gnode(WHEN, 0, BURN, 10, 0);
+    n.cond_len = 2;
+    let mut fx = Fx::new(
+        vec![n],
+        vec![leaf(op::graph::PRICE_GTE, 0, p as u64), leaf(op::NOT, 0, 0)],
+    );
+    fx.reference = p - 1;
+    fx.observed = Some(Seen { min: p / 2, max: p });
+    assert_err(fx.plan(0), AutopilotError::ConditionFalse);
+    fx.observed = Some(Seen {
+        min: p / 2,
+        max: p - 1,
+    });
+    fx.plan(0).unwrap();
+    fx.reference = p;
+    assert_err(fx.plan(0), AutopilotError::ConditionFalse);
+
+    // OR: either side holding across the whole range is enough; a range
+    // that holds neither side throughout is refused.
+    let mut n = gnode(WHEN, 0, BURN, 10, 0);
+    n.cond_len = 3;
+    let mut fx = Fx::new(
+        vec![n],
+        vec![
+            leaf(op::graph::PRICE_GTE, 0, p as u64),
+            leaf(op::graph::TREASURY_SOL_GTE, 0, 2_000_000_000),
+            leaf(op::OR, 0, 0),
+        ],
+    );
+    fx.reference = p;
+    fx.observed = Some(Seen { min: p, max: p * 2 });
+    fx.sol = 0;
+    fx.plan(0).unwrap();
+    fx.observed = Some(Seen {
+        min: p - 1,
+        max: p * 2,
+    });
+    assert_err(fx.plan(0), AutopilotError::ConditionFalse);
+    fx.sol = 2_000_000_000;
+    fx.plan(0).unwrap();
 }
 
 #[test]

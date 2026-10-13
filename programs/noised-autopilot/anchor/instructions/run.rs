@@ -1,3 +1,8 @@
+// Review F1 (2026-10-13): this reference carries the change made to the
+// program (`src/`), so that it keeps describing what the program checks: a
+// price condition must hold across the reference and every price observed
+// in the window (`condition_prices`, `reference::observed`,
+// `Graph::runnable_over`). The Anchor build compared the reference alone.
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::get_associated_token_address_with_program_id,
@@ -92,6 +97,9 @@ pub fn handle_run<'info>(
     }
     let seen = reference::seen(&price.observations, now);
     reference::follow(&mut price, seen, now);
+    // Every price the window holds, this run's included: what price
+    // conditions must hold across (review F1), and its lowest a burn's value.
+    let observed = reference::observed(&price.observations, now);
     let pool_quote = match (is_buyback, pool) {
         (true, Some(p)) => Some(damm_accounts(ctx.remaining_accounts, &p)?),
         _ => None,
@@ -113,6 +121,7 @@ pub fn handle_run<'info>(
         spot: pool.map(|p| p.sqrt_price),
         reference: price.reference,
         seen,
+        observed,
         pool_quote,
         partial_spent,
     })?;
@@ -170,11 +179,7 @@ pub fn handle_run<'info>(
         plan.spent(),
         plan.partial(),
     )?;
-    let burn_price = logic::burn_price(
-        graduated,
-        price.reference,
-        reference::lowest(&price.observations, now),
-    );
+    let burn_price = logic::burn_price(graduated, price.reference, observed.map(|o| o.min));
     let tip = logic::take_tip(
         &mut ap.tip_epoch_start,
         &mut ap.tips_in_epoch,

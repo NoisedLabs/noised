@@ -1,3 +1,8 @@
+// Review F1 (2026-10-13): this reference carries the change made to the
+// program (`src/`), so that it keeps describing what the program checks: a
+// price condition must hold across the reference and every price observed
+// in the window (`condition_prices`, `reference::observed`,
+// `Graph::runnable_over`). The Anchor build compared the reference alone.
 //! Every decision the autopilot makes, as pure functions of its state and
 //! inputs (host-tested in `tests/`): when a graph may be queued, which
 //! authorizations may be used, whether and how much a node may move, how a
@@ -6,7 +11,7 @@
 //! planned CPIs.
 
 use anchor_lang::prelude::*;
-use noised_rules::graph::{action, current_epoch, Graph, GraphCtx, NodeState, NotDue};
+use noised_rules::graph::{action, current_epoch, Graph, GraphCtx, NodeState, NotDue, PriceRange};
 
 use crate::{
     constants::{
@@ -240,6 +245,25 @@ impl Plan {
     }
 }
 
+/// The sqrt prices a run's price conditions must hold at (review F1): from
+/// the lower of the reference and the lowest price observed in the window
+/// to the higher of the reference and the highest (`observed`:
+/// `reference::observed`, however recent, this run's own observation
+/// included). `Graph::condition_over` judges PRICE_GTE on the low end and
+/// PRICE_LTE on the high end (and, under NOT, the other end), so an
+/// observation, a pump or a dump in the run's own transaction included, can
+/// make a price condition false, never true. Without observations (before
+/// graduation): the reference alone.
+pub fn condition_prices(reference: u128, observed: Option<Seen>) -> PriceRange {
+    match observed {
+        Some(o) => PriceRange {
+            low: reference.min(o.min),
+            high: reference.max(o.max),
+        },
+        None => PriceRange::at(reference),
+    }
+}
+
 /// The price a burn's tokens are valued at for its tip (audit 4, A4-4):
 /// none before graduation (the only price then is the migration price,
 /// which the curve can be far below: a burn earns no tip), after it the
@@ -273,8 +297,14 @@ pub struct RunInput<'a, 'g> {
     pub spot: Option<u128>,
     /// The reference sqrt price, after this run's observation.
     pub reference: u128,
-    /// What the observation window saw, this run's observation included.
+    /// What the observation window saw, this run's observation included,
+    /// if its observations span a minute (`reference::seen`): the buyback
+    /// bound.
     pub seen: Option<Seen>,
+    /// Every price the window holds however recent, this run's observation
+    /// included (`reference::observed`): price conditions must hold across
+    /// it and the reference ([`condition_prices`]; review F1).
+    pub observed: Option<Seen>,
     /// The pool's wSOL, for a buyback.
     pub pool_quote: Option<u64>,
     /// What partial buybacks of the node moved since it last completed a
@@ -284,8 +314,9 @@ pub struct RunInput<'a, 'g> {
 
 /// Decide a run (spec §4 `run`), checking in this order: the node exists;
 /// an operator-gated node is signed by the operator; the node is due
-/// (trigger, runs this epoch, budget) and its condition holds (on the
-/// reference price); a buyback only after graduation, only with a usable
+/// (trigger, runs this epoch, budget) and its condition holds across the
+/// reference and every price observed in the window ([`condition_prices`],
+/// review F1); a buyback only after graduation, only with a usable
 /// observation window, and only while the pool price is within the node's
 /// premium over the lower of the reference and the lowest observed price
 /// (`reference::buyback_cap`), which also prices its minimum out; the
@@ -314,8 +345,13 @@ pub fn plan_run(input: &RunInput) -> Result<Plan> {
         sqrt_price: input.reference,
         runs_in_epoch: g.runs_in_epoch(input.states, input.now),
     };
-    g.runnable(input.node, input.states, &ctx)
-        .map_err(not_due_error)?;
+    g.runnable_over(
+        input.node,
+        input.states,
+        &ctx,
+        condition_prices(input.reference, input.observed),
+    )
+    .map_err(not_due_error)?;
     let state = input
         .states
         .get(input.node)

@@ -9,7 +9,7 @@ repository; the repository is never written) and must make a test fail:
   2. the LiteSVM suites, pinned: the test binaries built from the unmutated
      sources (`--svm-bins`, from `cargo test --no-run` of
      programs/noised-autopilot/tests/litesvm: autopilot, invariants,
-     review_fixes and audit4) run against an SBPF v3 build of the mutated
+     review_fixes, audit4 and price_conditions) run against an SBPF v3 build of the mutated
      program (the binaries link the program only for its instruction
      builders and account types; what they execute is the .so).
 
@@ -58,6 +58,10 @@ LOGIC, PRICE, LP, EXT, CONST, REF = P + "logic.rs", P + "price.rs", P + "launchp
 # The framework-free program's own code (no Anchor): account layout, events,
 # dispatch, error lines, integer division.
 STATE, EVENTS, PROC, ERR, INT = P + "state.rs", P + "events.rs", P + "processor.rs", P + "error.rs", P + "int.rs"
+# Shared crates the program links (paths from the program's directory): the
+# decimal error lines (noised-onchain) and the graph conditions (noised-rules).
+ONCHAIN_ERR = "../../crates/noised-onchain/src/error.rs"
+RULES_GRAPH, RULES_VM = "../../crates/noised-rules/src/graph.rs", "../../crates/noised-rules/src/vm.rs"
 RUN, GOV, INIT, BIND, BINDP, PUB, UPD = (
     P + "instructions/run.rs",
     P + "instructions/governance.rs",
@@ -102,6 +106,11 @@ A44 = "a4_4_burns_earn_no_tips_before_graduation"
 A44B = "a4_4_burns_after_graduation_are_valued_at_the_lowest_observed_price"
 M4 = "m4_recipients_without_accounts_are_skipped_and_cost_keepers_nothing"
 M4Z = "m4_a_share_of_nothing_is_no_skip"
+# Review F1 of the framework-free rewrite (tests/price_conditions.rs).
+F1GTE = "one_pumped_observation_in_the_run_tx_cannot_keep_a_price_gte_node_running"
+F1LTE = "one_dumped_observation_in_the_run_tx_cannot_keep_a_price_lte_node_running"
+F1FRESH = "a_fresh_honest_observation_counts_at_once"
+F1LIVE = "a_price_condition_every_observation_agrees_on_still_runs"
 
 # (file, original, mutant, label, LiteSVM filters or None for host only)
 MUTANTS = [
@@ -135,7 +144,24 @@ MUTANTS = [
     (LOGIC, "            input.operator != Pubkey::default(),", "            true,", "revoked operator runs", None),
     (LOGIC, "            input.operator_signer == Some(input.operator),", "            true,", "anyone runs gated nodes", None),
     (LOGIC, "    let gated = node.operator_gated == 1;", "    let gated = false;", "gating ignored", None),
-    (LOGIC, "        sqrt_price: input.reference,", "        sqrt_price: input.spot.unwrap_or(input.reference),", "conditions read spot", [REFCOND]),
+    # ---- review F1: price conditions hold across the reference and every observed price
+    (LOGIC, "        condition_prices(input.reference, input.observed),", "        PriceRange::at(input.reference),", "conditions on the reference alone (review F1)", [F1GTE, F1LTE]),
+    (LOGIC, "        condition_prices(input.reference, input.observed),", "        condition_prices(input.reference, input.seen),", "conditions on a minute-old window only (review F1)", [F1FRESH]),
+    (LOGIC, "        condition_prices(input.reference, input.observed),", "        PriceRange::at(input.spot.unwrap_or(input.reference)),", "conditions read spot", [REFCOND]),
+    (LOGIC, "            low: reference.min(o.min),", "            low: reference,", "PRICE_GTE ignores the lowest observation (review F1)", [F1GTE]),
+    (LOGIC, "            low: reference.min(o.min),", "            low: o.min,", "PRICE_GTE ignores the reference (review F1)", None),
+    (LOGIC, "            high: reference.max(o.max),", "            high: reference,", "PRICE_LTE ignores the highest observation (review F1)", [F1LTE]),
+    (LOGIC, "            high: reference.max(o.max),", "            high: o.max,", "PRICE_LTE ignores the reference (review F1)", None),
+    (LOGIC, "        None => PriceRange::at(reference),", "        None => PriceRange { low: 0, high: u128::MAX },", "no observation is every price (review F1)", [F1LIVE]),
+    (RUN, "    let observed = reference::observed(&price.observations, now);", "    let observed: Option<Seen> = None;", "conditions without the observations, on-chain (review F1)", [F1GTE]),
+    (REF, "    window(observations, now).map(|(s, _)| s)", "    seen(observations, now)", "observed prices need a minute (review F1)", [F1FRESH]),
+    (RULES_GRAPH, "            op::graph::PRICE_GTE => (low >= arg, high >= arg),", "            op::graph::PRICE_GTE => (high >= arg, high >= arg),", "PRICE_GTE on the highest price (review F1)", [F1GTE]),
+    (RULES_GRAPH, "            op::graph::PRICE_LTE => (high <= arg, low <= arg),", "            op::graph::PRICE_LTE => (low <= arg, low <= arg),", "PRICE_LTE on the lowest price (review F1)", [F1LTE]),
+    (RULES_GRAPH, "            op::graph::PRICE_GTE => (low >= arg, high >= arg),", "            op::graph::PRICE_GTE => (low >= arg, low >= arg),", "PRICE_GTE may on the lowest price (review F1)", None),
+    (RULES_GRAPH, "            op::graph::PRICE_LTE => (high <= arg, low <= arg),", "            op::graph::PRICE_LTE => (high <= arg, high <= arg),", "PRICE_LTE may on the highest price (review F1)", None),
+    (RULES_VM, "                (y1 ^ 1, m1 ^ 1)", "                (m1 ^ 1, y1 ^ 1)", "NOT keeps the ends of the range (review F1)", None),
+    (RULES_VM, "                    (m1 & m2, y1 & y2)", "                    (m1 | m2, y1 & y2)", "AND of uncertain prices as OR (review F1)", None),
+    (RULES_VM, "                    (m1 | m2, y1 | y2)", "                    (m1 & m2, y1 | y2)", "OR of uncertain prices as AND (review F1)", None),
     (LOGIC, "        graduated: input.graduated,", "        graduated: true,", "always graduated", [EARLY]),
     (LOGIC, "            require!(input.graduated, AutopilotError::NotGraduated);\n", "", "buyback without graduation", None),
     (LOGIC, "            let spot = input.spot.ok_or(AutopilotError::InvalidPool)?;", "            let spot = input.spot.unwrap_or(0);", "buyback without the pool price", None),
@@ -320,12 +346,11 @@ MUTANTS = [
     (LOGIC, "    if !graduated {\n        return 0;\n    }\n    lowest", "    lowest", "burns valued before graduation (audit 4, A4-4)", [A44]),
     (LOGIC, "    lowest.map_or(reference, |l| reference.min(l))", "    lowest.map_or(reference, |_| reference)", "burns valued at the reference (audit 4, A4-4)", [A44B]),
     (LOGIC, "    lowest.map_or(reference, |l| reference.min(l))", "    lowest.unwrap_or(reference)", "burns valued at the lowest price only (audit 4, A4-4)", None),
-    (RUN, "    let burn_price = logic::burn_price(\n        graduated,", "    let burn_price = logic::burn_price(\n        true,", "burns valued as graduated, on-chain (audit 4, A4-4)", [A44]),
-    (RUN, "        reference::lowest(&price.observations, now),", "        None,", "burns valued without the observations (audit 4, A4-4)", [A44B]),
-    (REF, "    let oldest_counted = bucket_of(now).saturating_sub(1);\n    observations", "    let oldest_counted = bucket_of(now);\n    observations", "the lowest price from one bucket (audit 4, A4-4)", None),
-    (REF, "    let oldest_counted = bucket_of(now).saturating_sub(1);\n    observations", "    let oldest_counted = bucket_of(now).saturating_sub(2);\n    observations", "the lowest price from three buckets (audit 4, A4-4)", None),
-    (REF, "        .filter(|b| !b.is_empty() && b.index >= oldest_counted)", "        .filter(|b| b.index >= oldest_counted)", "the lowest price of an empty bucket (audit 4, A4-4)", None),
-    (REF, "        .map(|b| b.min)\n        .min()", "        .map(|b| b.max)\n        .min()", "the lowest price from the highest (audit 4, A4-4)", None),
+    (RUN, "logic::burn_price(graduated, price.reference, observed", "logic::burn_price(true, price.reference, observed", "burns valued as graduated, on-chain (audit 4, A4-4)", [A44]),
+    (RUN, "price.reference, observed.map(|o| o.min));", "price.reference, None);", "burns valued without the observations (audit 4, A4-4)", [A44B]),
+    (RUN, "price.reference, observed.map(|o| o.min));", "price.reference, observed.map(|o| o.max));", "burns valued at the highest observed price (audit 4, A4-4)", [A44B]),
+    (REF, "        if b.is_empty() || b.index < oldest_counted {", "        if b.index < oldest_counted {", "an empty bucket counts in the window (audit 4, A4-4)", None),
+    (REF, "    observed(observations, now).map(|s| s.min)", "    observed(observations, now).map(|s| s.max)", "the lowest price from the highest (audit 4, A4-4)", None),
     # ---- audit 4, M4: a recipient without a wSOL account is skipped
     (RUN, "        if !is_wsol_account_of(ata, &owner) {", "        if false {", "recipients are never skipped (audit 4, M4)", [M4]),
     (RUN, "            skipped |= 1 << i;\n", "", "skipped recipients not listed (audit 4, M4)", [M4]),
@@ -360,7 +385,7 @@ MUTANTS = [
     (STATE, "        s.seq = u64::from_le_bytes(get(d, SEQ));", "        s.seq = u64::from_le_bytes(get(d, SEQ + 1));", "seq read at another offset", None),
     (EVENTS, "            w.put(&[u8::from(self.partial), self.skipped]);", "            w.put(&[self.skipped, u8::from(self.partial)]);", "NodeRan's partial and skipped swapped", None),
     (PROC, "        ACTIVATE => instructions::governance::activate(accounts, args),", "        ACTIVATE => instructions::governance::freeze(accounts, args),", "activate dispatched to freeze", None),
-    (ERR, "            *digit = b'0' + (n % 10) as u8;", "            *digit = b'1' + (n % 10) as u8;", "logged values off by one digit", None),
+    (ONCHAIN_ERR, "            *digit = b'0' + (rest % 10) as u8;", "            *digit = b'1' + (rest % 10) as u8;", "logged values off by one digit", None),
     (INT, "        -(((-(a + 1)) as u64 / b) as i64) - 1", "        -((((-(a + 1)) as u64 + 1) / b) as i64)", "euclid quotient of a negative time", None),
     (INT, "        (b - 1 - (-(a + 1)) as u64 % b) as i64", "        (b - (-(a + 1)) as u64 % b) as i64", "euclid remainder of a negative time", None),
 ]
@@ -478,7 +503,7 @@ def main():
         del args[i : i + 2]
         bins = sorted(
             p for p in glob.glob(os.path.join(bins_dir, "*.exe"))
-            if os.path.basename(p).startswith(("autopilot-", "invariants-", "review_fixes-", "audit4-"))
+            if os.path.basename(p).startswith(("autopilot-", "invariants-", "review_fixes-", "audit4-", "price_conditions-"))
         )
         if not bins:
             raise SystemExit(f"no LiteSVM test binaries in {bins_dir}")

@@ -218,6 +218,7 @@ fn treasury_outflows_only_to_allowed_sinks() {
             }
             let seen = reference::seen(&price_after.observations, now);
             reference::follow(&mut price_after, seen, now);
+            let observed = reference::observed(&price_after.observations, now);
             let open = w.partial.get(index).copied().unwrap_or(0);
             let plan = logic::plan_run(&RunInput {
                 graph: &g,
@@ -233,6 +234,7 @@ fn treasury_outflows_only_to_allowed_sinks() {
                 spot: w.graduated.then_some(w.pool_sqrt),
                 reference: price_after.reference,
                 seen,
+                observed,
                 pool_quote: w.graduated.then_some(w.pool_quote),
                 partial_spent: open,
             });

@@ -125,10 +125,11 @@ pub struct Autopilot {
     pub auth_marks: [AuthMark; 3],
     /// Successful runs so far, across all nodes and graphs.
     pub seq: u64,
-    /// The reference sqrt price (Q64.64) price conditions read and that
-    /// bounds buybacks: seeded with the launch's migration price, then moved
-    /// toward the prices observations of the pool agree on, rising at most
-    /// 5% per hour.
+    /// The reference sqrt price (Q64.64), which bounds buybacks and which
+    /// price conditions read together with the observed prices
+    /// (`logic::condition_prices`): seeded with the launch's migration
+    /// price, then moved toward the prices observations of the pool agree
+    /// on, rising at most 5% per hour.
     pub ref_sqrt_price: u128,
     /// When the reference last moved (0: never).
     pub ref_updated_at: i64,

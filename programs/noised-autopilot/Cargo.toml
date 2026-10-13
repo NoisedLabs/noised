@@ -28,7 +28,7 @@ no-log-ix-name = []
 # allocation-free). The ABI (instruction, account and event layouts,
 # discriminators, error numbers) is the Anchor 1.2.1 build's, byte for byte;
 # `idls/noised_autopilot.json` describes it and `anchor/` keeps the Anchor
-# source it implements.
+# source it implements (with the review-F1 price-condition change, as src/).
 [dependencies]
 noised-onchain = { workspace = true }
 noised-rules = { workspace = true }

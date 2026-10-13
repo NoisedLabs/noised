@@ -18,7 +18,8 @@
 //!    after every CPI of the handler.
 //!
 //! The comments `[A]` name the Anchor constraint each check implements
-//! (the Anchor source is kept verbatim in `anchor/`).
+//! (the Anchor source is kept in `anchor/`, verbatim but for the review-F1
+//! price-condition change made in both: see `lib.rs`).
 
 use noised_onchain::{
     accounts::{check_mut, write_back},

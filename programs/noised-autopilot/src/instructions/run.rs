@@ -278,6 +278,9 @@ fn handle_run(a: &mut RunAccounts, node: u8, amount: Option<u64>) -> ProgramResu
     }
     let seen = reference::seen(&price.observations, now);
     reference::follow(&mut price, seen, now);
+    // Every price the window holds, this run's included: what price
+    // conditions must hold across (review F1), and its lowest a burn's value.
+    let observed = reference::observed(&price.observations, now);
     let pool_quote = match (is_buyback, &pool) {
         (true, Some(p)) => Some(damm_accounts(a.remaining, p)?),
         _ => None,
@@ -292,6 +295,7 @@ fn handle_run(a: &mut RunAccounts, node: u8, amount: Option<u64>) -> ProgramResu
         pool.as_ref().map(|p| p.sqrt_price),
         price.reference,
         seen,
+        observed,
         pool_quote,
     )?;
     let gnode = graph.node(index).ok_or(AutopilotError::NoSuchNode)?;
@@ -344,11 +348,7 @@ fn handle_run(a: &mut RunAccounts, node: u8, amount: Option<u64>) -> ProgramResu
         plan.spent(),
         plan.partial(),
     )?;
-    let burn_price = logic::burn_price(
-        graduated,
-        price.reference,
-        reference::lowest(&price.observations, now),
-    );
+    let burn_price = logic::burn_price(graduated, price.reference, observed.map(|o| o.min));
     let tip = logic::take_tip(
         &mut ap.tip_epoch_start,
         &mut ap.tips_in_epoch,
@@ -403,6 +403,7 @@ fn plan(
     spot: Option<u128>,
     reference: u128,
     seen: Option<Seen>,
+    observed: Option<Seen>,
     pool_quote: Option<u64>,
 ) -> Result<Plan, ProgramError> {
     let ap = &*a.ap;
@@ -422,6 +423,7 @@ fn plan(
         spot,
         reference,
         seen,
+        observed,
         pool_quote,
         partial_spent,
     })?)

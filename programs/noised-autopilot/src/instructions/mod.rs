@@ -1,6 +1,6 @@
 //! One module per instruction: its accounts and constraints in Anchor's
 //! order (each check with an `[A]` comment naming the constraint of the
-//! Anchor build, kept verbatim in `anchor/instructions/`), then the handler
+//! Anchor build, kept in `anchor/instructions/`), then the handler
 //! and the exit.
 
 pub mod bind_mint;

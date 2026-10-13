@@ -57,9 +57,11 @@
 //!    (Anchor `init` / `init_if_needed`) only to create accounts (the
 //!    autopilot, the treasury's wSOL and token accounts, a graph record),
 //!    rent paid by their payer: no treasury value moves.
-//! 4. A node runs only when the graph says so (trigger, condition on the
-//!    reference price, runs and spend per epoch) and moves at most
-//!    `min(p1, budget left, treasury)`; a keeper moves that maximum, or for
+//! 4. A node runs only when the graph says so (trigger, condition, runs
+//!    and spend per epoch; a price condition must hold across the
+//!    reference price and every price observed in the last 15 to 30
+//!    minutes, so no observation can make one true: review F1) and moves
+//!    at most `min(p1, budget left, treasury)`; a keeper moves that maximum, or for
 //!    a buyback at least 1% of the pool's wSOL (`KEEPER_MIN_POOL_BPS`); an
 //!    operator chooses at most it, and only on its gated nodes. A keeper's
 //!    smaller buyback is partial: it leaves the node's run open (it is no
@@ -106,13 +108,20 @@
 //! (`sha256("event:<Name>")[..8]` + Borsh, through `sol_log_data`) and
 //! error numbers, the framework's included (`ConstraintSeeds` 2006, ...).
 //! Each instruction in [`instructions`] lists every account constraint of
-//! the Anchor build (its source is kept verbatim in `anchor/`) and checks
+//! the Anchor build (its source is kept in `anchor/`) and checks
 //! them in Anchor's order; [`processor`] dispatches. The hand-maintained
 //! `idls/noised_autopilot.json` describes the ABI.
 //!
 //! The decisions ([`logic`], [`reference`], [`price`]) and the layout
 //! readers ([`launchpad`], [`external`]) are the Anchor build's, line for
-//! line; only their error type changed ([`error`]).
+//! line; only their error type changed ([`error`]). One decision changed
+//! on purpose, in both (review F1, 2026-10-13; no ABI change): a price
+//! condition must hold across the reference and every price observed in
+//! the window (`logic::condition_prices`, `reference::observed`,
+//! `Graph::runnable_over`), where the Anchor build compared the reference
+//! alone, which one pumped (or dumped) observation in a run's own
+//! transaction could keep stale. `anchor/` carries the same change, so it
+//! stays the reference of what the program checks.
 //!
 //! Off-chain (`not(target_os = "solana")`), the crate keeps the Anchor
 //! client API its users have: [`accounts`], [`instruction`],

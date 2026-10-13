@@ -1,3 +1,8 @@
+// Review F1 (2026-10-13): this reference carries the change made to the
+// program (`src/`), so that it keeps describing what the program checks: a
+// price condition must hold across the reference and every price observed
+// in the window (`condition_prices`, `reference::observed`,
+// `Graph::runnable_over`). The Anchor build compared the reference alone.
 //! The reference price and the observations of the pool price it follows
 //! (spec §4 "Buyback MEV bound"), as pure functions of the stored state.
 //!
@@ -18,11 +23,20 @@
 //!   price observed in the window ([`buyback_cap`]): after the market
 //!   falls, one observation by anyone bounds every buyback from a minute
 //!   later, and a stale reference alone never prices one.
-//! * The reference (what price conditions read) moves only to the edge of
-//!   the window: up toward its lowest price when every observation in it is
-//!   above the reference, by at most 5% per hour from an allowance that only
-//!   rises spend; down to its highest price when every observation is below
-//!   it, at once ([`follow`]).
+//! * The reference moves only to the edge of the window: up toward its
+//!   lowest price when every observation in it is above the reference, by
+//!   at most 5% per hour from an allowance that only rises spend; down to
+//!   its highest price when every observation is below it, at once
+//!   ([`follow`]).
+//! * Price conditions must hold across the reference and every price
+//!   observed in the window, however recent ([`observed`],
+//!   `logic::condition_prices`; review F1): PRICE_GTE on the lowest of
+//!   them, PRICE_LTE on the highest. One observation on the other side of
+//!   the reference vetoes the reference's move, and so could hold a
+//!   condition true on a stale reference: a pumped observation in a run's
+//!   own transaction kept a PRICE_GTE node running after a fall (a dumped
+//!   one a PRICE_LTE node after a rise). Judged on the whole range, an
+//!   observation can make a condition false, never true.
 //!
 //! Residual: an attacker who is the only one to observe the pool for a whole
 //! window can (a) after a market fall nobody observed, price a buyback at
@@ -105,6 +119,13 @@ pub fn observe(observations: &mut [ObsBucket; 2], now: i64, spot: u128) {
 /// bucket at `now`, if those observations span at least
 /// `OBS_MIN_SPAN_SECS` (the earliest of them is at least that old).
 pub fn seen(observations: &[ObsBucket; 2], now: i64) -> Option<Seen> {
+    let (s, first) = window(observations, now)?;
+    (now.saturating_sub(first) >= OBS_MIN_SPAN_SECS).then_some(s)
+}
+
+/// The lowest and highest price observed in the current and the previous
+/// bucket at `now`, and when the earliest of those observations was made.
+fn window(observations: &[ObsBucket; 2], now: i64) -> Option<(Seen, i64)> {
     let oldest_counted = bucket_of(now).saturating_sub(1);
     let mut window: Option<(Seen, i64)> = None;
     for b in observations {
@@ -128,8 +149,7 @@ pub fn seen(observations: &[ObsBucket; 2], now: i64) -> Option<Seen> {
             ),
         });
     }
-    let (s, first) = window?;
-    (now.saturating_sub(first) >= OBS_MIN_SPAN_SECS).then_some(s)
+    window
 }
 
 /// The sqrt price a buyback is bounded by: the lower of the reference and
@@ -138,17 +158,23 @@ pub fn buyback_cap(reference: u128, seen: Option<Seen>) -> Option<u128> {
     seen.map(|s| reference.min(s.min))
 }
 
+/// The lowest and the highest price observed in the current and the
+/// previous bucket at `now`, however recent (this run's own observation
+/// included); `None` without one. A burn is valued at the lowest
+/// ([`lowest`]; audit 4, A4-4) and price conditions must hold across both
+/// and the reference (`logic::condition_prices`; review F1): more
+/// observations only ever make either more cautious, so none needs to be a
+/// minute old.
+pub fn observed(observations: &[ObsBucket; 2], now: i64) -> Option<Seen> {
+    window(observations, now).map(|(s, _)| s)
+}
+
 /// The lowest price observed in the current and the previous bucket at
 /// `now`, however recent (a burn's value, audit 4, A4-4: a lower price only
 /// ever lowers a tip, so no observation needs to be a minute old); `None`
 /// without one.
 pub fn lowest(observations: &[ObsBucket; 2], now: i64) -> Option<u128> {
-    let oldest_counted = bucket_of(now).saturating_sub(1);
-    observations
-        .iter()
-        .filter(|b| !b.is_empty() && b.index >= oldest_counted)
-        .map(|b| b.min)
-        .min()
+    observed(observations, now).map(|s| s.min)
 }
 
 /// Accrue the rise allowance up to `now`: `REF_UP_SQRT_BPS_PER_HOUR` per
