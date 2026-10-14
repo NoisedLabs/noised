@@ -820,11 +820,11 @@
   .hm-how[data-scroll] .hm-how-steps > li {
     flex: none;
     align-items: center;
-    min-height: 40vh;
+    min-height: 30vh;
   }
   .hm-how[data-scroll] .hm-how-steps > li:first-child {
     align-items: flex-start;
-    min-height: 34vh;
+    min-height: 24vh;
   }
   .hm-how[data-scroll] .hm-how-step {
     flex: 1;
