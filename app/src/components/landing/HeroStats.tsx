@@ -5,10 +5,16 @@
  * (the simulated chain in the demo build); nothing here is decorative data.
  * Each tile is marked `data-pane`: the hero's wall draws liquid glass under it,
  * and carries a small icon of dots that coalesces out of noise (noise/stats.ts).
+ *
+ * Before the first launch on mainnet the three numbers would all be zero, so the
+ * tiles say where Noised stands instead: launches open soon, the vault and the
+ * Shield are live, and all five programs are verified builds (StartStats).
  */
 import { useConnection } from "@solana/wallet-adapter-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { useLaunchesState, type LaunchesState } from "../../app/network";
+import { VERIFIED_PROGRAMS } from "../../app/opensource";
 import { verifyCached } from "../../app/verification";
 import { usePrefersReducedMotion } from "../../fx/motion";
 import { unixSecs } from "../../lib/format";
@@ -20,6 +26,9 @@ import { launchesIcon, raisedIcon, verifiedIcon } from "./noise/stats";
 
 /** One scene per tile, made once (a scene is a description; each canvas keeps its own state). */
 const ICONS = { launches: launchesIcon(), raised: raisedIcon(), verified: verifiedIcon() } as const;
+
+/** The facts StartStats shows hold on mainnet (where the verified builds run and the Shield is deployed). */
+const ON_MAINNET = __NOISED_CLUSTER__ === "mainnet";
 
 /** At most this many tokens are verified for the stat (the board verifies the same ones; results are cached). */
 const VERIFY_LIMIT = 48;
@@ -47,6 +56,9 @@ export function HeroStats({ launches, error = null }: HeroStatsProps): ReactNode
     return { total: launches?.length ?? 0, raised, openNow, trading };
   }, [launches, now]);
   const verified = useVerified(launches);
+  const launchesState = useLaunchesState();
+  // No launch yet on mainnet: three facts instead of three zeros.
+  if (ON_MAINNET && loaded && !error && summary.total === 0) return <StartStats state={launchesState} />;
 
   const launchesCaption = !loaded
     ? "Loading…"
@@ -98,6 +110,41 @@ export function HeroStats({ launches, error = null }: HeroStatsProps): ReactNode
           Live numbers are unavailable right now. The launches below have the details.
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The tiles before the first launch: launches open soon (or the first one could be yours, once they are open), the
+ * vault and the Shield are live, and all five programs are verified builds (the same code as the public source).
+ */
+export function StartStats({ state }: { state: LaunchesState }): ReactNode {
+  const open = state === "open";
+  const count = VERIFIED_PROGRAMS.length;
+  return (
+    <div className="hx-stats" data-state="ready" data-start="">
+      <dl className="hx-stats-grid" aria-label="Noised today">
+        <Stat label="Launches" caption={open ? "The first one could be yours" : "Opening on Solana shortly"} art={ICONS.launches}>
+          {open ? <CountUp value={0} /> : <span className="hx-roll hx-stat-word">Soon</span>}
+        </Stat>
+        <Stat label="Vault & Shield" caption="Ready for your coins today" art={ICONS.raised}>
+          <span className="hx-roll hx-stat-word">Live</span>
+        </Stat>
+        <Stat label="Verified builds" caption="Same code as on GitHub" art={ICONS.verified}>
+          <span className="sr-only">
+            {count} of {count}
+          </span>
+          <span className="hx-roll" aria-hidden="true">
+            {count}
+          </span>
+          <span className="hx-stat-of" aria-hidden="true">
+            /
+          </span>
+          <span className="hx-roll" aria-hidden="true">
+            {count}
+          </span>
+        </Stat>
+      </dl>
     </div>
   );
 }

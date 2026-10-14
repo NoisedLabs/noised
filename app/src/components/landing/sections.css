@@ -641,15 +641,83 @@
 .hm-live-error {
   margin-bottom: 18px;
 }
-.hm-live-empty {
+/* No launch yet: one compact glass band (the rising-arrow dots, the words, the two ways forward) instead of an empty
+   board. It sits close under the hero's numbers. */
+.hm-live[data-empty] {
+  padding-top: clamp(32px, 3.4vw, 56px);
+}
+.hm-soon {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(18px, 2.4vw, 34px);
+  padding: clamp(20px, 2.2vw, 28px) clamp(22px, 2.6vw, 34px);
+}
+.hm-soon-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 14px;
+  background: var(--hm-screen);
+  box-shadow: var(--hm-screen-edge);
+}
+.hm-soon-copy {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 48px 24px;
-  text-align: center;
+  align-items: flex-start;
+  min-width: 0;
 }
-.hm-live-empty .btn {
-  margin-top: 22px;
+.hm-soon-title {
+  margin-top: 12px;
+  font-family: var(--font-head);
+  font-weight: 400;
+  font-size: var(--px-1, 26.3158px);
+  line-height: 1.12;
+  letter-spacing: 0;
+  color: var(--text, #f5f5f5);
+  text-wrap: balance;
+}
+.hm-soon-text {
+  margin-top: 6px;
+}
+.hm-soon-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+@media (max-width: 900px) {
+  .hm-soon {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .hm-soon-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 560px) {
+  .hm-soon {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 20px;
+  }
+  /* Phones: the dots sit in the band's top-right corner, small, beside the chip. */
+  .hm-soon-art {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 56px;
+    height: 56px;
+  }
+  .hm-soon-title {
+    padding-right: 60px;
+  }
+  .hm-soon-actions .btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
 }
 
 /* Loading cards: soft breathing placeholders. */
