@@ -23,6 +23,7 @@ import { sfx, useSound } from "../fx/sfx";
 import { ADAPTER_MODE, CLUSTERS, PROGRAMMABLE_AVAILABLE } from "../lib/noised";
 import { missingNoisedPrograms, useNetwork } from "./network";
 import { BRAND_MARK, NAV, TAGLINE } from "./brand";
+import { REPO_URL } from "./opensource";
 import { APP_VERSION, CLUSTER, PALETTE_META, useSettings } from "./settings";
 import { WalletButton } from "./wallet";
 
@@ -404,6 +405,11 @@ function Footer(): ReactNode {
                 <NavLink to="/autopilot" title="Automatic buybacks, burns and payouts within fixed limits">
                   Autopilot{PROGRAMMABLE_AVAILABLE ? null : <small className="phx-footer-soon-tag"> coming</small>}
                 </NavLink>
+              </li>
+              <li>
+                <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+                  GitHub<span className="sr-only"> (opens in a new tab)</span>
+                </a>
               </li>
             </ul>
           </nav>

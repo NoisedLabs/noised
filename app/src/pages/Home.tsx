@@ -2,6 +2,7 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { memo, useMemo, type ReactNode } from "react";
 
 import { useAsync } from "../app/hooks";
+import { BuildWithNoised } from "../components/landing/BuildWithNoised";
 import { CtaBand } from "../components/landing/CtaBand";
 import { Hero } from "../components/landing/Hero";
 import { HowItWorks } from "../components/landing/HowItWorks";
@@ -21,8 +22,9 @@ const StableHero = memo(Hero);
 
 /**
  * The home page, in this order and nothing else: hero (with the three live numbers), the live
- * launches right under those numbers, Why Noised, How it works, Keep it safe, the closing call to action. The
- * footer belongs to the shell. One launch-list read feeds the hero and the launches.
+ * launches right under those numbers, Why Noised, How it works, Keep it safe, Build with Noised (what developers
+ * install, and the verified programs), the closing call to action. The footer belongs to the shell. One launch-list
+ * read feeds the hero and the launches.
  */
 export function HomePage(): ReactNode {
   const { connection } = useConnection();
@@ -39,6 +41,7 @@ export function HomePage(): ReactNode {
       <WhyNoised />
       <HowItWorks />
       <KeepSafe />
+      <BuildWithNoised />
       <CtaBand />
     </div>
   );
