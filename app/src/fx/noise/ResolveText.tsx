@@ -6,11 +6,13 @@
  *   <h2><ResolveText text="Why " /><ResolveText text="Noised" className="hm-accent" delay={140} /></h2>
  *
  * The real text is always in the DOM and holds the layout (screen readers and find-in-page read it); only a mask
- * and opacity change, through the CSSOM. Reduced motion: the text, at once.
+ * and opacity change, through the CSSOM. Reduced motion: the text, at once; and text still waiting for its turn shows
+ * at once when motion is switched off or the page prints (fx/inview observeSeen).
  */
 import { createElement, useEffect, useRef, type ElementType, type ReactNode } from "react";
 
-import { motionStill } from "./env";
+import { observeSeen } from "../inview";
+import { motionStill, onMotionChange } from "./env";
 import { playResolve } from "./reveal";
 import "./noise.css";
 
@@ -32,26 +34,29 @@ export function ResolveText({ text, as = "span", className = "", durationMs = 70
     const el = ref.current?.firstElementChild;
     if (!(el instanceof HTMLElement) || motionStill()) return;
     let cancel: (() => void) | null = null;
-    let io: IntersectionObserver | null = null;
+    let unwatch: (() => void) | null = null;
     // Hidden until it plays.
     el.style.setProperty("opacity", "0");
     const run = (): void => {
+      unwatch?.();
+      unwatch = null;
       el.style.removeProperty("opacity");
       cancel = playResolve(el, { duration: durationMs, delay, sweep: "right" });
     };
+    // Motion switched off while it waits or plays: the text, at once.
+    const offMotion = onMotionChange(() => {
+      if (!motionStill()) return;
+      unwatch?.();
+      unwatch = null;
+      cancel?.();
+      cancel = null;
+      el.style.removeProperty("opacity");
+    });
     if (trigger === "mount" || typeof IntersectionObserver === "undefined") run();
-    else {
-      io = new IntersectionObserver((entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          io?.disconnect();
-          io = null;
-          run();
-        }
-      });
-      io.observe(el);
-    }
+    else unwatch = observeSeen(el, run, { threshold: 0 });
     return () => {
-      io?.disconnect();
+      offMotion();
+      unwatch?.();
       cancel?.();
       el.style.removeProperty("opacity");
     };

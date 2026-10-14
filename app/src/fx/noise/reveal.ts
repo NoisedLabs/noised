@@ -12,10 +12,15 @@
  * shared frame loop and cleans every property it set when done. Reduced motion (or no IntersectionObserver): the
  * element simply shows. Like any mask / opacity fade, frosted glass inside the element shows its blur once the
  * reveal ends (about half a second).
+ *
+ * Nothing stays hidden: an element waiting for its turn shows at once when motion is switched off or the page
+ * prints, an element taller than the window starts once a fair part of the window shows it (fx/inview observeSeen),
+ * and a reveal that the frame loop cannot finish (a stalled or throttled tab) ends on a timer.
  */
 import { createElement, useEffect, useRef, type ElementType, type ReactNode, type RefObject } from "react";
 
-import { motionStill } from "./env";
+import { observeSeen } from "../inview";
+import { motionStill, onMotionChange } from "./env";
 import { noiseScheduler } from "./scheduler";
 
 export type ResolveSweep = "none" | "right" | "down" | "up";
@@ -44,6 +49,9 @@ const LATTICES: readonly (readonly [number, number, number])[] = [
 const MASK_PROPS = ["mask-image", "-webkit-mask-image", "mask-size", "-webkit-mask-size", "mask-position", "-webkit-mask-position", "mask-repeat", "-webkit-mask-repeat"];
 
 const ease = (v: number): number => 1 - (1 - v) ** 3;
+
+/** A reveal still running this long after its planned end finishes at once (the frame loop is stalled). */
+export const REVEAL_FAILSAFE_MS = 1500;
 
 /**
  * The mask at progress p (0 hidden .. 1 fully shown): growing soft dots, plus an optional sweep. `invert` gives the
@@ -92,11 +100,12 @@ function clear(el: HTMLElement): void {
 
 /**
  * Plays the resolve on `el` now (after `delay`). Returns a cancel function that also restores the element.
- * Under reduced motion it does nothing (and calls onDone).
+ * Under reduced motion it only shows the element (clearing a mask a waiting reveal left on it) and calls onDone.
  */
 export function playResolve(el: HTMLElement, opts: NoiseRevealOptions = {}): () => void {
   const { duration = 700, delay = 0, sweep = "none", onDone } = opts;
   if (motionStill()) {
+    clear(el);
     onDone?.();
     return () => undefined;
   }
@@ -105,23 +114,31 @@ export function playResolve(el: HTMLElement, opts: NoiseRevealOptions = {}): () 
   let stop: (() => void) | null = null;
   let finished = false;
   const total = Math.max(0.05, duration / 1000);
+  const finish = (): void => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(failsafe);
+    stop?.();
+    stop = null;
+    clear(el);
+    onDone?.();
+  };
+  // The frame loop pauses in a hidden tab and can stall in a throttled one: the element shows regardless.
+  const failsafe = setTimeout(finish, Math.max(0, delay) + duration + REVEAL_FAILSAFE_MS);
   stop = noiseScheduler().add({
     frame(dt) {
       elapsed += dt;
       if (elapsed < 0) return;
       const p = elapsed / total;
       if (p >= 1) {
-        finished = true;
-        stop?.();
-        stop = null;
-        clear(el);
-        onDone?.();
+        finish();
         return;
       }
       apply(el, ease(p), sweep);
     },
   });
   return () => {
+    clearTimeout(failsafe);
     stop?.();
     stop = null;
     if (!finished) clear(el);
@@ -144,25 +161,24 @@ export function useNoiseReveal(ref: RefObject<HTMLElement | null>, opts: NoiseRe
     // Hidden from mount until it plays (no flash of the finished element first).
     apply(el, 0, sweep);
     const run = (): void => {
+      unwatch?.();
+      unwatch = null;
       cancel = playResolve(el, { duration, delay, sweep, onDone: () => done.current?.() });
     };
-    let io: IntersectionObserver | null = null;
+    let unwatch: (() => void) | null = immediate ? null : observeSeen(el, run, { threshold });
+    // Motion switched off while it waits or plays: it simply shows.
+    const offMotion = onMotionChange(() => {
+      if (!motionStill()) return;
+      unwatch?.();
+      unwatch = null;
+      cancel?.();
+      cancel = null;
+      clear(el);
+    });
     if (immediate) run();
-    else {
-      io = new IntersectionObserver(
-        (entries) => {
-          if (entries.some((e) => e.isIntersecting)) {
-            io?.disconnect();
-            io = null;
-            run();
-          }
-        },
-        { threshold },
-      );
-      io.observe(el);
-    }
     return () => {
-      io?.disconnect();
+      offMotion();
+      unwatch?.();
       cancel?.();
       clear(el);
     };
