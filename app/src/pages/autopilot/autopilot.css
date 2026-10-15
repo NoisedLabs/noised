@@ -38,7 +38,7 @@
 .ap-canvas[data-gesture="pan"] { cursor: grabbing; }
 .ap-canvas[data-gesture="connect"] { cursor: crosshair; }
 .ap-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
-.ap-edges { position: absolute; left: 0; top: 0; overflow: visible; }
+.ap-edges { position: absolute; left: 0; top: 0; overflow: visible; max-width: none; } /* a 1x1 layer the links overflow: any global max-width on svg would shrink it to 0 */
 .ap-edge-line { fill: none; stroke: var(--pg-ink-2); stroke-width: 2; shape-rendering: crispEdges; }
 .ap-edge-head { fill: var(--pg-ink-2); shape-rendering: crispEdges; }
 .ap-edge-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
