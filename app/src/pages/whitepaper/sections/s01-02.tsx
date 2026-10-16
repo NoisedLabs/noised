@@ -11,11 +11,12 @@ export function S01(): ReactNode {
   return (
     <Section id="abstract">
       <p className="wp-abstract">
-        Noised is a token launchpad on Solana built so that nobody can rug a launch, not even its creator, and so that the guarantees that matter
-        still hold against an adversary with a cryptographically relevant quantum computer. Every privileged role of a launch is held by a
+        Noised is a quantum security layer for Solana (a token launchpad, a vault, private balances and a verifier) built so that the guarantees
+        that matter still hold against an adversary with a cryptographically relevant quantum computer, and so that no key, not even the
+        creator's, can override them. Every privileged role of a launch is held by a
         program-derived address that has no private key. A pro-rata <em>fair-open batch</em> makes the first trade of every launch at one price for
         everyone who joined it. A transfer hook, Launch Guard, refuses every buy before that batch and enforces bounded anti-sniping rules for at most
-        72 hours, and graduated liquidity is locked forever. Post-quantum cryptography enters exactly where an elliptic-curve break would otherwise be
+        72 hours. Post-quantum cryptography enters exactly where an elliptic-curve break would otherwise be
         fatal: a launch goes live only after its creator's hash-based identity (LMS, RFC 8554, height 10) signs the launch's exact parameters,
         its metadata and its opening window, verified on-chain; the token's metadata itself (name, symbol, description and icon) is a record
         stored on-chain at the address of its own hash, so that signature covers every byte a reader will display; and the PQ vault keeps tokens

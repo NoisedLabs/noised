@@ -1,6 +1,6 @@
 ---
 title: Introduction
-summary: Noised is a token launchpad on Solana where no key, the creator's included, can rug a launch, and where launches and vaults are protected by hash-based, post-quantum signatures.
+summary: Noised is the quantum security layer for Solana. Token launches are signed by their creator's hash-based, post-quantum key and verified on-chain; vaults open only with such a key; balances can be private; and anyone can verify a token.
 ---
 
 Noised launches tokens on Meteora's Dynamic Bonding Curve (DBC) through one program that fixes every dangerous setting, holds every privileged role itself through program-derived addresses (PDAs, which have no private key), opens trading with a fair pro-rata batch and writes an on-chain certificate that anyone can re-check against the live chain. Value you want to keep can sit in a **PQ vault** that only a hash-based signature (LM-OTS, RFC 8554) can open.
@@ -13,6 +13,7 @@ These docs are the technical side of Noised. The app explains things in plain wo
 
 Each line holds for every mint that has a Noised certificate, and each is enforced on-chain by code you can read in the [programs reference](/docs/programs).
 
+- **Post-quantum origin.** Every launch is signed by its creator's hash-based identity, over its parameters, metadata and opening window, and the launchpad verifies that signature on-chain before the launch can go live. See [Post-quantum creator identity](/docs/concepts/pq-identity).
 - **Fixed supply, no freezes.** Mint and freeze authorities are None, checked by `launch` on the live mint before the certificate is written.
 - **No hidden powers.** The mint has exactly three Token-2022 extensions (metadata pointer, metadata, transfer hook). Extensions cannot be added later.
 - **Metadata stored on-chain.** The name, symbol, description, icon and links are one record on Solana at the address of its own hash, signed by the creator's post-quantum identity, and the mint shows exactly that record. No link, no server. See [Token metadata](/docs/concepts/token-metadata).
@@ -22,7 +23,6 @@ Each line holds for every mint that has a Noised certificate, and each is enforc
 - **Liquidity locked forever.** At graduation 100% of the liquidity moves to a Meteora DAMM v2 pool and is permanently locked under a PDA with no withdraw instruction.
 - **Fees by fixed rules.** Recipients and shares are set at creation and can never change; fees paid in the launched token are burned.
 - **No admin.** No pause, no settings update, no privileged withdrawal.
-- **Post-quantum origin.** Every launch is signed by its creator's hash-based identity, over its parameters, metadata and opening window, and the launchpad verifies that signature on-chain before the launch can go live. See [Post-quantum creator identity](/docs/concepts/pq-identity).
 
 :::warn Status: on mainnet, not yet finalized
 The programs are deployed on Solana mainnet since 2026-10-13, and launches open once the protocol is initialized. They are not yet finalized (made immutable), and no independent audit has been completed. They have had three rounds of internal adversarial review by AI agents ([Security](/docs/security#internal-reviews)). Until their upgrade authority is set to None, whoever holds it can replace the code. Check any program with `solana program show <program id>`: the line `Authority:` must read `none`. Do not use Noised with funds you cannot afford to lose until then.

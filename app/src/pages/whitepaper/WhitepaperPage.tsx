@@ -30,7 +30,7 @@ import "../../components/charts/charts.css";
 import "./whitepaper.css";
 
 const TITLE = "Noised: the quantum security layer for Solana";
-const VERSION = "Protocol v2, safety policy 3 · draft of 2026-10-10";
+const VERSION = "Protocol v2, safety policy 3 · draft of 2026-10-16";
 
 function Cover(): ReactNode {
   const digits = useMemo(() => digitsOfText(TITLE), []);
@@ -50,8 +50,8 @@ function Cover(): ReactNode {
         <ResolveText text={"the quantum security layer for Solana"} className="wp-title-soft" trigger="mount" delay={120} durationMs={950} />
       </h1>
       <p className="wp-lede">
-        A security layer with four products: a launchpad where no key can rug a launch and the first trade is one fair price for everyone, a
-        vault whose keys are hash-based, private balances, and a verifier for QSL-1, the token standard that names these guarantees. The
+        A quantum security layer with four products: a launchpad where every launch is signed by its creator's hash-based key and verified
+        on-chain, a vault whose keys are hash-based, private balances, and a verifier for QSL-1, the token standard that names these guarantees. The
         creator's identity and long-term custody rest on hash-based signatures that a quantum computer cannot forge. With every derivation,
         every bound, and an honest list of what is still trusted.
       </p>
