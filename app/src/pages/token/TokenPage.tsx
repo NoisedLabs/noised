@@ -164,7 +164,7 @@ function LiveToken({ launch }: { launch: LaunchAccount }): ReactNode {
         verification={report.data?.overall ?? null}
         verifying={report.loading}
         checks={checks}
-        image={meta?.icon?.dataUri ?? null}
+        image={flag === null ? (meta?.icon?.dataUri ?? null) : null}
         badge={
           <QslBadge
             verdict={qsl.data}
@@ -191,7 +191,8 @@ function LiveToken({ launch }: { launch: LaunchAccount }): ReactNode {
         </aside>
         <div className="tk-main">
           {flow !== null ? <LaunchTracker view={flow} compact /> : null}
-          {meta !== null && (meta.description !== null || meta.links.length > 0) ? (
+          {/* A hidden launch's own description and links are left out: they are what pretends to be Noised. */}
+          {flag === null && meta !== null && (meta.description !== null || meta.links.length > 0) ? (
             <Panel title={`About ${symbol}`} description="From its creator, stored on Solana with the token and signed by their quantum key. Links are shown as text: check the address before you visit one.">
               <TokenAbout meta={meta} />
             </Panel>
@@ -249,7 +250,7 @@ function ConfiguredLaunch({ launch, onLaunched }: { launch: LaunchAccount; onLau
         title={meta === null ? "Ready to launch" : `${meta.name} (${meta.symbol})`}
         lede="Its rules are recorded on Solana and its creator's quantum key signs when it opens. Nothing can be traded yet: opening it creates the token and its pool, and starts the opening batch."
       />
-      {meta !== null ? (
+      {meta !== null && flag === null ? (
         <section className="tkp-pre-id glass" aria-label="The token">
           {meta.icon !== null ? (
             <span className="tk-coin tk-icon px-icon-tile px-corners px-frame" aria-hidden="true">

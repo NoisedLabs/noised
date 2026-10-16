@@ -24,7 +24,7 @@ import { verifyCached } from "../app/verification";
 import { sfx, useSound } from "../fx/sfx";
 import { prefersReducedMotion, Typewriter } from "../fx/text";
 import { errorMessage, shortKey, unixSecs } from "../lib/format";
-import { listListedLaunches } from "../lib/brandGuard";
+import { listListedLaunches, mintBrandFlag } from "../lib/brandGuard";
 import { ADAPTER_MODE, launchPhase, type LaunchAccount, type VerificationReport } from "../lib/noised";
 import { useAmbientMotion } from "./AmbientMotion";
 import { isPqCheck, PQ_PENDING, pqOrigin } from "./launch";
@@ -219,6 +219,15 @@ export function CommandPalette(): ReactNode {
       // A pinned subject row: which mint this output is about stays in view while the checks stream.
       const known = named ?? (tokens ?? []).find((t) => t.route === `/token/${mint.toBase58()}`) ?? null;
       push({ tone: "subj", tag: "»", text: `verify ${known ? `${known.sym} · ${known.name} · ` : ""}${shortKey(mint.toBase58(), 4)}` });
+      // A launch the site hides (the Noised name on a mint that is not the team's, or the hidden list): said first.
+      const flag = await mintBrandFlag(connection, mint).catch(() => null);
+      if (flag !== null) {
+        push({
+          tone: "fail",
+          tag: "[×]",
+          text: flag.reason === "impersonation" ? "Not affiliated with Noised: this token uses the Noised name but wasn't launched by the Noised team." : "Hidden on Noised: this token was reported to the Noised team.",
+        });
+      }
       push({ tone: "dim", tag: ">", text: "reading mint, certificate, curve, guard policy…" });
       try {
         const report = await verifyCached(connection, mint);

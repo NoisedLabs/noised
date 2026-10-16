@@ -56,6 +56,8 @@ import "../create/create.css";
 import "../create/rules/rules.css";
 import "./autopilot.css";
 import "./autopilot-page.css";
+import { BrandWarning } from "../../components/BrandWarning";
+import { launchBrandFlag } from "../../lib/brandGuard";
 
 export function AutopilotPage(): ReactNode {
   const { address = "" } = useParams();
@@ -271,6 +273,7 @@ function AutopilotView({ launch }: { launch: LaunchAccount }): ReactNode {
   return (
     <div className="pg ap">
       <Crumbs here="Autopilot" to={tokenPath} back={symbol} />
+      <BrandWarning flag={launchBrandFlag(launch)} />
       <PageHead
         eyebrow={`Autopilot · ${symbol}`}
         title={

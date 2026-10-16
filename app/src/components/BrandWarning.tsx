@@ -33,9 +33,8 @@ export function useOfficialToken(): OfficialToken | null | undefined {
   return r.error ? null : r.data;
 }
 
-/** The sentence about the team's own token. */
-function Official(): ReactNode {
-  const official = useOfficialToken();
+/** The sentence about the team's own token: nothing while it is being read. */
+export function OfficialSentence({ official }: { official: OfficialToken | null | undefined }): ReactNode {
   if (official === undefined) return null;
   if (official === null) return <> Noised hasn&apos;t launched a token yet.</>;
   return (
@@ -56,6 +55,17 @@ function Official(): ReactNode {
  */
 export function BrandWarning({ flag, trading = false }: { flag: BrandFlag | null; trading?: boolean }): ReactNode {
   if (flag === null) return null;
+  return <OfficialAware flag={flag} trading={trading} />;
+}
+
+/** Reads the team's token only for a page that shows the warning. */
+function OfficialAware({ flag, trading }: { flag: BrandFlag; trading: boolean }): ReactNode {
+  const official = useOfficialToken();
+  return <BrandWarningView flag={flag} trading={trading} official={official} />;
+}
+
+/** The warning itself (tests render it with each state of the team's token). */
+export function BrandWarningView({ flag, trading, official }: { flag: BrandFlag; trading: boolean; official: OfficialToken | null | undefined }): ReactNode {
   const impersonation = flag.reason === "impersonation";
   return (
     <div className="brand-warn" role="alert" data-reason={flag.reason}>
@@ -66,7 +76,7 @@ export function BrandWarning({ flag, trading = false }: { flag: BrandFlag | null
           {impersonation ? (
             <>
               This token uses the Noised name but wasn&apos;t launched by the Noised team.
-              <Official />
+              <OfficialSentence official={official} />
             </>
           ) : (
             "This token was reported to the Noised team, so it is hidden from this site's lists. Noised doesn't stand behind it."
