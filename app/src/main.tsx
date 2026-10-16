@@ -1,3 +1,5 @@
+// First: the browser has no Node `Buffer`, which the Solana libraries use when building transactions.
+import "./polyfills";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
