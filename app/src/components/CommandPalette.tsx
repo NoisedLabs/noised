@@ -25,6 +25,7 @@ import { sfx, useSound } from "../fx/sfx";
 import { prefersReducedMotion, Typewriter } from "../fx/text";
 import { errorMessage, shortKey, unixSecs } from "../lib/format";
 import { listListedLaunches, mintBrandFlag } from "../lib/brandGuard";
+import { OFFICIAL_NOISED } from "../lib/brandPolicy";
 import { ADAPTER_MODE, launchPhase, type LaunchAccount, type VerificationReport } from "../lib/noised";
 import { useAmbientMotion } from "./AmbientMotion";
 import { isPqCheck, PQ_PENDING, pqOrigin } from "./launch";
@@ -225,7 +226,7 @@ export function CommandPalette(): ReactNode {
         push({
           tone: "fail",
           tag: "[×]",
-          text: flag.reason === "impersonation" ? "Not affiliated with Noised: this token uses the Noised name but wasn't launched by the Noised team." : "Hidden on Noised: this token was reported to the Noised team.",
+          text: flag.reason === "impersonation" ? `Not affiliated with Noised: this token uses the Noised name but wasn't launched by the Noised team. The official ${OFFICIAL_NOISED.label} is ${OFFICIAL_NOISED.mint}.` : "Hidden on Noised: this token was reported to the Noised team.",
         });
       }
       push({ tone: "dim", tag: ">", text: "reading mint, certificate, curve, guard policy…" });

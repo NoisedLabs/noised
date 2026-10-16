@@ -31,7 +31,7 @@ import {
   RESERVED_TICKER_MESSAGE,
   reservedNameErrors,
 } from "../src/lib/brandGuard";
-import { HIDDEN_LAUNCHES, OFFICIAL_TOKENS, RESERVED_BRANDS } from "../src/lib/brandPolicy";
+import { HIDDEN_LAUNCHES, OFFICIAL_NOISED, OFFICIAL_TOKENS, RESERVED_BRANDS } from "../src/lib/brandPolicy";
 import type { LaunchAccount } from "../src/lib/noised";
 import { convertDraft, draftFromPreset } from "../src/pages/create/draft";
 import { launchTreasury, quickDefaults, quickDraft, resolveTreasury } from "../src/pages/create/quick";
@@ -241,24 +241,28 @@ describe("lists", () => {
 });
 
 describe("the token page of a flagged launch", () => {
-  it("warns in red, in plain words, and follows the team's own token", () => {
+  it("warns in red, in plain words, and points to the official $NOISED", () => {
     const flag = { reason: "impersonation" as const };
-    const none = text(html(createElement(BrandWarningView, { flag, trading: true, official: null })));
-    expect(none).toContain("Not affiliated with Noised.");
-    expect(none).toContain("This token uses the Noised name but wasn't launched by the Noised team. Noised hasn't launched a token yet.");
-    expect(none).toContain("Buying is turned off here. If you already hold it, you can still sell it.");
-    const live = html(createElement(BrandWarningView, { flag, trading: false, official: OFFICIAL_TOKENS[0] }));
-    expect(text(live)).toMatch(/The official Noised token is \$NOISED ?\./);
-    expect(text(live)).not.toContain("hasn't launched");
-    expect(text(live)).not.toContain("Buying is turned off");
-    expect(live).toContain(`href="/token/${OFFICIAL_MINT}"`);
-    // While the team's token is being read, the sentence waits.
-    expect(text(html(createElement(OfficialSentence, { official: undefined })))).toBe("");
-    const box = html(createElement(BrandWarningView, { flag, trading: false, official: null }));
+    const box = html(createElement(BrandWarningView, { flag, trading: true }));
+    const said = text(box);
+    expect(said).toContain("Not affiliated with Noised.");
+    expect(said).toContain("This token uses the Noised name but wasn't launched by the Noised team. The official $NOISED is 5oZbhx…noisd .");
+    expect(said).not.toContain("hasn't launched");
+    expect(said).toContain("Buying is turned off here. If you already hold it, you can still sell it.");
     expect(box).toContain('class="brand-warn"');
     expect(box).toContain('role="alert"');
-    const reported = text(html(createElement(BrandWarningView, { flag: { reason: "reported" }, trading: false, official: null })));
-    expect(reported).toContain("Hidden on Noised.");
+    // The full address, a copy button and the three links follow.
+    expect(box).toContain(`<code class="ot-addr" translate="no">${OFFICIAL_MINT}</code>`);
+    expect(box).toMatch(/<button type="button" class="ot-copy" data-state="idle" aria-label="Copy the \$NOISED address">/);
+    for (const href of [OFFICIAL_NOISED.links.buy, OFFICIAL_NOISED.links.chart, OFFICIAL_NOISED.links.explorer])
+      expect(box).toContain(`href="${href}" target="_blank" rel="noopener noreferrer"`);
+    // No link to a token page here: $NOISED was not launched through Noised.
+    expect(box).not.toContain('href="/token/');
+    expect(text(html(createElement(OfficialSentence)))).toBe(" The official $NOISED is 5oZbhx…noisd .");
+    expect(text(html(createElement(BrandWarningView, { flag, trading: false })))).not.toContain("Buying is turned off");
+    const reported = html(createElement(BrandWarningView, { flag: { reason: "reported" }, trading: false }));
+    expect(text(reported)).toContain("Hidden on Noised.");
+    expect(reported).not.toContain("ot-addr");
   });
 
   it("the red box is red", () => {
