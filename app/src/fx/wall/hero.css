@@ -49,9 +49,9 @@
   display: flex;
   flex-direction: column;
   min-height: max(680px, 100svh);
-  /* About 7vh on tall screens; tighter around 900px tall, so the copy (with its links row) and the stats row still
-     share the first screen. */
-  padding-top: calc(var(--hx-top) + clamp(20px, 18.5vh - 126px, 96px));
+  /* Room above the official token bar on tall screens; none around 900px tall, so the bar, the copy (with its links
+     row) and the stats row still share the first screen. */
+  padding-top: calc(var(--hx-top) + clamp(0px, 18.5vh - 166px, 56px));
   color: var(--hx-text);
   overflow-x: clip;
 }
@@ -621,7 +621,10 @@ html[data-motion="still"] .hx :is(.hx-stat-wait) {
 /* Short laptop screens (768/720 tall): tighten the hero so the stats row stays on the first screen. */
 @media (max-height: 820px) and (min-width: 641px) {
   .hx {
-    padding-top: calc(var(--hx-top) + clamp(16px, 4vh, 40px));
+    padding-top: var(--hx-top);
+  }
+  .hx .ot {
+    margin-bottom: 12px;
   }
   /* Pixel-exact sizes only (fractional sizes smear the pixel face). */
   .hx {
@@ -645,7 +648,7 @@ html[data-motion="still"] .hx :is(.hx-stat-wait) {
     height: 32px;
   }
   .hx-copy {
-    margin-bottom: 24px;
+    margin-bottom: 18px;
   }
   .hx-stat {
     padding-block: 12px;

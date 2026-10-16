@@ -20,16 +20,48 @@ export const RESERVED_BRANDS: readonly string[] = ["noised", "noisd"];
 export interface OfficialToken {
   /** The token's mint address. */
   mint: string;
-  /** Its Launch account, once created: lets the launch show before it opens (when it has no mint yet). */
+  /** Its Launch account, if it is ever launched through Noised: lets the launch show before it opens. */
   launch?: string;
-  /** How the site names it in the "not affiliated" warning ("$NOISED"). */
+  /** How the site names it ("$NOISED"). */
   label: string;
 }
 
+/** Where to buy it, see its chart and look it up: plain links, each opened in a new tab (the site fetches none). */
+export interface OfficialTokenLinks {
+  /** Jupiter's swap page, SOL to the token. */
+  buy: string;
+  /** Its pool on DEX Screener. */
+  chart: string;
+  /** Its mint on Solscan. */
+  explorer: string;
+}
+
+/**
+ * The official Noised token, $NOISED: a classic SPL token (6 decimals, 1,000,000,000 supply, mint and freeze authority
+ * revoked) launched on Meteora's dynamic bonding curve, not through the Noised launchpad. So it is not a QSL-1 token:
+ * the site never says it is quantum-signed. The home page features it (components/landing/OfficialToken.tsx) and the
+ * "Not affiliated" warning points to it.
+ */
+export const OFFICIAL_NOISED = {
+  mint: "5oZbhxYrdoUiLWsgTxAPx3rgcvBCErw47oD5vXjnoisd",
+  label: "$NOISED",
+  name: "Noised",
+  symbol: "NOISED",
+  /** Its Meteora pool (where it trades). */
+  pool: "7Xj1J43rn5VndyxjPmTjdX4yWUY8wmWm4szr3YKLr3QA",
+  links: {
+    buy: "https://jup.ag/swap/SOL-5oZbhxYrdoUiLWsgTxAPx3rgcvBCErw47oD5vXjnoisd",
+    chart: "https://dexscreener.com/solana/7xj1j43rn5vndyxjpmtjdx4ywuy8wmwm4szr3yklr3qa",
+    explorer: "https://solscan.io/token/5oZbhxYrdoUiLWsgTxAPx3rgcvBCErw47oD5vXjnoisd",
+  },
+} as const satisfies OfficialToken & { name: string; symbol: string; pool: string; links: OfficialTokenLinks };
+
+/** "5oZbhx…noisd": the first six and the last five characters of the official mint (the warning's short form). */
+export const OFFICIAL_NOISED_SHORT = `${OFFICIAL_NOISED.mint.slice(0, 6)}…${OFFICIAL_NOISED.mint.slice(-5)}`;
+
 export const OFFICIAL_TOKENS: readonly OfficialToken[] = [
-  // The team's $NOISED mint (a vanity address ending in "noisd"). Not launched yet: until a live launch has this mint,
-  // the warning says that Noised has not launched a token.
-  { mint: "5oZbhxYrdoUiLWsgTxAPx3rgcvBCErw47oD5vXjnoisd", label: "$NOISED" },
+  // $NOISED (a vanity mint ending in "noisd"): live, launched outside the launchpad (above).
+  { mint: OFFICIAL_NOISED.mint, label: OFFICIAL_NOISED.label },
 ];
 
 /** Why a launch is hidden: it pretends to be Noised, or it was reported for something else. */

@@ -21,6 +21,7 @@ import { useNoiseReveal } from "../fx/noise/reveal";
 import { noiseWipe } from "../fx/noise/wipe";
 import { installMagnetic } from "../fx/pixel/magnetic";
 import { sfx, useSound } from "../fx/sfx";
+import { OFFICIAL_NOISED } from "../lib/brandPolicy";
 import { ADAPTER_MODE, CLUSTERS, PROGRAMMABLE_AVAILABLE } from "../lib/noised";
 import { missingNoisedPrograms, useNetwork } from "./network";
 import { BRAND_MARK, NAV, TAGLINE } from "./brand";
@@ -433,6 +434,12 @@ function Footer(): ReactNode {
               <li>
                 <a href={X_URL} target="_blank" rel="noopener noreferrer">
                   X<span className="sr-only"> ({X_HANDLE}, opens in a new tab)</span>
+                </a>
+              </li>
+              <li>
+                <a href={OFFICIAL_NOISED.links.buy} target="_blank" rel="noopener noreferrer" data-link="official-token">
+                  {OFFICIAL_NOISED.label}
+                  <span className="sr-only"> (the official token, buy on Jupiter, opens in a new tab)</span>
                 </a>
               </li>
             </ul>

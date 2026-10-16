@@ -1,5 +1,6 @@
 /**
- * Home hero (v5.1 "graphite glass"; LAYER_V1 positioning): "Quantum security /
+ * Home hero (v5.1 "graphite glass"; LAYER_V1 positioning): the official $NOISED token
+ * bar (its address, Copy, Buy, Chart, Explorer) above "Quantum security /
  * for Solana." resolving out of noise in front of the monochrome shield wall (a
  * 3D wall of hex shields made of dots that blocks incoming shots), one sentence,
  * two buttons, a field that checks any token by its address, a row of links (the SDK,
@@ -31,6 +32,7 @@ import { useHeaderClearance } from "../../fx/wall/useClearance";
 import { listListedLaunches } from "../../lib/brandGuard";
 import type { LaunchAccount } from "../../lib/noised";
 import { useAmbientMotion } from "../AmbientMotion";
+import { OfficialTokenBar } from "../OfficialToken";
 import { ResolveText, useNoiseReveal } from "../../fx/noise";
 import { HeroLinks } from "./HeroLinks";
 import { HeroStats } from "./HeroStats";
@@ -76,11 +78,13 @@ export function Hero({
   const sectionStyle = clearance ? ({ ["--hx-top" as string]: `${clearance}px` } as CSSProperties) : undefined;
   const panes = useCallback(() => paneSources(section.current), []);
   // After the headline: the sentence, the buttons, the field, the links and the numbers resolve in from noise, one after another.
+  const token = useRef<HTMLDivElement>(null);
   const sub = useRef<HTMLParagraphElement>(null);
   const ctas = useRef<HTMLDivElement>(null);
   const verify = useRef<HTMLDivElement>(null);
   const links = useRef<HTMLUListElement>(null);
   const foot = useRef<HTMLDivElement>(null);
+  useNoiseReveal(token, { immediate: true, delay: 140, duration: 520, sweep: "right" });
   useNoiseReveal(sub, { immediate: true, delay: 420, duration: 560, sweep: "right" });
   useNoiseReveal(ctas, { immediate: true, delay: 560, duration: 520, sweep: "right" });
   useNoiseReveal(verify, { immediate: true, delay: 660, duration: 520, sweep: "right" });
@@ -116,6 +120,7 @@ export function Hero({
 
       <div className="hx-inner">
         <div className="hx-copy" ref={copy}>
+          <OfficialTokenBar ref={token} />
           <h1 id="hx-title" className="hx-title">
             <span className="hx-line">
               <ResolveText text={HERO_TITLE[0]} trigger="mount" durationMs={820} delay={80} />
