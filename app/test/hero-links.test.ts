@@ -1,7 +1,7 @@
 /**
- * The home hero's row of links (the SDK and the MCP server on npm, GitHub, the whitepaper PDF). Every link to another
- * site opens in a new tab without an opener or a referrer; the marks are inline SVG (the CSP allows nothing from
- * elsewhere).
+ * The home hero's row of links (the SDK and the MCP server on npm, GitHub, the whitepaper PDF) and Noised on X in the
+ * navbar, the mobile menu and the footer. Every link to another site opens in a new tab without an opener or a
+ * referrer; the marks are inline SVG (the CSP allows nothing from elsewhere).
  */
 import { existsSync, readFileSync } from "node:fs";
 
@@ -9,7 +9,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { HERO_LINKS, MCP_NPM_URL, REPO_URL, SDK_NPM_URL, WHITEPAPER_PDF } from "../src/app/opensource";
+import { HERO_LINKS, MCP_NPM_URL, REPO_URL, SDK_NPM_URL, WHITEPAPER_PDF, X_HANDLE, X_URL } from "../src/app/opensource";
 import { DocMark, GitHubMark, NpmMark, XMark } from "../src/components/brandMarks";
 import { HeroLinks } from "../src/components/landing/HeroLinks";
 
@@ -69,5 +69,28 @@ describe("hero links", () => {
     const css = read("src/fx/wall/hero.css");
     expect(css).toMatch(/\.hx-link:focus-visible \{\s*outline: 2px solid/);
     expect(css).toMatch(/@media \(max-width: 640px\) \{[^@]*\.hx-links \{\s*display: grid;\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  });
+});
+
+describe("Noised on X", () => {
+  const layout = read("src/app/Layout.tsx");
+
+  it("is x.com/noiseddotfun", () => {
+    expect(X_URL).toBe("https://x.com/noiseddotfun");
+    expect(X_HANDLE).toBe("@noiseddotfun");
+  });
+
+  it("has an icon button in the navbar, next to the sound and theme switches", () => {
+    expect(layout).toMatch(
+      /<a className="phx-icon-btn phx-nav-pref phx-x-btn" href=\{X_URL\} target="_blank" rel="noopener noreferrer" aria-label="Noised on X"[^>]*>\s*<XMark \/>\s*<\/a>/,
+    );
+    expect(layout).toMatch(/<XButton \/>\s*<SoundButton \/>\s*<ThemeButton \/>/);
+  });
+
+  it("is in the mobile menu and the footer, next to GitHub", () => {
+    expect(layout).toMatch(/<a className="phx-sheet-x" href=\{X_URL\} target="_blank" rel="noopener noreferrer"/);
+    expect(layout).toMatch(
+      /<a href=\{REPO_URL\} target="_blank" rel="noopener noreferrer">\s*GitHub[\s\S]*?<\/li>\s*<li>\s*<a href=\{X_URL\} target="_blank" rel="noopener noreferrer">\s*X<span className="sr-only">/,
+    );
   });
 });

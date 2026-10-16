@@ -1,6 +1,6 @@
 /**
- * App shell (SIMPLE_V4 spec sections 1-2): a calm background, the floating pill navbar (logo, five links, sound,
- * theme, Connect), a small mode pill under it ("Demo mode — no real funds" in demo builds), the live-mode network
+ * App shell (SIMPLE_V4 spec sections 1-2): a calm background, the floating pill navbar (logo, five links, X,
+ * sound, theme, Connect), a small mode pill under it ("Demo mode — no real funds" in demo builds), the live-mode network
  * banner, the mobile menu sheet, the command palette (Ctrl/⌘ K or "/", no chip), toasts and a simple footer.
  * v6 (PIXEL_V6): pixel type in the chrome, a quick pixel-dissolve page transition, the pixel-shield loading state,
  * magnetic pixel buttons and a pixel wordmark in the footer. The brand mark is the official Noised hexagon of dots.
@@ -11,6 +11,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type React
 import { NavLink, Outlet, useLocation } from "react-router";
 
 import { AmbientMotionProvider, useAmbientMotion } from "../components/AmbientMotion";
+import { XMark } from "../components/brandMarks";
 import { CommandPalette, openCommandPalette } from "../components/CommandPalette";
 import { Toaster } from "../components/ui";
 import { Aurora } from "../fx/aurora/Aurora";
@@ -23,7 +24,7 @@ import { sfx, useSound } from "../fx/sfx";
 import { ADAPTER_MODE, CLUSTERS, PROGRAMMABLE_AVAILABLE } from "../lib/noised";
 import { missingNoisedPrograms, useNetwork } from "./network";
 import { BRAND_MARK, NAV, TAGLINE } from "./brand";
-import { REPO_URL } from "./opensource";
+import { REPO_URL, X_HANDLE, X_URL } from "./opensource";
 import { APP_VERSION, CLUSTER, PALETTE_META, useSettings } from "./settings";
 import { WalletButton } from "./wallet";
 
@@ -160,6 +161,7 @@ function NavBar({ menuOpen, onMenu }: { menuOpen: boolean; onMenu: () => void })
           ))}
         </div>
         <div className="phx-tools">
+          <XButton />
           <SoundButton />
           <ThemeButton />
           <div className="phx-wallet">
@@ -186,6 +188,15 @@ function NavItem({ to, label, hint }: { to: string; label: string; hint: string 
         </>
       )}
     </NavLink>
+  );
+}
+
+/** Noised on X: a link (new tab, no opener) that sits with the sound and theme switches. */
+function XButton(): ReactNode {
+  return (
+    <a className="phx-icon-btn phx-nav-pref phx-x-btn" href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Noised on X" title={`Noised on X (${X_HANDLE})`}>
+      <XMark />
+    </a>
   );
 }
 
@@ -362,6 +373,14 @@ function MobileSheet({ open, onClose }: { open: boolean; onClose: () => void }):
             <span>Animations</span>
             <span>{still ? "Off" : "On"}</span>
           </button>
+          <a className="phx-sheet-x" href={X_URL} target="_blank" rel="noopener noreferrer" onClick={onClose}>
+            <XMark />
+            <span>Follow Noised on X</span>
+            <span>
+              {X_HANDLE}
+              <span className="sr-only"> (opens in a new tab)</span>
+            </span>
+          </a>
         </div>
         <p className="phx-sheet-foot">
           <span>{MOCK ? "Demo mode — no real funds" : CLUSTERS[CLUSTER].label}</span>
@@ -409,6 +428,11 @@ function Footer(): ReactNode {
               <li>
                 <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
                   GitHub<span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              </li>
+              <li>
+                <a href={X_URL} target="_blank" rel="noopener noreferrer">
+                  X<span className="sr-only"> ({X_HANDLE}, opens in a new tab)</span>
                 </a>
               </li>
             </ul>

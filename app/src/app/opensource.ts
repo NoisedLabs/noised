@@ -11,6 +11,10 @@ export const REPO_URL = "https://github.com/NoisedLabs/noised";
 export const SDK_NPM_URL = "https://www.npmjs.com/package/@noisedlabs/sdk";
 export const MCP_NPM_URL = "https://www.npmjs.com/package/@noisedlabs/mcp";
 
+/** Noised on X. */
+export const X_URL = "https://x.com/noiseddotfun";
+export const X_HANDLE = "@noiseddotfun";
+
 /** The whitepaper as a PDF, shipped with the site (public/): relative, so it resolves from any IPFS gateway path. */
 export const WHITEPAPER_PDF = "noised-whitepaper.pdf";
 
