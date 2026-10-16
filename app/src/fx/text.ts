@@ -8,7 +8,7 @@
  *   const s = useScramble("LAUNCHPAD", { trigger: "manual" });
  *   <a onPointerEnter={s.replay}>{s.text}</a>
  *
- *   <Scramble text="NOBODY CAN RUG" trigger="view" />      // a11y-safe component
+ *   <Scramble text="QUANTUM SECURITY" trigger="view" />      // a11y-safe component
  *   <Typewriter text="> verifying programs… [OK]" speed={18} cursor />
  *   <Cursor />                                               // blinking "_" in the signal colour
  */

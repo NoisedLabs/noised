@@ -1,7 +1,8 @@
 /**
  * Why Noised: three graphite glass cards, each topped by a field of drifting dots that coalesces into one idea
- * (fx/noise, noise/why.ts): a shield that noise bounces off, columns of dots rising to the same height (everyone
- * pays the same price), a padlock whose shackle drops shut inside a closing loop. The dots part around the pointer.
+ * (fx/noise, noise/why.ts): a shield that noise bounces off (launches signed with a quantum key), a padlock whose
+ * shackle drops shut inside a closing loop (the vault), columns of dots rising to a line they never cross (Autopilot's
+ * hard limits). The dots part around the pointer.
  * Over a very faint dot field; the cards resolve in from noise. The scenes play only on screen and show their
  * formed still under reduced motion or with motion off.
  */
@@ -11,23 +12,23 @@ import { Link } from "react-router";
 
 import { NoiseArt, useNoiseReveal, type NoiseScene } from "../../fx/noise";
 import { SectionField, SectionHead, useReveal } from "./glass";
-import { fairScene, lockScene, shieldScene } from "./noise/why";
+import { limitScene, lockScene, shieldScene } from "./noise/why";
 
 const CARDS: { scene: () => NoiseScene; title: string; text: string }[] = [
   {
     scene: shieldScene,
     title: "Safe from quantum computers",
-    text: "Launches are signed with post-quantum keys that never come from your wallet.",
-  },
-  {
-    scene: fairScene,
-    title: "Fair from the first second",
-    text: "Everyone in the opening batch pays the same price. No snipers, no insider supply.",
+    text: "Every launch is signed with a quantum key that never comes from your wallet.",
   },
   {
     scene: lockScene,
-    title: "Locked forever",
-    text: "No admin keys. Liquidity is locked for good. Nobody can change the rules.",
+    title: "A vault no ordinary key opens",
+    text: "Keep coins in a vault only your quantum key can open. A stolen wallet key is not enough.",
+  },
+  {
+    scene: limitScene,
+    title: "Autopilot with hard limits",
+    text: "Buybacks, burns and payouts run themselves, inside limits your quantum key signed. Not even an AI agent can cross them.",
   },
 ];
 

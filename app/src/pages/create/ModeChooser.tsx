@@ -30,7 +30,7 @@ const CARDS: { id: LaunchMode; title: string; badge: string; lede: string; point
 ];
 
 /** The promises every launch keeps, whichever way it is made. */
-export const PROMISES: readonly string[] = ["Signed with your quantum key", "Liquidity locked forever", "Selling never blocked"];
+export const PROMISES: readonly string[] = ["Signed with your quantum key", "Checked on-chain by anyone", "No admin key"];
 
 export function ModeChooser({ mode, onPick }: { mode: LaunchMode; onPick: (m: LaunchMode) => void }): ReactNode {
   return (

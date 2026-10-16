@@ -254,7 +254,7 @@ export function TrustPanel({ parties, intro = true }: { parties: readonly Truste
     <Card id="trust" title="Who you still trust" subtitle="No key controls this launch, but these parties can still affect it.">
       {intro ? (
         <p className="ld-trust-intro">
-          Noised holds every launch role through program addresses, so no private key can rug the launch. Meteora's programs, their operators,
+          Noised holds every launch role through program addresses, so no private key controls the launch. Meteora's programs, their operators,
           Token-2022 and the validators sit underneath it and keep the powers listed here.
         </p>
       ) : null}

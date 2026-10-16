@@ -45,7 +45,7 @@ export function CtaBand(): ReactNode {
             </span>
           </h2>
           <NoiseReveal as="p" className="t-sub hm-lead hm-cta-lead" sweep="right" duration={620} delay={600}>
-            Fair for everyone, signed with keys built for quantum computers, and locked for good.
+            Signed with keys built to resist quantum computers, and checked on-chain by anyone.
           </NoiseReveal>
           <div className="hm-cta-actions">
             <Link to="/create" className="btn btn-primary btn-lg btn-noglyph" onClick={() => sfx.play("click")}>

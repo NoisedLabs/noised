@@ -26,7 +26,7 @@ export const PHASE_INFO: Record<LaunchPhase, { label: string; tag: string; tone:
   execute: { label: "Starting soon", tag: "STARTING", tone: "accent", pill: "signal", description: "The batch has closed. Anyone can start it now: it buys for everyone at once." },
   guarded: { label: "Early limits", tag: "EARLY LIMITS", tone: "info", pill: "amber", description: "Trading is open, with early limits so no single wallet can grab too much. Selling is never blocked." },
   open: { label: "Open trading", tag: "TRADING", tone: "ok", pill: "ice", description: "Anyone can buy and sell, with no limits." },
-  graduated: { label: "Graduated", tag: "GRADUATED", tone: "neutral", pill: "violet", description: "It reached its goal: its liquidity moved to a bigger pool, 100% locked forever." },
+  graduated: { label: "Graduated", tag: "GRADUATED", tone: "neutral", pill: "violet", description: "It reached its goal: its liquidity moved to a bigger pool." },
 };
 
 /** A neutral glass chip in sentence case; only its small dot carries the status colour (tokens.css .ld-tag). */
@@ -107,7 +107,7 @@ export const PHASE_STATUS: Record<LaunchPhase, { text: string; tone: StatusTone;
   execute: { text: "Starting", tone: "signal", pulse: false, hint: "The opening batch has closed. Trading starts in a few minutes." },
   guarded: { text: "Early limits", tone: "amber", pulse: false, hint: "Trading is open, with early limits so no single wallet can grab too much. Selling is never blocked." },
   open: { text: "Trading", tone: "ice", pulse: false, hint: "Anyone can buy and sell." },
-  graduated: { text: "Graduated", tone: "violet", pulse: false, hint: "It reached its goal. Its liquidity moved to a bigger pool and is locked forever." },
+  graduated: { text: "Graduated", tone: "violet", pulse: false, hint: "It reached its goal. Its liquidity moved to a bigger pool." },
   configured: { text: "Coming soon", tone: "dim", pulse: false, hint: "Set up, but not launched yet." },
 };
 

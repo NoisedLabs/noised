@@ -31,7 +31,7 @@ describe("positioning", () => {
   it("leads the home page and the footer with the quantum security layer, in plain words", () => {
     expect(HERO_TITLE.join("")).toBe("Quantum security for Solana.");
     expect(HERO_SUB).toMatch(/^Noised is the quantum security layer for Solana\./);
-    for (const product of ["Launch tokens nobody can rug", "vault only your quantum key opens", "balances privately", "check any token"]) expect(HERO_SUB).toContain(product);
+    for (const product of ["Launch tokens signed with a quantum key", "vault only that key opens", "balances privately", "automate your token", "check any token"]) expect(HERO_SUB).toContain(product);
     expect(TAGLINE).toMatch(/^The quantum security layer for Solana\./);
   });
 
@@ -97,6 +97,15 @@ describe("positioning", () => {
       // Relative paths: the site works from any path (IPFS gateways).
       for (const f of files) expect(f).toMatch(/^brand\/[\w-]+\.png$/);
     }
+  });
+
+  it("sells quantum security, not a liquidity lock or \"no rug\" (every launchpad says those)", () => {
+    const landing = ["WhyNoised", "HowItWorks", "CtaBand", "Hero"].map((c) => readFileSync(new URL(`../src/components/landing/${c}.tsx`, import.meta.url), "utf8"));
+    const create = readFileSync(new URL("../src/pages/create/CreatePage.tsx", import.meta.url), "utf8");
+    const lede = create.slice(create.indexOf("lede={"), create.indexOf("/>", create.indexOf("lede={")));
+    expect(lede).toContain("signed with your quantum key");
+    const sellingPoints = [HERO_SUB, TAGLINE, ...NAV.map((n) => n.hint), meta("name", "description") ?? "", meta("property", "og:description") ?? "", meta("name", "twitter:description") ?? "", ...landing, lede];
+    for (const text of sellingPoints) expect(text).not.toMatch(/\brug|locked (forever|for good)|locked liquidity|liquidity (is )?locked/i);
   });
 
   it("never calls a token or a launch quantum-proof", () => {

@@ -188,8 +188,8 @@ function stepErrorCount(conv: Conversion, parts: readonly StepId[]): number {
 
 /**
  * Launch (owner's request, 2026-10-11): first the way to launch, "Quick launch" (default: one short screen) or
- * "Custom launch" (the full wizard), both signed by the creator's quantum key, with liquidity locked forever and selling
- * never blocked. `?mode=custom` opens the wizard directly.
+ * "Custom launch" (the full wizard), both signed by the creator's quantum key and checked on-chain before they go live.
+ * `?mode=custom` opens the wizard directly.
  */
 export function CreatePage(): ReactNode {
   const [params, setParams] = useSearchParams();
@@ -211,8 +211,8 @@ export function CreatePage(): ReactNode {
         lede={
           <>
             {launches === "open" ? "Pick how you want to launch. " : null}
-            <strong>Every launch</strong> is signed with your quantum key, its liquidity is locked forever, and selling is never blocked. No admin
-            key: every launch role is held by a program, not a person.
+            <strong>Every launch</strong> is signed with your quantum key and checked on-chain before it goes live. No admin key: every
+            launch role is held by a program, not a person.
           </>
         }
       />
@@ -835,11 +835,11 @@ function CurveStep({ draft, set, conv }: { draft: Draft; set: SetDraft; conv: Co
   const goalSay =
     goal === null
       ? "Set the goal under Advanced."
-      : `When buyers have put in ${goal.toLocaleString("en-US")} SOL, ${name} graduates: its liquidity moves to a bigger pool and is locked forever.${
+      : `When buyers have put in ${goal.toLocaleString("en-US")} SOL, ${name} graduates: its liquidity moves to a bigger pool.${
           estimate && p ? ` About ${plainCount(estimate.curveBase, p.tokenDecimal)} tokens are sold before then.` : ""
         }`;
   return (
-    <Panel title="Price curve" description="The price rises as people buy, until the raise reaches its goal. Then the token graduates and its liquidity is locked forever.">
+    <Panel title="Price curve" description="The price rises as people buy, until the raise reaches its goal. Then the token graduates: its liquidity moves to a bigger pool.">
       <div className="sm-stack">
         <StopSlider
           label="Goal"

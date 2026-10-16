@@ -1,9 +1,9 @@
 /**
  * "Why Noised" scenes (fx/noise): three cards, each a field of drifting dots that coalesces into one idea.
  *   shield  a shield forms; streaks of noise fly at it and bounce off its edge, a faint ripple where they hit
- *   fair    five columns of dots rise, at different speeds, to exactly the same height (one price for everyone);
- *           a hairline marks the level once they are all there
- *   lock    a padlock forms with its shackle up; the shackle drops shut while a hairline loop closes around it
+ *   limit   five columns of dots rise, at different speeds, to exactly the same height and no further (Autopilot's
+ *           hard limits); a hairline marks the limit once they are all there
+ *   lock    a padlock forms with its shackle up; the shackle drops shut while a hairline loop closes around it (the vault)
  */
 import { line, shape, type NoiseScene } from "../../../fx/noise";
 import { addLock, addShield } from "../../art/shapes";
@@ -43,12 +43,12 @@ const TOP = 22;
 /** How fast each column rises (1 = it needs the whole forming time). They all end level. */
 const RISE = [0.62, 1, 0.74, 0.9, 0.55] as const;
 
-export function fairScene(): NoiseScene {
+export function limitScene(): NoiseScene {
   const s = shape(W, H);
   for (const x of COLS) for (const dx of [-2.2, 2.2]) s.stroke(line(x + dx, BOTTOM, x + dx, TOP));
   const form = 2.4;
   return {
-    id: "why-fair",
+    id: "why-limit",
     pad: 0.06,
     steps: [
       {
@@ -66,7 +66,7 @@ export function fairScene(): NoiseScene {
         // Leave from the top down.
         releaseOrder: (p) => clamp01((p.y - TOP) / (BOTTOM - TOP) * 0.8 + p.rand * 0.2),
         accents: (pen, lt, k) => {
-          // The common level, once every column has reached it; and a quiet baseline.
+          // The limit, once every column has reached it; and a quiet baseline.
           const level = clamp01((lt - form * 0.92) / 0.6) * k;
           pen.line(42, TOP, 158, TOP, 0.4 * easeInOut(level));
           pen.line(44, BOTTOM + 5, 156, BOTTOM + 5, 0.14 * k);

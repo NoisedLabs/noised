@@ -164,7 +164,6 @@ export function TokenHeader({
             <PhaseChip phase={phase} />
             <VerifyChip status={verification} loading={verifying} />
             {badge}
-            {m?.migrated ? <Chip tone="ok">Liquidity locked forever</Chip> : null}
           </div>
           <dl className="tk-meta">
             <div>
@@ -184,7 +183,7 @@ export function TokenHeader({
         <Metric
           label={stageLabel}
           value={end !== null ? formatDuration(Number(end) - now) : graduated ? "Graduated" : PHASE_INFO[phase].label}
-          hint={end !== null ? `at ${formatTimestamp(end)}` : graduated ? "liquidity locked forever" : "no limits; it graduates when the curve fills"}
+          hint={end !== null ? `at ${formatTimestamp(end)}` : graduated ? "moved to a bigger pool" : "no limits; it graduates when the curve fills"}
           tone={PHASE_TONE[phase]}
         />
         {batchOpen ? (
@@ -223,12 +222,12 @@ export function CurvePanel({ launch, phase, now, symbol }: { launch: LaunchAccou
   const pending = fraction(batchSpend, threshold);
   const price = spotPrice(launch);
   const caption = graduated
-    ? `The curve is complete: its liquidity moved to a bigger pool${m?.migrated ? " and is locked forever" : " (moving now)"}.`
+    ? `The curve is complete: its liquidity moved to a bigger pool${m?.migrated ? "" : " (moving now)"}.`
     : `${formatSol(reserve, 2)} of ${formatSolExact(threshold)} raised (${pctText(progress)}%)${pending > 0 ? `; the batch will spend up to ${formatSol(batchSpend, 2)} in one swap` : ""}.`;
   return (
     <Panel
       title="Price curve"
-      description="The price rises as SOL comes in. When the curve fills, the token graduates and its liquidity is locked forever."
+      description="The price rises as SOL comes in. When the curve fills, the token graduates: its liquidity moves to a bigger pool."
       status={<span className="tk-status-num pg-num">{(progress * 100).toFixed(1)}%</span>}
       className="tk-curve"
     >
@@ -320,8 +319,8 @@ export function LifecyclePanel({ launch, phase, now }: { launch: LaunchAccount; 
       phase: "graduated",
       short: "Graduate",
       title: "Graduation",
-      when: launch.market?.migrated ? "moved to a bigger pool, locked forever" : launch.market?.curveComplete ? "curve complete, moving now" : "when the curve fills",
-      detail: "Its liquidity moves to a bigger pool, 100% locked forever.",
+      when: launch.market?.migrated ? "moved to a bigger pool" : launch.market?.curveComplete ? "curve complete, moving now" : "when the curve fills",
+      detail: "Its liquidity moves to a bigger pool.",
       boundary: null,
       starts: null,
     },

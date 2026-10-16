@@ -250,7 +250,7 @@ export function TrustList({ parties, intro = true }: { parties: readonly Trusted
       <p className="pg-text">
         <strong>No key controls this launch, but these parties can still affect it.</strong>
         {intro
-          ? " Noised holds every launch role through program addresses, so no private key can rug the launch. Meteora's programs, their operators, Token-2022 and the validators sit underneath it and keep the powers listed here."
+          ? " Noised holds every launch role through program addresses, so no private key controls the launch. Meteora's programs, their operators, Token-2022 and the validators sit underneath it and keep the powers listed here."
           : ""}
       </p>
       {parties === undefined ? <Skeleton className="h-24 w-full" /> : null}

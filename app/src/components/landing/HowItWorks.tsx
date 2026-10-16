@@ -1,5 +1,5 @@
 /**
- * How it works: a big screen of drifting dots forms four glyphs in turn (create, fair launch, trading, graduate;
+ * How it works: a big screen of drifting dots forms four glyphs in turn (a key, a coin being sealed, a check, a padlock;
  * fx/noise, noise/how.ts) next to the four steps in plain words; the playing step's name sits in its corner.
  *
  * Wide screens: the screen (about 60% of the width) stays pinned while the steps scroll past it; the step in the
@@ -17,10 +17,10 @@ import { SectionField, SectionHead, useReveal } from "./glass";
 import { HOW_STEP, HOW_STILL_AT, howScene } from "./noise/how";
 
 const STEPS: { title: string; text: string }[] = [
-  { title: "Create", text: "Pick a name, draw an icon, and choose a price curve and a few simple rules." },
-  { title: "Fair launch", text: "Everyone joins one opening batch and pays the same price. No one gets in first." },
-  { title: "Trading opens", text: "Anyone can buy and sell, with early limits so no one grabs too much." },
-  { title: "Graduates", text: "At its goal, liquidity moves to a bigger pool and is locked forever." },
+  { title: "Make your quantum key", text: "Create it with a passkey or a recovery phrase. It never comes from your wallet." },
+  { title: "Sign your launch", text: "Pick a name, an icon and your rules. Your quantum key signs all of it." },
+  { title: "Checked on-chain", text: "The launch goes live only once its quantum signature checks out on-chain. Anyone can verify it." },
+  { title: "Keep it safe", text: "Hold coins in a vault only your quantum key opens, and let Autopilot run buybacks within limits you set." },
 ];
 
 const WIDE = "(min-width: 981px)";
@@ -112,7 +112,7 @@ export function HowItWorks(): ReactNode {
       data-scroll={scrollMode ? "" : undefined}
     >
       <SectionField fade="right" seed={17} />
-      <SectionHead id="how-title" title="How it" accent="works" lead="From idea to locked liquidity, in four simple steps." align="center" />
+      <SectionHead id="how-title" title="How it" accent="works" lead="From your quantum key to a verified launch, in four simple steps." align="center" />
       <div ref={grid} className="hm-how-grid">
         <div className="hm-how-pin">
           <div className="glass hm-how-screen">

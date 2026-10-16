@@ -1,14 +1,14 @@
 /**
  * "How it works" as one screen of drifting dots that forms each step's glyph in turn (fx/noise):
- *   01 Create      a new coin, the Noised mark in its middle, a hairline drawing its orbit
- *   02 Fair launch eight identical rings inside one batch (a hairline box): everyone, the same price
- *   03 Trading     a price line rising over its own faint area, with an arrow at the end
- *   04 Graduate    a padlock inside a bigger ring (the pool), the ring's hairline closing around it
+ *   01 Make your quantum key  a key (bow, shaft, two teeth), a hairline circling its bow
+ *   02 Sign your launch       a new coin, the Noised mark in its middle, a hairline sealing it all the way round
+ *   03 Checked on-chain       a check mark in a ring, drawn left to right, a wider hairline ring closing around it
+ *   04 Keep it safe           a padlock inside a bigger ring (the vault), the ring's hairline closing around it
  * Between steps the glyph dissolves back into noise and the next one coalesces. The player (HowItWorks.tsx) reads
  * the playing step through `onStep` and jumps with `seekTo` (step i starts at i * HOW_STEP seconds).
  */
-import { circle, roundRect, shape, type NoiseScene, type SceneStep } from "../../../fx/noise";
-import { addCoin, addLock } from "../../art/shapes";
+import { circle, line, shape, type AccentPen, type NoiseScene, type SceneStep } from "../../../fx/noise";
+import { addCheck, addCoin, addLock } from "../../art/shapes";
 
 const W = 160;
 const H = 100;
@@ -31,68 +31,57 @@ const easeInOut = (v: number): number => {
 
 const timing = { form: FORM, hold: HOLD, release: RELEASE, rest: REST } as const;
 
-function create(): SceneStep {
+/** A hairline arc from the top, clockwise, `q` (0..1) of the way round. */
+const sweep = (pen: AccentPen, cx: number, cy: number, r: number, q: number, alpha: number): void => {
+  if (q > 0) pen.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * q, alpha);
+};
+
+function key(): SceneStep {
+  const s = shape(W, H);
+  s.stroke(circle(56, 50, 19, 64), { weight: 1.2 });
+  s.fill(circle(56, 50, 6.5, 32), { weight: 1.3 });
+  s.stroke(line(75, 50, 126, 50), { weight: 1.4 });
+  s.stroke([line(107, 50, 107, 65), line(119, 50, 119, 62)], { weight: 1.4 });
+  return {
+    shape: s.build(),
+    ...timing,
+    // The bow first, then the shaft and its teeth, left to right.
+    order: (p) => clamp01(((p.x - 37) / 90) * 0.8 + p.rand * 0.2),
+    accents: (pen, lt, k) => sweep(pen, 56, 50, 26, easeInOut(lt / (FORM + 0.4)), 0.16 * k),
+  };
+}
+
+function sign(): SceneStep {
   const s = shape(W, H);
   addCoin(s, 80, 50, 30);
   return {
     shape: s.build(),
     ...timing,
-    accents: (pen, lt, k) => {
-      const q = easeInOut(lt / (FORM + 0.4));
-      if (q > 0) pen.arc(80, 50, 38, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * q, 0.16 * k);
-    },
+    accents: (pen, lt, k) => sweep(pen, 80, 50, 38, easeInOut(lt / (FORM + 0.4)), 0.16 * k),
   };
 }
 
-function batch(): SceneStep {
+function verified(): SceneStep {
   const s = shape(W, H);
-  const xs = [53, 71, 89, 107];
-  for (const y of [41, 59]) for (const x of xs) s.stroke(circle(x, y, 6.4, 40));
+  addCheck(s, 80, 50, 30);
   return {
     shape: s.build(),
     ...timing,
-    // Row by row, left to right: they file into the batch.
-    order: (p) => clamp01(((p.x - 44) / 72) * 0.7 + (p.y > 50 ? 0.22 : 0) + p.rand * 0.08),
-    accents: (pen, _lt, k) => {
-      pen.poly(roundRectPoints(37, 27, 86, 46, 9), 0.3 * k, true);
-    },
+    // The ring, then the check drawn left to right.
+    order: (p) => (p.el === 0 ? p.rand * 0.45 : clamp01(0.45 + ((p.x - 65) / 31) * 0.45 + p.rand * 0.1)),
+    accents: (pen, lt, k) => sweep(pen, 80, 50, 38, easeInOut((lt - FORM * 0.6) / 0.9), 0.2 * k),
   };
 }
 
-function trading(): SceneStep {
-  const s = shape(W, H);
-  const pts = "M30 74 L46 64 L58 68 L74 53 L87 57 L103 41 L116 45 L130 28";
-  s.stroke(pts, { weight: 1.5 });
-  s.stroke("M121 27.5 L130 28 L129.5 37", { weight: 1.5 });
-  s.fill(`${pts} L130 78 L30 78 Z`, { weight: 0.2 });
-  return {
-    shape: s.build(),
-    ...timing,
-    // The line draws itself left to right; the area fills in under it.
-    order: (p) => clamp01((p.x - 30) / 100 * 0.85 + p.rand * 0.15),
-    accents: (pen, _lt, k) => {
-      pen.line(26, 80, 136, 80, 0.22 * k);
-    },
-  };
-}
-
-function graduate(): SceneStep {
+function vault(): SceneStep {
   const s = shape(W, H);
   s.stroke(circle(80, 50, 38), { weight: 0.9 });
   addLock(s, 80, 53, 0.62, { fill: 0.7 });
   return {
     shape: s.build(),
     ...timing,
-    accents: (pen, lt, k) => {
-      const q = easeInOut((lt - FORM * 0.6) / 0.9);
-      if (q > 0) pen.arc(80, 50, 44, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * q, 0.22 * k);
-    },
+    accents: (pen, lt, k) => sweep(pen, 80, 50, 44, easeInOut((lt - FORM * 0.6) / 0.9), 0.22 * k),
   };
-}
-
-/** Points of a round rectangle as a flat list (for a hairline). */
-function roundRectPoints(x: number, y: number, w: number, h: number, r: number): number[] {
-  return [...roundRect(x, y, w, h, r).pts];
 }
 
 export function howScene(): NoiseScene {
@@ -102,6 +91,6 @@ export function howScene(): NoiseScene {
     ambientGap: 18,
     pad: 0.08,
     still: { step: 0, at: 0.6 },
-    steps: [create(), batch(), trading(), graduate()],
+    steps: [key(), sign(), verified(), vault()],
   };
 }

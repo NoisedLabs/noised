@@ -13,7 +13,7 @@ import { ctaScene } from "../src/components/landing/noise/cta";
 import { HOW_STEP, HOW_STEPS, HOW_STILL_AT, howScene } from "../src/components/landing/noise/how";
 import { privateScene, vaultScene } from "../src/components/landing/noise/safe";
 import { launchesIcon, raisedIcon, verifiedIcon } from "../src/components/landing/noise/stats";
-import { fairScene, lockScene, shieldScene } from "../src/components/landing/noise/why";
+import { limitScene, lockScene, shieldScene } from "../src/components/landing/noise/why";
 import { buildField, computeFrame, createFrame, loopOf, stepStart, stillTime, timelineAt, type Field, type NoiseScene } from "../src/fx/noise/field";
 import { createScheduler, type SchedulerEnv } from "../src/fx/noise/scheduler";
 import { apportion, circle, parsePath, roundRect, sampleShape, shape, type Shape } from "../src/fx/noise/shape";
@@ -215,7 +215,7 @@ describe("noise field", () => {
 describe("the site's scenes", () => {
   const scenes: [string, NoiseScene][] = [
     ["shield", shieldScene()],
-    ["fair", fairScene()],
+    ["limit", limitScene()],
     ["lock", lockScene()],
     ["how", howScene()],
     ["vault", vaultScene()],

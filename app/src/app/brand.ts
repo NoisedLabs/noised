@@ -6,7 +6,7 @@ export const SITE_TITLE = "Noised: the quantum security layer for Solana";
 
 /** The layer's products, then how it is checked. The brand goes home, where the live launches are. */
 export const NAV = [
-  { to: "/create", label: "Launch", hint: "Launch a token nobody can rug" },
+  { to: "/create", label: "Launch", hint: "Launch a token signed with your quantum key" },
   { to: "/vault", label: "Vault", hint: "A vault only your quantum key opens" },
   { to: "/shield", label: "Shield", hint: "Private balances" },
   { to: "/verify", label: "Verify", hint: "Check any token against QSL-1" },
@@ -43,4 +43,4 @@ export const LAUNCHES_SOON = {
 /** The home hero's headline (two lines) and the sentence under it: what the layer is, then its products in plain words. */
 export const HERO_TITLE = ["Quantum security ", "for Solana."] as const;
 export const HERO_SUB =
-  "Noised is the quantum security layer for Solana. Launch tokens nobody can rug, keep coins in a vault only your quantum key opens, hold balances privately and check any token in one click.";
+  "Noised is the quantum security layer for Solana. Launch tokens signed with a quantum key, keep coins in a vault only that key opens, hold balances privately, automate your token and check any token in one click.";

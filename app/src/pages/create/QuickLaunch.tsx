@@ -502,7 +502,7 @@ function QuickReview({
               <ul className="ql-fact-list">
                 <li>Everyone starts together in a {describeSeconds(fair.openDelaySecs)} opening batch at the same price: nothing to snipe.</li>
                 <li>For {describeSeconds(fair.guardSecs)} no wallet can hold more than {fair.maxWalletBps / 100}% of the supply. Selling is never blocked.</li>
-                <li>It graduates at {formatSolExact(fair.migrationQuoteThreshold)} raised; its liquidity is then locked forever.</li>
+                <li>It graduates at {formatSolExact(fair.migrationQuoteThreshold)} raised; its liquidity then moves to a bigger pool.</li>
                 <li>No admin key: no one, including you, can mint more, freeze anyone or change these values.</li>
               </ul>
             </Details>

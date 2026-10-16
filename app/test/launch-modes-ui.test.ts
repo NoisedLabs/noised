@@ -38,7 +38,9 @@ describe("the mode chooser", () => {
       expect(t).toContain("Custom launch");
       for (const p of PROMISES) expect(t.split(p).length - 1, p).toBe(2);
     }
-    expect(PROMISES).toEqual(["Signed with your quantum key", "Liquidity locked forever", "Selling never blocked"]);
+    expect(PROMISES).toEqual(["Signed with your quantum key", "Checked on-chain by anyone", "No admin key"]);
+    // The promises are about quantum security, not a liquidity lock or "no rug" (every launchpad says those).
+    for (const p of PROMISES) expect(p).not.toMatch(/liquidity|locked|rug/i);
   });
 });
 
