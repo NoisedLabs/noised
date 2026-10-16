@@ -28,6 +28,7 @@ import {
 } from "../../lib/noised";
 import { iconByteBudget, type LogoFitter, type LogoIcon } from "./logoIcon";
 import { generateIcon, ICON_MAX_COLORS, ICON_SIZE, iconRgba, isBlank, seedOf, type IconDraft } from "./pixelIcon";
+import { reservedNameErrors } from "../../lib/brandGuard";
 
 export interface RecipientDraft {
   wallet: string;
@@ -304,8 +305,10 @@ function big(text: string): bigint | null {
  * is published), in the wizard's words: "is required" for an empty field, the byte limit for a long one.
  */
 function metadataErrors(metadata: { name: string; symbol: string }): string[] {
+  // The Noised name is reserved for the team's token (lib/brandGuard.ts): refused here, with no override on the site.
+  const reserved = reservedNameErrors(metadata);
   const v = validateTokenMeta(metadata);
-  if (v.ok) return [];
+  if (v.ok) return reserved;
   const out: string[] = [];
   const fields = [
     ["name", metadata.name, METADATA.MAX_NAME_LEN],
@@ -318,7 +321,7 @@ function metadataErrors(metadata: { name: string; symbol: string }): string[] {
     const len = new TextEncoder().encode(text).length;
     out.push(len === 0 ? `${field}: is required` : len > max ? `${field}: must be at most ${max} bytes of UTF-8 (is ${len})` : first);
   }
-  return out;
+  return [...out, ...reserved.filter((e) => !out.some((o) => splitError(o).field === splitError(e).field))];
 }
 
 /**

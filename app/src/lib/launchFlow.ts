@@ -87,6 +87,7 @@ import {
   type TokenMetaInput,
 } from "./noised";
 import type * as Phx from "./noised";
+import { reservedNameErrors } from "./brandGuard";
 
 // ---------------------------------------------------------------- numbers ---
 
@@ -1544,6 +1545,9 @@ export async function startLaunchFlow(n: NewLaunch): Promise<string> {
     throw new Error(AUTOPILOT_NOT_LIVE);
   }
   const p = newProgress(n, await env.now());
+  // The Noised name is reserved for the team's token (./brandGuard.ts): the forms refuse it, and so does this.
+  const reserved = reservedNameErrors({ name: p.name, symbol: p.symbol })[0];
+  if (reserved !== undefined) throw new Error(reserved.slice(reserved.indexOf(": ") + 2));
   // Fees routed to the token's own treasury need the autopilot program on this network: refused before anything is signed.
   const treasury = autopilotTreasuryAddress(new PublicKey(p.launch));
   if (!env.backend.programmable.available && n.params.recipients.some((r) => r.wallet.equals(treasury))) throw new Error(FEES_TO_TOKEN_NOT_LIVE);

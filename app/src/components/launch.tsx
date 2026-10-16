@@ -6,6 +6,7 @@ import { Link } from "react-router";
 
 import { useAsync, useNow } from "../app/hooks";
 import { qslCached, verifyCached } from "../app/verification";
+import { launchBrandFlag } from "../lib/brandGuard";
 import { qslBadgeView } from "../lib/qsl";
 import { formatSol, formatSolExact } from "../lib/amounts";
 import { expectedBatchFill, type CheckStatus, type LaunchAccount, type LaunchPhase, type VerificationReport } from "../lib/noised";
@@ -189,6 +190,8 @@ export function LaunchCard({ launch, phase, index = 0 }: { launch: LaunchAccount
   const meta = useTokenMeta(live ? { mint: launch.baseMint } : { launch: launch.publicKey });
   const name = market?.name ?? meta?.name ?? "New launch";
   const symbol = market?.symbol ?? meta?.symbol ?? null;
+  // The list already leaves out hidden launches; one whose record shows a reserved name only now (before launch) goes too.
+  const hidden = launchBrandFlag(launch, meta) !== null;
   const address = live ? launch.baseMint : launch.publicKey;
   const image = meta?.icon?.dataUri ?? null;
   // Its own icon first; the demo's hand-made art only in demo builds (null in live ones); else its pixel coin.
@@ -207,6 +210,7 @@ export function LaunchCard({ launch, phase, index = 0 }: { launch: LaunchAccount
   const barLabel = batch
     ? `${name}: ${formatSol(launch.totalCommitted, 2)} in the opening batch, which buys with up to ${formatSolExact(launch.batchTotalCap)}`
     : `${name}: progress toward its goal`;
+  if (hidden) return null;
   return (
     <li className="glass glass-hover hm-lc" data-phase={phase} data-failed={failed ? "" : undefined} style={{ ["--i" as string]: index } as CSSProperties}>
       <span className="hm-lc-shimmer" aria-hidden="true" />

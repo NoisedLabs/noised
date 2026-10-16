@@ -6,6 +6,7 @@ import { useNavigate, useParams } from "react-router";
 import { useAsync, useNow } from "../../app/hooks";
 import { useTx } from "../../app/tx";
 import { useOwner } from "../../app/wallet";
+import { BrandWarning } from "../../components/BrandWarning";
 import { TokenIcon } from "../../components/Identicon";
 import { guardRules, PHASE_INFO } from "../../components/launch";
 import { LaunchTracker, useLaunchFlows } from "../../components/launchTracker";
@@ -16,6 +17,7 @@ import { Address, Alert, Button } from "../../components/ui";
 import { When } from "../../components/When";
 import { DotSpinner } from "../../fx/noise";
 import { formatSolExact } from "../../lib/amounts";
+import { brandFlag, hiddenEntry, launchBrandFlag } from "../../lib/brandGuard";
 import { describeSeconds, formatClock, shortKey, unixSecs } from "../../lib/format";
 import {
   buildLaunchTx,
@@ -128,6 +130,9 @@ function LiveToken({ launch }: { launch: LaunchAccount }): ReactNode {
   const symbol = m?.symbol ?? "TOKEN";
   const checks = report.data ? { passed: report.data.checks.filter((c) => c.status === "pass").length, total: report.data.checks.length } : null;
   const aside = useStickyFit<HTMLElement>();
+  // A launch the site hides (the Noised name on a mint that is not the team's, or the hidden list): a red warning
+  // first, and no buying here (selling and claims stay, so nobody is trapped).
+  const flag = launchBrandFlag(l, meta);
 
   // The pill under the navbar shows this page's context: "AEGS · Batch open · closes in 11m 43s".
   const end = phaseEnd(l, phase);
@@ -149,6 +154,7 @@ function LiveToken({ launch }: { launch: LaunchAccount }): ReactNode {
   return (
     <div className="pg tkp">
       <Crumbs here={symbol} />
+      <BrandWarning flag={flag} trading />
       <TokenHeader
         launch={l}
         phase={phase}
@@ -174,7 +180,14 @@ function LiveToken({ launch }: { launch: LaunchAccount }): ReactNode {
 
       <div className="tk-grid">
         <aside className="tk-aside" aria-label="Actions" ref={aside}>
-          <BatchPanel launch={l} phase={phase} now={now} symbol={symbol} trade={<TradePanel launch={l} phase={phase} now={now} symbol={symbol} />} />
+          <BatchPanel
+            launch={l}
+            phase={phase}
+            now={now}
+            symbol={symbol}
+            noBuys={flag !== null}
+            trade={<TradePanel launch={l} phase={phase} now={now} symbol={symbol} sellOnly={flag !== null} />}
+          />
         </aside>
         <div className="tk-main">
           {flow !== null ? <LaunchTracker view={flow} compact /> : null}
@@ -224,10 +237,13 @@ function ConfiguredLaunch({ launch, onLaunched }: { launch: LaunchAccount; onLau
   const symbol = meta?.symbol ?? null;
   // Its own icon first; the demo's hand-made art only in demo builds (null in live ones); else its pixel coin.
   const demoIcon = meta === null || meta.icon !== null ? null : demoTokenIcon(meta.symbol);
+  // A launch the site hides: a red warning first, and no "Open the launch" here.
+  const flag = brandFlag({ launch: launch.publicKey, name: meta?.name, symbol: meta?.symbol });
 
   return (
     <div className="pg tkp-pre">
       <Crumbs here={symbol ?? "Not launched yet"} />
+      <BrandWarning flag={flag} />
       <PageHead
         eyebrow="Not launched yet"
         title={meta === null ? "Ready to launch" : `${meta.name} (${meta.symbol})`}
@@ -283,7 +299,7 @@ function ConfiguredLaunch({ launch, onLaunched }: { launch: LaunchAccount; onLau
           {attestation.error ? <Alert tone="fail">Could not read the creator&apos;s signature: {attestation.error}</Alert> : null}
           {state === null && !attestation.error ? <p className="pg-wait">Reading the creator&apos;s signature…</p> : null}
           {state !== null ? <OpeningStatus state={state} now={now} mine={mine !== null} /> : null}
-          {state?.kind === "open" ? (
+          {state?.kind === "open" && flag === null ? (
             <div className="pg-stack">
               <p className="pg-text">
                 Open until <When t={state.closesAt} />. Anyone can open it now: the token gets the name, symbol and icon its creator signed, stored on Solana. You pay only the fees and the new accounts&apos; rent.
@@ -378,6 +394,7 @@ function UnknownMint({ mint }: { mint: PublicKey }): ReactNode {
   return (
     <div className="pg">
       <Crumbs here="Verify" />
+      <BrandWarning flag={hiddenEntry(mint)} />
       <PageHead
         eyebrow="Verify"
         title="Not a Noised launch"

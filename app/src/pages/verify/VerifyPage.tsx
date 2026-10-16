@@ -11,10 +11,12 @@ import { Link, useLocation, useNavigate, useParams } from "react-router";
 
 import { useAsync } from "../../app/hooks";
 import { ownTitle } from "../../app/titles";
+import { BrandWarning } from "../../components/BrandWarning";
 import { QslMark } from "../../components/qsl/QslBadge";
 import { sfx } from "../../fx/sfx";
 import { shortKey } from "../../lib/format";
-import { checkQsl1, fetchLaunchByMint, listLaunches } from "../../lib/noised";
+import { brandFlag, listListedLaunches } from "../../lib/brandGuard";
+import { checkQsl1, fetchLaunchByMint } from "../../lib/noised";
 import { LEVELS, PROGRAMMABLE_MEANS } from "../../lib/qsl";
 import { PageArt } from "../inner/art";
 import { Grad, PageHead, Panel } from "../inner/kit";
@@ -108,6 +110,8 @@ function VerifyResult({ mint }: { mint: PublicKey }): ReactNode {
   const launch = useAsync(() => fetchLaunchByMint(connection, mint), [connection, mint.toBase58()], { watchChain: false });
   const name = launch.data?.market?.name ?? null;
   const symbol = launch.data?.market?.symbol ?? null;
+  // A launch the site hides (the Noised name on a mint that is not the team's, or the hidden list): warned first.
+  const flag = brandFlag({ mint, launch: launch.data?.publicKey, name, symbol });
   useEffect(() => {
     document.title = ownTitle(`Verify ${symbol ?? shortKey(mint.toBase58(), 4)}`);
   }, [symbol, mint]);
@@ -119,6 +123,7 @@ function VerifyResult({ mint }: { mint: PublicKey }): ReactNode {
   }, [hash, hasRules]);
   return (
     <div className="pg-stack-lg vf-result">
+      <BrandWarning flag={flag} />
       {launch.data ? (
         <div className="vf-token">
           <span className="vf-token-t">
@@ -140,7 +145,7 @@ function VerifyResult({ mint }: { mint: PublicKey }): ReactNode {
 /** No address yet: the two levels, the programmable tag, and live launches to try. */
 function VerifyIntro(): ReactNode {
   const { connection } = useConnection();
-  const launches = useAsync(() => listLaunches(connection), [connection], { watchChain: false });
+  const launches = useAsync(() => listListedLaunches(connection), [connection], { watchChain: false });
   const live = (launches.data ?? []).filter((l) => l.status === "live").slice(0, 6);
   return (
     <div className="pg-stack-lg">

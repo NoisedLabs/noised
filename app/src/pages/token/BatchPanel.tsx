@@ -66,7 +66,25 @@ type ActionTab = "commit" | "claim" | "trade";
 
 const STATUS_WORD = { executed: "Done", expired: "Expired", empty: "Empty", pending: "Waiting to start" } as const;
 
-export function BatchPanel({ launch, phase, now, symbol, trade }: { launch: LaunchAccount; phase: LaunchPhase; now: number; symbol: string; trade: ReactNode }): ReactNode {
+/**
+ * `noBuys`: the site hides this launch (lib/brandGuard.ts): no Commit tab (no commit, no batch start); claims and the
+ * trade tab (sell only, see TradePanel) stay, so nobody is trapped.
+ */
+export function BatchPanel({
+  launch,
+  phase,
+  now,
+  symbol,
+  trade,
+  noBuys = false,
+}: {
+  launch: LaunchAccount;
+  phase: LaunchPhase;
+  now: number;
+  symbol: string;
+  trade: ReactNode;
+  noBuys?: boolean;
+}): ReactNode {
   const { connection } = useConnection();
   const owner = useOwner();
   const { run } = useTx();
@@ -81,7 +99,7 @@ export function BatchPanel({ launch, phase, now, symbol, trade }: { launch: Laun
   const batchOpen = phase === "commit" || phase === "execute";
   const claimsOpen = launch.executed || outcome === "expired";
   const claimable = claimsOpen && me !== null && mine > 0n && commit.data?.claimed !== true;
-  const preferred: ActionTab = batchOpen ? "commit" : claimable ? "claim" : "trade";
+  const preferred: ActionTab = batchOpen && !noBuys ? "commit" : claimable ? "claim" : "trade";
   const stage = batchOpen ? "batch" : claimsOpen ? "after" : "other";
   const [picked, setPicked] = useState<ActionTab | null>(null);
   const [pickedIn, setPickedIn] = useState(stage);
@@ -89,9 +107,9 @@ export function BatchPanel({ launch, phase, now, symbol, trade }: { launch: Laun
     setPickedIn(stage);
     setPicked(null);
   }
-  const tab = picked ?? preferred;
+  const tab = noBuys && picked === "commit" ? preferred : (picked ?? preferred);
   const items: TabItem<ActionTab>[] = [
-    { value: "commit", label: "Commit", badge: batchOpen ? <i className="pg-live-dot" aria-label="open now" /> : undefined },
+    ...(noBuys ? [] : [{ value: "commit" as const, label: "Commit", badge: batchOpen ? <i className="pg-live-dot" aria-label="open now" /> : undefined }]),
     { value: "claim", label: "Claim", badge: claimable ? <span aria-label="1 claim waiting">1</span> : undefined },
     { value: "trade", label: "Trade" },
   ];
@@ -115,6 +133,7 @@ export function BatchPanel({ launch, phase, now, symbol, trade }: { launch: Laun
     >
       <Tabs items={items} value={tab} onChange={setPicked} label="Launch actions" idBase="act" className="tk-action-tabs" />
 
+      {noBuys ? null : (
       <div {...tabPanel("act", "commit", tab)}>
         <header className="tk-act-head">
           <h2 className="tk-act-title">The opening batch</h2>
@@ -176,6 +195,7 @@ export function BatchPanel({ launch, phase, now, symbol, trade }: { launch: Laun
           {!launch.executed && outcome === "pending" && fill !== null ? <PendingFill launch={launch} fill={fill} mine={mine} /> : batchOpen ? <Comment>{ORDER_NOTE}</Comment> : null}
         </div>
       </div>
+      )}
 
       <div {...tabPanel("act", "claim", tab)}>
         <header className="tk-act-head">

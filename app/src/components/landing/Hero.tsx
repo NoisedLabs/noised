@@ -28,7 +28,8 @@ import "../../fx/wall/hero.css";
 import { ShieldWall, type GlassSource, type ShieldWallHandle } from "../../fx/wall/ShieldWall";
 import { useBleed } from "../../fx/wall/useBleed";
 import { useHeaderClearance } from "../../fx/wall/useClearance";
-import { listLaunches, type LaunchAccount } from "../../lib/noised";
+import { listListedLaunches } from "../../lib/brandGuard";
+import type { LaunchAccount } from "../../lib/noised";
 import { useAmbientMotion } from "../AmbientMotion";
 import { ResolveText, useNoiseReveal } from "../../fx/noise";
 import { HeroLinks } from "./HeroLinks";
@@ -57,7 +58,7 @@ export function Hero({
 } = {}): ReactNode {
   const { connection } = useConnection();
   // Shares the page's launch list when given one; otherwise reads it here.
-  const own = useAsync(() => listLaunches(connection), [connection], { enabled: launches === undefined });
+  const own = useAsync(() => listListedLaunches(connection), [connection], { enabled: launches === undefined });
   const data = launches ? launches.data : own.data;
   const error = launches ? launches.error : own.error;
   const launchesState = useLaunchesState();

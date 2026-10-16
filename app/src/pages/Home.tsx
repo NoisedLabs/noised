@@ -11,7 +11,8 @@ import { LiveLaunches } from "../components/landing/LiveLaunches";
 import { usePhaseNow } from "../components/landing/phaseClock";
 import { WhyNoised } from "../components/landing/WhyNoised";
 import { unixSecs } from "../lib/format";
-import { launchPhase, listLaunches } from "../lib/noised";
+import { listListedLaunches } from "../lib/brandGuard";
+import { launchPhase } from "../lib/noised";
 
 import "../components/landing/tokens.css";
 import "../components/landing/sections.css";
@@ -28,7 +29,7 @@ const StableHero = memo(Hero);
  */
 export function HomePage(): ReactNode {
   const { connection } = useConnection();
-  const launches = useAsync(() => listLaunches(connection), [connection]);
+  const launches = useAsync(() => listListedLaunches(connection), [connection]);
   // Re-renders at phase boundaries only.
   const now = usePhaseNow(launches.data);
   const rows = useMemo(() => (launches.data ?? []).map((launch) => ({ launch, phase: launchPhase(launch, unixSecs(now)) })), [launches.data, now]);

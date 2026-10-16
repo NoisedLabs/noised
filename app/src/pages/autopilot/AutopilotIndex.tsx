@@ -11,7 +11,8 @@ import { ownTitle } from "../../app/titles";
 import { Alert } from "../../components/ui";
 import { DotSpinner } from "../../fx/noise";
 import { formatSol } from "../../lib/amounts";
-import { fetchAutopilot, findDueSteps, listLaunches, PROGRAMMABLE_AVAILABLE, type AutopilotInfo, type LaunchAccount } from "../../lib/noised";
+import { listListedLaunches } from "../../lib/brandGuard";
+import { fetchAutopilot, findDueSteps, PROGRAMMABLE_AVAILABLE, type AutopilotInfo, type LaunchAccount } from "../../lib/noised";
 import { Chip, Grad, PageHead } from "../inner/kit";
 import { statusOf } from "./AutopilotPage";
 import { NodeGlyph } from "./GraphCanvas";
@@ -32,7 +33,7 @@ export function AutopilotIndex(): ReactNode {
     document.title = ownTitle("Autopilot");
   }, []);
   const rows = useAsync(async (): Promise<Row[]> => {
-    const launches = await listLaunches(connection);
+    const launches = await listListedLaunches(connection);
     return Promise.all(
       launches.map(async (launch) => {
         const info = await fetchAutopilot(connection, launch.publicKey);

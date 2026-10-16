@@ -23,9 +23,9 @@ import {
   getMintInfo,
   getTokenBalance,
   getTokenSupply,
-  listLaunches,
   shieldAddresses,
 } from "../lib/noised";
+import { listListedLaunches } from "../lib/brandGuard";
 import { AmountInput, Chip, Compare, Details, DotBar, EmptyState, Feats, Grad, Metric, PageHead, Panel, Readout, Reason, Row, Tiles, type CompareColumn, type FeatItem } from "./inner/kit";
 import { PageArt } from "./inner/art";
 import { DotGlyph } from "./inner/glyphs";
@@ -73,7 +73,7 @@ const VISIBILITY: readonly CompareColumn[] = [
 
 export function ShieldPage(): ReactNode {
   const { connection } = useConnection();
-  const launches = useAsync(() => listLaunches(connection), [connection], { watchChain: false });
+  const launches = useAsync(() => listListedLaunches(connection), [connection], { watchChain: false });
   const [mint, setMint] = useState<PublicKey | null>(null);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);

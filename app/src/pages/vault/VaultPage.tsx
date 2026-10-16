@@ -6,7 +6,8 @@ import { useAsync } from "../../app/hooks";
 import { useLedgers, type LedgersState } from "../../app/ledgers";
 import { CLUSTER } from "../../app/settings";
 import { Alert, Button } from "../../components/ui";
-import { ADAPTER_MODE, demoMints, listLaunches, WSOL_MINT } from "../../lib/noised";
+import { listListedLaunches } from "../../lib/brandGuard";
+import { ADAPTER_MODE, demoMints, WSOL_MINT } from "../../lib/noised";
 import { usePqKey, vaultMaster } from "../../lib/pqKey";
 import { archiveOtherClusterRecords } from "../../lib/storage";
 import { Comment, Feats, Fold, PageHead, Panel, type FeatItem } from "../inner/kit";
@@ -97,7 +98,7 @@ const STEPS: readonly FeatItem[] = [
 
 function TokenPicker({ master, ledgers }: { master: Uint8Array; ledgers: LedgersState }): ReactNode {
   const { connection } = useConnection();
-  const launches = useAsync(() => listLaunches(connection), [connection], { watchChain: false });
+  const launches = useAsync(() => listListedLaunches(connection), [connection], { watchChain: false });
   const [mintText, setMintText] = useState("");
   const [mint, setMint] = useState<PublicKey | null>(null);
   const [error, setError] = useState<string | null>(null);

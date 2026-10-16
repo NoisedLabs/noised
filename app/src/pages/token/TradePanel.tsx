@@ -24,13 +24,18 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-export function TradePanel({ launch, phase, now, symbol }: { launch: LaunchAccount; phase: LaunchPhase; now: number; symbol: string }): ReactNode {
+/**
+ * `sellOnly`: the site hides this launch (lib/brandGuard.ts): no buying here, but anyone who holds it can still sell, so
+ * nobody is trapped.
+ */
+export function TradePanel({ launch, phase, now, symbol, sellOnly = false }: { launch: LaunchAccount; phase: LaunchPhase; now: number; symbol: string; sellOnly?: boolean }): ReactNode {
   const { connection } = useConnection();
   const owner = useOwner();
   const { run } = useTx();
   const me = owner.publicKey;
   const mint = launch.baseMint;
-  const [side, setSide] = useState<SwapSide>("buy");
+  const [picked, setSide] = useState<SwapSide>(sellOnly ? "sell" : "buy");
+  const side: SwapSide = sellOnly ? "sell" : picked;
   const [text, setText] = useState("");
   const [slippageBps, setSlippageBps] = useState<number>(100);
   const decimals = side === "buy" ? SOL_DECIMALS : launch.tokenDecimal;
@@ -81,12 +86,15 @@ export function TradePanel({ launch, phase, now, symbol }: { launch: LaunchAccou
   return (
     <div className="tk-trade" id="trade">
       <header className="tk-act-head">
-        <h2 className="tk-act-title">Trade</h2>
-        <p className="tk-act-sub">Your trade goes straight to the token's pool. Selling is never blocked.</p>
+        <h2 className="tk-act-title">{sellOnly ? "Sell" : "Trade"}</h2>
+        <p className="tk-act-sub">
+          {sellOnly ? "Buying is turned off here for this token. If you hold it, you can still sell it." : "Your trade goes straight to the token's pool. Selling is never blocked."}
+        </p>
       </header>
       <div className="tk-act-stack">
         <div className="tk-trade-top">
-          <Segmented<SwapSide>
+          {sellOnly ? null : (
+            <Segmented<SwapSide>
             label="Trade side"
             value={side}
             onChange={(s) => {
@@ -98,6 +106,7 @@ export function TradePanel({ launch, phase, now, symbol }: { launch: LaunchAccou
               { value: "sell", label: "Sell" },
             ]}
           />
+          )}
           <div className="tk-trade-bal pg-num">
             {me ? (
               <>
@@ -181,7 +190,7 @@ export function TradePanel({ launch, phase, now, symbol }: { launch: LaunchAccou
           </Alert>
         ))}
 
-        {side === "buy" ? <VaultChoice mint={mint} symbol={symbol} target={target} checked={toVault} onChange={setToVault} label="Send what I buy to my quantum vault" /> : null}
+        {side === "buy" && !sellOnly ? <VaultChoice mint={mint} symbol={symbol} target={target} checked={toVault} onChange={setToVault} label="Send what I buy to my quantum vault" /> : null}
         {/* Why the primary is unavailable, right above it (the navbar's Connect glows while this shows). */}
         {!me ? <Reason id="trade-reason">Connect a wallet to trade</Reason> : null}
         <Button

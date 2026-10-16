@@ -24,7 +24,8 @@ import { verifyCached } from "../app/verification";
 import { sfx, useSound } from "../fx/sfx";
 import { prefersReducedMotion, Typewriter } from "../fx/text";
 import { errorMessage, shortKey, unixSecs } from "../lib/format";
-import { ADAPTER_MODE, launchPhase, listLaunches, type LaunchAccount, type VerificationReport } from "../lib/noised";
+import { listListedLaunches } from "../lib/brandGuard";
+import { ADAPTER_MODE, launchPhase, type LaunchAccount, type VerificationReport } from "../lib/noised";
 import { useAmbientMotion } from "./AmbientMotion";
 import { isPqCheck, PQ_PENDING, pqOrigin } from "./launch";
 import { shortCheck } from "./verifyLabels";
@@ -175,7 +176,7 @@ export function CommandPalette(): ReactNode {
   const findLaunch = useCallback(
     async (needle: string): Promise<LaunchAccount | null> => {
       const n = needle.trim().toLowerCase();
-      const all = await listLaunches(connection);
+      const all = await listListedLaunches(connection);
       return (
         all.find(
           (l) =>
@@ -274,7 +275,7 @@ export function CommandPalette(): ReactNode {
     async (arg: string) => {
       const a = arg.trim();
       if (a === "") {
-        const all = await listLaunches(connection);
+        const all = await listListedLaunches(connection);
         const now = Math.floor(Date.now() / 1000);
         if (all.length === 0) push({ tone: "dim", tag: ">", text: "no launches yet" });
         push(
@@ -453,7 +454,7 @@ export function CommandPalette(): ReactNode {
     if (!open || tokens !== null) return;
     let cancelled = false;
     const now = Math.floor(Date.now() / 1000);
-    listLaunches(connection).then(
+    listListedLaunches(connection).then(
       (all) => {
         if (cancelled) return;
         setTokens(
