@@ -7,6 +7,31 @@
 /** The source code: every program, this app, the SDK, the MCP server and the crates (Apache-2.0). */
 export const REPO_URL = "https://github.com/NoisedLabs/noised";
 
+/** The TypeScript SDK and the MCP server for AI agents, on npm. */
+export const SDK_NPM_URL = "https://www.npmjs.com/package/@noisedlabs/sdk";
+export const MCP_NPM_URL = "https://www.npmjs.com/package/@noisedlabs/mcp";
+
+/** The whitepaper as a PDF, shipped with the site (public/): relative, so it resolves from any IPFS gateway path. */
+export const WHITEPAPER_PDF = "noised-whitepaper.pdf";
+
+export interface HeroLink {
+  id: "sdk" | "mcp" | "github" | "whitepaper";
+  /** What the pill says. */
+  label: string;
+  /** Read after the label by screen readers: where it goes, and that it opens in a new tab. */
+  more: string;
+  href: string;
+  mark: "npm" | "github" | "doc";
+}
+
+/** The row of links under the home hero's verify field; each opens in a new tab. */
+export const HERO_LINKS: readonly HeroLink[] = [
+  { id: "sdk", label: "SDK", more: "on npm, opens in a new tab", href: SDK_NPM_URL, mark: "npm" },
+  { id: "mcp", label: "MCP server", more: "on npm, opens in a new tab", href: MCP_NPM_URL, mark: "npm" },
+  { id: "github", label: "GitHub", more: "source code, opens in a new tab", href: REPO_URL, mark: "github" },
+  { id: "whitepaper", label: "Whitepaper", more: "PDF, opens in a new tab", href: WHITEPAPER_PDF, mark: "doc" },
+];
+
 export interface DevTool {
   id: "sdk" | "agents" | "rust" | "source";
   label: string;
@@ -25,7 +50,7 @@ export const DEV_TOOLS: readonly DevTool[] = [
     title: "SDK",
     text: "Check tokens, build launches, and use vaults and Shield from your own app.",
     command: "npm i @noisedlabs/sdk",
-    links: [{ label: "npm", href: "https://www.npmjs.com/package/@noisedlabs/sdk" }],
+    links: [{ label: "npm", href: SDK_NPM_URL }],
   },
   {
     id: "agents",
@@ -33,7 +58,7 @@ export const DEV_TOOLS: readonly DevTool[] = [
     title: "MCP server",
     text: "Lets your AI agent read and check tokens and launches. It never signs. Works with LangGraph.",
     command: "npx -y @noisedlabs/mcp",
-    links: [{ label: "npm", href: "https://www.npmjs.com/package/@noisedlabs/mcp" }],
+    links: [{ label: "npm", href: MCP_NPM_URL }],
   },
   {
     id: "rust",

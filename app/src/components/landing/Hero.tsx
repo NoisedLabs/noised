@@ -2,8 +2,9 @@
  * Home hero (v5.1 "graphite glass"; LAYER_V1 positioning): "Quantum security /
  * for Solana." resolving out of noise in front of the monochrome shield wall (a
  * 3D wall of hex shields made of dots that blocks incoming shots), one sentence,
- * two buttons, a field that checks any token by its address, and three live
- * numbers, each resolving in from noise (fx/noise).
+ * two buttons, a field that checks any token by its address, a row of links (the SDK,
+ * the MCP server, GitHub, the whitepaper) and three live numbers, each resolving in
+ * from noise (fx/noise).
  *
  *   <Hero />                                   // reads the launch list itself
  *   <Hero launches={{ data, error }} />        // or shares the page's fetch
@@ -30,6 +31,7 @@ import { useHeaderClearance } from "../../fx/wall/useClearance";
 import { listLaunches, type LaunchAccount } from "../../lib/noised";
 import { useAmbientMotion } from "../AmbientMotion";
 import { ResolveText, useNoiseReveal } from "../../fx/noise";
+import { HeroLinks } from "./HeroLinks";
 import { HeroStats } from "./HeroStats";
 
 export interface HeroLaunches {
@@ -72,14 +74,16 @@ export function Hero({
   const clearance = useHeaderClearance();
   const sectionStyle = clearance ? ({ ["--hx-top" as string]: `${clearance}px` } as CSSProperties) : undefined;
   const panes = useCallback(() => paneSources(section.current), []);
-  // After the headline: the sentence, the buttons, the field and the numbers resolve in from noise, one after another.
+  // After the headline: the sentence, the buttons, the field, the links and the numbers resolve in from noise, one after another.
   const sub = useRef<HTMLParagraphElement>(null);
   const ctas = useRef<HTMLDivElement>(null);
   const verify = useRef<HTMLDivElement>(null);
+  const links = useRef<HTMLUListElement>(null);
   const foot = useRef<HTMLDivElement>(null);
   useNoiseReveal(sub, { immediate: true, delay: 420, duration: 560, sweep: "right" });
   useNoiseReveal(ctas, { immediate: true, delay: 560, duration: 520, sweep: "right" });
   useNoiseReveal(verify, { immediate: true, delay: 660, duration: 520, sweep: "right" });
+  useNoiseReveal(links, { immediate: true, delay: 720, duration: 480, sweep: "right" });
   useNoiseReveal(foot, { immediate: true, delay: 760, duration: 640 });
   const onGlass = useCallback((active: boolean) => setGlass(active ? "gl" : "css"), []);
 
@@ -144,6 +148,7 @@ export function Hero({
             </button>
           </div>
           <VerifyField ref={verify} />
+          <HeroLinks ref={links} />
         </div>
         <div ref={foot} className="hx-foot">
           <HeroStats launches={data} error={error} />
